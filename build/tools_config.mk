@@ -28,6 +28,13 @@ COMMON_CFLAGS += -fno-rtti
 COMMON_CFLAGS += -fdata-sections
 COMMON_CFLAGS += -ffunction-sections
 
+# Enable debugging symbols for debug builds.
+COMMON_DEBUG_CFLAGS += -g
+
 # Common Archive Flags #########################################################
 
 COMMON_ARFLAGS += rsc
+
+# Common Shared-Object Linker Flags ############################################
+
+COMMON_SO_LDFLAGS += -gc-sections

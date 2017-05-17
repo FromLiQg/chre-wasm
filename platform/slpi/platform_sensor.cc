@@ -53,6 +53,9 @@ constexpr float kMicroTeslaPerGauss = 100.0f;
 //! The maximum number of CHRE sensors that share the same SMGR sensor ID.
 constexpr size_t kMaxNumSensorsPerSensorId = 3;
 
+//! The value to override a default interval request.
+constexpr uint64_t kDefaultInterval = Seconds(1).toRawNanoseconds();
+
 //! The QMI sensor service client handle.
 qmi_client_type gPlatformSensorServiceQmiClientHandle = nullptr;
 
@@ -726,6 +729,8 @@ SensorMode getMergedMode(uint8_t sensorId, SensorType sensorType,
  */
 void onNumSmgrClientsChange(uint8_t sensorId, uint8_t prevNumClients,
                             uint8_t currNumClients) {
+  LOGD("id %" PRIu64 ", num clients: prev %" PRIu8 " curr %" PRIu8,
+       sensorId, prevNumClients, currNumClients);
   bool makeAllRequests = (prevNumClients == 0 && currNumClients > 0);
   SensorRequest dummyRequest;
   SensorMode mode = getMergedMode(sensorId, SensorType::Unknown, dummyRequest);
@@ -754,11 +759,12 @@ void onStatusChange(const sns_smgr_sensor_status_monitor_ind_msg_v02& status) {
     LOGE("Sensor status monitor update of invalid sensor ID %" PRIu64,
          status.sensor_id);
   } else {
+    LOGD("Status: id %" PRIu64 " clients %" PRIu8 " sampling %dHz wakeup %dHz",
+         status.sensor_id, status.num_clients,
+         status.sampling_rate, status.wakeup_rate);
+
     uint8_t numClients = gSensorMonitors[index].numClients;
     if (numClients != status.num_clients) {
-      LOGD("Status: id %" PRIu64 ", num clients: prev %" PRIu8 " curr %" PRIu8,
-           status.sensor_id, numClients, status.num_clients);
-
       onNumSmgrClientsChange(status.sensor_id, numClients, status.num_clients);
       gSensorMonitors[index].numClients = status.num_clients;
     }
@@ -956,6 +962,24 @@ uint8_t getSmgrRequestActionForMode(SensorMode mode) {
 }
 
 /**
+ * Specify the sensor decimation type.
+ *
+ * @param sensorId The sensorID as provided by the SMGR.
+ * @param dataType The dataType for the sesnor as provided by the SMGR.
+ * return The decimation type as defined by the SMGR.
+ */
+uint8_t getDecimationType(uint8_t sensorId, uint8_t dataType) {
+  // Request filtered data for accel and gyro to reduce noise aliasing in case
+  // SMGR has other higher ODR clients.
+  if ((sensorId == SNS_SMGR_ID_ACCEL_V01 || sensorId == SNS_SMGR_ID_GYRO_V01)
+      && dataType == SNS_SMGR_DATA_TYPE_PRIMARY_V01) {
+    return SNS_SMGR_DECIMATION_FILTER_V01;
+  } else {
+    return SNS_SMGR_DECIMATION_RECENT_SAMPLE_V01;
+  }
+}
+
+/**
  * Populates a sns_smgr_buffering_req_msg_v01 struct to request sensor data.
  *
  * @param request The new request to set this sensor to.
@@ -974,26 +998,33 @@ void populateSensorRequest(
   // specified to be set to false or zero so this is safe.
   memset(sensorRequest, 0, sizeof(*sensorRequest));
 
-  // Reconstructs a request to deliver one-shot sensors' data ASAP.
+  // Reconstructs a request to deliver one-shot sensors' data ASAP and set
+  // default interval to some meaningful number.
   bool isOneShot = sensorTypeIsOneShot(getSensorTypeFromSensorId(
       sensorId, dataType, calType));
-  SensorRequest request(
-      chreRequest.getMode(), chreRequest.getInterval(),
-      isOneShot ? Nanoseconds(0) : chreRequest.getLatency());
+  uint64_t cappedInterval = chreRequest.getInterval().toRawNanoseconds();
+  if (cappedInterval == CHRE_SENSOR_INTERVAL_DEFAULT) {
+    cappedInterval = std::max(minInterval, kDefaultInterval);
+  }
+  SensorRequest request(chreRequest.getMode(), Nanoseconds(cappedInterval),
+                        isOneShot ? Nanoseconds(0) : chreRequest.getLatency());
 
   // Build the request for one sensor at the requested rate. An add action for a
   // ReportID that is already in use causes a replacement of the last request.
   sensorRequest->ReportId = getReportId(sensorId, dataType, calType);
   sensorRequest->Action = getSmgrRequestActionForMode(request.getMode());
-  // If latency < interval, request to SMGR would fail.
-  Nanoseconds batchingInterval =
-      (request.getLatency() > request.getInterval()) ?
-      request.getLatency() : request.getInterval();
-  sensorRequest->ReportRate = intervalToSmgrQ16ReportRate(batchingInterval);
-  sensorRequest->Item_len = 1; // One sensor per request if possible.
+
+  // SMGR report interval should be (interval + latency). However, to handle
+  // fractional-interval latency setting and to guarantee meeting chre request,
+  // report interval is set to latency only. Also, lower-bound batchInterval as
+  // request to SMGR would fail if batchInterval < interval.
+  Nanoseconds batchInterval =
+      std::max(request.getLatency(), request.getInterval());
+  sensorRequest->ReportRate = intervalToSmgrQ16ReportRate(batchInterval);
+  sensorRequest->Item_len = 1;  // One sensor per request if possible.
   sensorRequest->Item[0].SensorId = sensorId;
   sensorRequest->Item[0].DataType = dataType;
-  sensorRequest->Item[0].Decimation = SNS_SMGR_DECIMATION_RECENT_SAMPLE_V01;
+  sensorRequest->Item[0].Decimation = getDecimationType(sensorId, dataType);
   sensorRequest->Item[0].Calibration = calType;
   sensorRequest->Item[0].SamplingRate =
       intervalToSmgrSamplingRate(request.getInterval());
@@ -1005,10 +1036,19 @@ void populateSensorRequest(
     sensorRequest->Item_len = 2;
     sensorRequest->Item[1].SensorId = sensorId;
     sensorRequest->Item[1].DataType = SNS_SMGR_DATA_TYPE_PRIMARY_V01;
-    sensorRequest->Item[1].Decimation = SNS_SMGR_DECIMATION_RECENT_SAMPLE_V01;
+    sensorRequest->Item[1].Decimation = getDecimationType(
+        sensorId, SNS_SMGR_DATA_TYPE_PRIMARY_V01);
     sensorRequest->Item[1].Calibration = SNS_SMGR_CAL_SEL_FULL_CAL_V01;
     sensorRequest->Item[1].SamplingRate = sensorRequest->Item[0].SamplingRate;
   }
+
+  // Synchronize fifo flushes with other clients that have SSC proc_type.
+  // send_indications_during_suspend has no effect on data sent to SLPI.
+  // Default is to synchronize with AP clients, which may have undesirable
+  // effects on sensor hal batching.
+  sensorRequest->notify_suspend_valid = true;
+  sensorRequest->notify_suspend.proc_type = SNS_PROC_SSC_V01;
+  sensorRequest->notify_suspend.send_indications_during_suspend = true;
 }
 
 /**
