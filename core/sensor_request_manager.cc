@@ -158,9 +158,10 @@ bool SensorRequestManager::setSensorRequest(Nanoapp *nanoapp,
       // Deliver last valid event to new clients of on-change sensors
       if (sensorTypeIsOnChange(sensor.getSensorType())
           && sensor.getLastEvent() != nullptr) {
-        EventLoopManagerSingleton::get()->postEvent(
-            getSampleEventTypeForSensorType(sensorType), sensor.getLastEvent(),
-            nullptr, kSystemInstanceId, nanoapp->getInstanceId());
+        EventLoopManagerSingleton::get()->getEventLoop()
+            .postEvent(getSampleEventTypeForSensorType(sensorType),
+                       sensor.getLastEvent(), nullptr, kSystemInstanceId,
+                       nanoapp->getInstanceId());
       }
     }
   } else {
@@ -267,6 +268,18 @@ bool SensorRequestManager::getSensorSamplingStatus(
     }
   }
   return success;
+}
+
+const DynamicVector<SensorRequest>& SensorRequestManager::getRequests(
+    SensorType sensorType) const {
+  size_t sensorIndex = 0;
+  if (sensorType == SensorType::Unknown
+      || sensorType >= SensorType::SENSOR_TYPE_COUNT) {
+    LOGW("Attempting to get requests of an invalid SensorType");
+  } else {
+    sensorIndex = getSensorTypeArrayIndex(sensorType);
+  }
+  return mSensorRequests[sensorIndex].multiplexer.getRequests();
 }
 
 const SensorRequest *SensorRequestManager::SensorRequests::find(

@@ -139,13 +139,13 @@ bool EventLoop::startNanoapp(UniquePtr<Nanoapp>& nanoapp) {
   CHRE_ASSERT(!nanoapp.isNull());
   bool success = false;
   auto *eventLoopManager = EventLoopManagerSingleton::get();
+  EventLoop& eventLoop = eventLoopManager->getEventLoop();
   uint32_t existingInstanceId;
 
   if (nanoapp.isNull()) {
     // no-op, invalid argument
-  } else if (eventLoopManager->findNanoappInstanceIdByAppId(nanoapp->getAppId(),
-                                                            &existingInstanceId,
-                                                            nullptr)) {
+  } else if (eventLoop.findNanoappInstanceIdByAppId(nanoapp->getAppId(),
+                                                    &existingInstanceId)) {
     LOGE("App with ID 0x%016" PRIx64 " already exists as instance ID 0x%"
          PRIx32, nanoapp->getAppId(), existingInstanceId);
   } else if (!mNanoapps.prepareForPush()) {
@@ -334,9 +334,6 @@ bool EventLoop::deliverNextEvent(const UniquePtr<Nanoapp>& app) {
 }
 
 void EventLoop::distributeEvent(Event *event) {
-  // TODO: this is *not* thread-safe; if we have multiple EventLoops, then there
-  // is no safety mechanism that ensures an event is not freed twice, or that
-  // its free callback is invoked in the proper EventLoop, etc.
   for (const UniquePtr<Nanoapp>& app : mNanoapps) {
     if ((event->targetInstanceId == chre::kBroadcastInstanceId
             && app->isRegisteredForBroadcastEvent(event->eventType))
@@ -411,8 +408,7 @@ void EventLoop::notifyAppStatusChange(uint16_t eventType,
     info->version    = nanoapp.getAppVersion();
     info->instanceId = nanoapp.getInstanceId();
 
-    if (!EventLoopManagerSingleton::get()->postEvent(
-            eventType, info, freeEventDataCallback)) {
+    if (!postEvent(eventType, info, freeEventDataCallback)) {
       LOGE("Couldn't post app status change event");
       memoryFree(info);
     }
