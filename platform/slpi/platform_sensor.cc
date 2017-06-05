@@ -35,6 +35,7 @@ extern "C" {
 #include "chre/platform/assert.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/log.h"
+#include "chre/platform/system_time.h"
 #include "chre/platform/slpi/platform_sensor_util.h"
 #include "chre/platform/slpi/smgr_client.h"
 #include "chre/util/macros.h"
@@ -55,6 +56,10 @@ constexpr size_t kMaxNumSensorsPerSensorId = 3;
 
 //! The value to override a default interval request.
 constexpr uint64_t kDefaultInterval = Seconds(1).toRawNanoseconds();
+
+//! The offset in nanoseconds each 32-bit tick rollover introduces in timestamp
+constexpr uint64_t kTickRolloverOffset =
+    ((1ULL << 32) * Seconds(1).toRawNanoseconds()) / TIMETICK_NOMINAL_FREQ_HZ;
 
 //! The QMI sensor service client handle.
 qmi_client_type gPlatformSensorServiceQmiClientHandle = nullptr;
@@ -288,12 +293,15 @@ void addSensor(const sns_smgr_sensor_datatype_info_s_v01& sensorInfo,
                                 static_cast<size_t>(sensorInfo.SensorName_len));
   memcpy(sensor.sensorName, sensorInfo.SensorName, bytesToCopy);
   sensor.sensorName[bytesToCopy] = '\0';
-  sensor.minInterval = static_cast<uint64_t>(
-      Seconds(1).toRawNanoseconds() / sensorInfo.MaxSampleRate);
 
-  // Allocates memory for on-change sensor's last event.
+  // Override one-shot sensor's minInterval to default
   SensorType sensorType = getSensorTypeFromSensorId(
       sensorInfo.SensorID, sensorInfo.DataType, calType);
+  sensor.minInterval = sensorTypeIsOnChange(sensorType) ?
+      CHRE_SENSOR_INTERVAL_DEFAULT : static_cast<uint64_t>(
+          Seconds(1).toRawNanoseconds() / sensorInfo.MaxSampleRate);
+
+  // Allocates memory for on-change sensor's last event.
   sensor.lastEvent = allocateLastEvent(sensorType, &sensor.lastEventSize);
 
   sensor.isSensorOff = true;
@@ -319,10 +327,15 @@ uint64_t getNanosecondsFromSmgrTicks(uint32_t ticks) {
 void populateSensorDataHeader(
     SensorType sensorType, chreSensorDataHeader *header,
     const sns_smgr_buffering_sample_index_s_v01& sensorIndex) {
-  uint64_t baseTimestamp = getNanosecondsFromSmgrTicks(
+  // Compensate for header timestamp's 32-bit rollovers
+  uint64_t slpiTime = SystemTime::getMonotonicTime().toRawNanoseconds();
+  uint64_t baseTime = getNanosecondsFromSmgrTicks(
       sensorIndex.FirstSampleTimestamp);
+  while (slpiTime > baseTime + kTickRolloverOffset / 2) {
+    baseTime += kTickRolloverOffset;
+  }
   memset(header->reserved, 0, sizeof(header->reserved));
-  header->baseTimestamp = baseTimestamp;
+  header->baseTimestamp = baseTime;
   header->sensorHandle = getSensorHandleFromSensorType(sensorType);
   header->readingCount = sensorIndex.SampleCount;
 }
@@ -459,7 +472,7 @@ void *allocateAndPopulateEvent(
     }
 
     default:
-      LOGW("Unhandled sensor data %" PRIu8, sensorType);
+      LOGW("Unhandled sensor data %" PRIu8, static_cast<uint8_t>(sensorType));
       return nullptr;
   }
 }
