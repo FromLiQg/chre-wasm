@@ -160,7 +160,9 @@ class EventLoop : public NonCopyable {
    *
    * @return the currently executing nanoapp, or nullptr
    */
-  Nanoapp *getCurrentNanoapp() const;
+  Nanoapp *getCurrentNanoapp() const {
+    return mCurrentApp;
+  }
 
   /**
    * Gets the number of nanoapps currently associated with this event loop. Must
@@ -168,14 +170,18 @@ class EventLoop : public NonCopyable {
    *
    * @return The number of nanoapps managed by this event loop
    */
-  size_t getNanoappCount() const;
+  size_t getNanoappCount() const {
+    return mNanoapps.size();
+  }
 
   /**
    * Obtains the TimerPool associated with this event loop.
    *
    * @return The timer pool owned by this event loop.
    */
-  TimerPool& getTimerPool();
+  TimerPool& getTimerPool() {
+    return mTimerPool;
+  }
 
   /**
    * Searches the set of nanoapps managed by this EventLoop for one with the
@@ -211,6 +217,19 @@ class EventLoop : public NonCopyable {
    *         therefore it should not be allowed to send events or messages, etc.
    */
   bool currentNanoappIsStopping() const;
+
+  /**
+   * Prints state in a string buffer. Must only be called from the context of
+   * the main CHRE thread.
+   *
+   * @param buffer Pointer to the start of the buffer.
+   * @param bufferPos Pointer to buffer position to start the print (in-out).
+   * @param size Size of the buffer in bytes.
+   *
+   * @return true if entire log printed, false if overflow or error.
+   */
+  bool logStateToBuffer(char *buffer, size_t *bufferPos,
+                        size_t bufferSize) const;
 
  private:
   //! The maximum number of events that can be active in the system.

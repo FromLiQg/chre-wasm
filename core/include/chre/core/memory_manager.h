@@ -56,22 +56,43 @@ class MemoryManager : public NonCopyable {
   /**
    * @return current total allocated memory in bytes.
    */
-  size_t getTotalAllocatedBytes() const;
+  size_t getTotalAllocatedBytes() const {
+    return mTotalAllocatedBytes;
+  }
 
   /**
    * @return current count of allocated memory spaces.
    */
-  size_t getAllocationCount() const;
+  size_t getAllocationCount() const {
+    return mAllocationCount;
+  }
 
   /**
    * @return max total allocatable memory in bytes.
    */
-  size_t getMaxAllocationBytes() const;
+  size_t getMaxAllocationBytes() const {
+    return kMaxAllocationBytes;
+  }
 
   /**
    * @return max allocatable memory counts.
    */
-  size_t getMaxAllocationCount() const;
+  size_t getMaxAllocationCount() const {
+    return kMaxAllocationCount;
+  }
+
+  /**
+   * Prints state in a string buffer. Must only be called from the context of
+   * the main CHRE thread.
+   *
+   * @param buffer Pointer to the start of the buffer.
+   * @param bufferPos Pointer to buffer position to start the print (in-out).
+   * @param size Size of the buffer in bytes.
+   *
+   * @return true if entire log printed, false if overflow or error.
+   */
+  bool logStateToBuffer(char *buffer, size_t *bufferPos,
+                        size_t bufferSize) const;
 
  private:
   /**
