@@ -42,13 +42,17 @@ class Nanoapp : public PlatformNanoapp {
   /**
    * @return The unique identifier for this Nanoapp instance
    */
-  uint32_t getInstanceId() const;
+  uint32_t getInstanceId() const {
+    return mInstanceId;
+  }
 
   /**
    * Assigns an instance ID to this Nanoapp. This must be called prior to
    * starting this Nanoapp.
    */
-  void setInstanceId(uint32_t instanceId);
+  void setInstanceId(uint32_t instanceId) {
+    mInstanceId = instanceId;
+  }
 
   /**
    * @return true if the nanoapp should receive broadcast events with the given
@@ -101,6 +105,19 @@ class Nanoapp : public PlatformNanoapp {
    * @return A pointer to the processed event
    */
   Event *processNextEvent();
+
+  /**
+   * Prints state in a string buffer. Must only be called from the context of
+   * the main CHRE thread.
+   *
+   * @param buffer Pointer to the start of the buffer.
+   * @param bufferPos Pointer to buffer position to start the print (in-out).
+   * @param size Size of the buffer in bytes.
+   *
+   * @return true if entire log printed, false if overflow or error.
+   */
+  bool logStateToBuffer(char *buffer, size_t *bufferPos,
+                        size_t bufferSize) const;
 
  private:
   uint32_t mInstanceId = kInvalidInstanceId;

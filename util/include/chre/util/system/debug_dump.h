@@ -14,36 +14,27 @@
  * limitations under the License.
  */
 
-#include "chre/core/event_ref_queue.h"
+#ifndef CHRE_UTIL_SYSTEM_DEBUG_DUMP_H_
+#define CHRE_UTIL_SYSTEM_DEBUG_DUMP_H_
 
-#include "chre/platform/assert.h"
+#include <cstddef>
+#include <stdarg.h>
 
 namespace chre {
 
-EventRefQueue::~EventRefQueue() {
-  CHRE_ASSERT_LOG(empty(), "Potentially leaking events if queue not empty "
-                  "when destroyed");
-}
-
-bool EventRefQueue::push(Event *event) {
-  CHRE_ASSERT(event != nullptr);
-
-  bool pushed = mQueue.push(event);
-  if (pushed) {
-    event->incrementRefCount();
-  }
-
-  return pushed;
-}
-
-Event *EventRefQueue::pop() {
-  CHRE_ASSERT(!mQueue.empty());
-
-  Event *event = mQueue.front();
-  mQueue.pop();
-  event->decrementRefCount();
-
-  return event;
-}
+/**
+ * Prints a formatted string into a string buffer.
+ *
+ * @param buffer Pointer to the start of the buffer.
+ * @param bufferPos Pointer to buffer position to start the print (in-out).
+ * @param bufferSize Size of the buffer in bytes.
+ * @param formatStr Formatted string.
+ *
+ * @return true if entire log printed, false if overflow or error.
+ */
+bool debugDumpPrint(char *buffer, size_t *bufferPos, size_t bufferSize,
+                    const char *formatStr, ...);
 
 }  // namespace chre
+
+#endif  // CHRE_UTIL_SYSTEM_DEBUG_DUMP_H_
