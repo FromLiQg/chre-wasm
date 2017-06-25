@@ -19,6 +19,7 @@
 #include "chre/core/event_loop_manager.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/fatal_error.h"
+#include "chre/util/system/debug_dump.h"
 
 namespace chre {
 
@@ -27,6 +28,10 @@ GnssRequestManager::GnssRequestManager()
   if (!mLocationSessionRequests.reserve(1)) {
     FATAL_ERROR("Failed to allocate GNSS requests list at startup");
   }
+}
+
+void GnssRequestManager::init() {
+  mPlatformGnss.init();
 }
 
 uint32_t GnssRequestManager::getCapabilities() {
@@ -87,6 +92,36 @@ void GnssRequestManager::handleLocationEvent(chreGnssLocationEvent *event) {
   if (!eventPosted) {
     FATAL_ERROR("Failed to send GNSS location event");
   }
+}
+
+bool GnssRequestManager::logStateToBuffer(char *buffer, size_t *bufferPos,
+                                          size_t bufferSize) const {
+  bool success = debugDumpPrint(buffer, bufferPos, bufferSize, "\nGNSS:"
+                                " Current interval(ms)=%" PRIu64 "\n",
+                                mCurrentLocationSessionInterval.
+                                getMilliseconds());
+
+  success &= debugDumpPrint(buffer, bufferPos, bufferSize,
+                            " GNSS requests:\n");
+  for (const auto &request : mLocationSessionRequests) {
+    success &= debugDumpPrint(buffer, bufferPos, bufferSize, "  minInterval(ms)"
+                              "=%" PRIu64 " nanoappId=%" PRIu32 "\n",
+                              request.minInterval.getMilliseconds(),
+                              request.nanoappInstanceId);
+  }
+
+  success &= debugDumpPrint(buffer, bufferPos, bufferSize,
+                            " GNSS transition queue:\n");
+  for (const auto &transition : mLocationSessionStateTransitions) {
+    success &= debugDumpPrint(buffer, bufferPos, bufferSize,
+                              "  minInterval(ms)=%" PRIu64 " enable=%d"
+                              " nanoappId=%" PRIu32 "\n",
+                              transition.minInterval.getMilliseconds(),
+                              transition.enable,
+                              transition.nanoappInstanceId);
+  }
+
+  return success;
 }
 
 bool GnssRequestManager::configureLocationSession(
