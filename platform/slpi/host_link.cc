@@ -73,6 +73,7 @@ enum class PendingMessageType {
   UnloadNanoappResponse,
   DebugDumpData,
   DebugDumpResponse,
+  TimeSyncRequest,
 };
 
 struct PendingMessage {
@@ -444,6 +445,7 @@ extern "C" int chre_slpi_get_message_to_host(
       case PendingMessageType::UnloadNanoappResponse:
       case PendingMessageType::DebugDumpData:
       case PendingMessageType::DebugDumpResponse:
+      case PendingMessageType::TimeSyncRequest:
         result = generateMessageFromBuilder(pendingMsg.data.builder,
                                             buffer, bufferSize, messageLen);
         break;
@@ -455,6 +457,10 @@ extern "C" int chre_slpi_get_message_to_host(
 
   FARF(MEDIUM, "Returning message to host (result %d length %u)",
        result, *messageLen);
+
+  // Opportunistically send a time sync message
+  requestTimeSyncIfStale();
+
   return result;
 }
 
@@ -547,6 +553,17 @@ void HostLinkBase::shutdown() {
       FARF(MEDIUM, "Finished draining queue");
     }
   }
+}
+
+void sendTimeSyncRequest() {
+  auto msgBuilder = [](FlatBufferBuilder& builder, void *cookie) {
+    HostProtocolChre::encodeTimeSyncRequest(builder);
+  };
+
+  constexpr size_t kInitialSize = 52;
+  buildAndEnqueueMessage(PendingMessageType::TimeSyncRequest, kInitialSize,
+                         msgBuilder, nullptr);
+  updateLastTimeSyncRequest();
 }
 
 void requestHostLinkLogBufferFlush() {
