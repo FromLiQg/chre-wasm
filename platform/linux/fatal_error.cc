@@ -14,21 +14,15 @@
  * limitations under the License.
  */
 
-#include "ash_api/ash.h"
+#include "chre/target_platform/fatal_error.h"
 
-bool ashSetCalibration(uint8_t sensorType, const struct ashCalInfo *calInfo) {
-  // TODO: Implement this.
-  return false;
+#include "chre/platform/shared/platform_log.h"
+
+namespace chre {
+
+void preFatalError() {
+  // Flush logs before fatally quitting.
+  chre::PlatformLogSingleton::deinit();
 }
 
-bool ashLoadCalibrationParams(uint8_t sensorType, uint8_t storage,
-                              struct ashCalParams *params) {
-  // TODO: Implement this.
-  return false;
-}
-
-bool ashSaveCalibrationParams(uint8_t sensorType,
-                              const struct ashCalParams *params) {
-  // TODO: Implement this.
-  return false;
-}
+}  // namespace chre
