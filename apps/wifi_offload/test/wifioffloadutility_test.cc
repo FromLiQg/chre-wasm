@@ -14,21 +14,16 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_PLATFORM_POWER_CONTROL_UTIL_H
-#define CHRE_PLATFORM_POWER_CONTROL_UTIL_H
+#include "gtest/gtest.h"
 
-#include "chre/core/event_loop_manager.h"
+#include "chre/apps/wifi_offload/utility.h"
+#include "include/utility.h"
 
-namespace chre {
-
-/**
- * @return true if the vote succeeds.
- */
-inline bool slpiForceBigImage() {
-  return EventLoopManagerSingleton::get()->getEventLoop().
-      getPowerControlManager().votePowerMode(SNS_IMG_MODE_BIG);
+TEST(UtilityTest, MapAllSupportedFrequenciesToAllchannel_numbers) {
+  for (size_t i = 0; i < wifi_offload_test::kNumFrequencies_Test; i++) {
+    int channel = wifi_offload::utility::Ieee80211FrequencyToChannel(
+        static_cast<int>(wifi_offload_test::kAllFrequencies_Test[i]));
+    EXPECT_EQ(wifi_offload_test::kAllChannels_Test[i],
+              static_cast<uint8_t>(channel));
+  }
 }
-
-} // namespace chre
-
-#endif // CHRE_PLATFORM_POWER_CONTROL_UTIL_H

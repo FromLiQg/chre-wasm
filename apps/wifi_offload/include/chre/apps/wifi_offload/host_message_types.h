@@ -14,14 +14,27 @@
  * limitations under the License.
  */
 
-#include "chre/platform/shared/platform_pal.h"
+#ifndef CHRE_WIFI_OFFLOAD_HOST_MESSAGE_TYPES_H_
+#define CHRE_WIFI_OFFLOAD_HOST_MESSAGE_TYPES_H_
 
-#include "chre/platform/slpi/power_control_util.h"
+namespace wifi_offload {
 
-namespace chre {
+enum HostMessageType : uint32_t {
+  HOST_CMD_BASE = 0x00001000,
 
-void PlatformPal::prePalApiCall() {
-  slpiForceBigImage();
-}
+  HOST_CMD_CONFIG_SCANS,
+  HOST_CMD_SUBSCRIBE_SCAN_RESULTS,
+  HOST_CMD_UNSUBSCRIBE_SCAN_RESULTS,
+  HOST_CMD_GET_SCAN_STATS,
+  HOST_CMD_RESET,
 
-}  // namespace chre
+  HOST_MSG_BASE = 0x0005000,
+
+  HOST_MSG_SCAN_RESULTS,
+  HOST_MSG_SCAN_STATS,
+  HOST_MSG_ERROR,
+};
+
+}  // namespace wifi_offload
+
+#endif  // CHRE_WIFI_OFFLOAD_HOST_MESSAGE_TYPES_H_
