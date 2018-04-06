@@ -18,6 +18,10 @@
 
 #include "chre/platform/assert.h"
 
+#ifdef CHREX_SENSOR_SUPPORT
+#include "chre/extensions/platform/vendor_sensor_types.h"
+#endif  // CHREX_SENSOR_SUPPORT
+
 namespace chre {
 
 const char *getSensorTypeName(SensorType sensorType) {
@@ -54,6 +58,8 @@ const char *getSensorTypeName(SensorType sensorType) {
       return "Uncal Geomagnetic Field";
     case SensorType::VendorType0:
       return "Vendor Type 0";
+    case SensorType::VendorType1:
+      return "Vendor Type 1";
     default:
       CHRE_ASSERT(false);
       return "";
@@ -104,6 +110,8 @@ SensorType getSensorTypeFromUnsignedInt(uint8_t sensorType) {
       return SensorType::UncalibratedGeomagneticField;
     case (CHRE_SENSOR_TYPE_VENDOR_START + 0):
       return SensorType::VendorType0;
+    case (CHRE_SENSOR_TYPE_VENDOR_START + 1):
+      return SensorType::VendorType1;
     default:
       return SensorType::Unknown;
   }
@@ -141,6 +149,8 @@ uint8_t getUnsignedIntFromSensorType(SensorType sensorType) {
       return CHRE_SENSOR_TYPE_UNCALIBRATED_GEOMAGNETIC_FIELD;
     case SensorType::VendorType0:
       return (CHRE_SENSOR_TYPE_VENDOR_START + 0);
+    case SensorType::VendorType1:
+      return (CHRE_SENSOR_TYPE_VENDOR_START + 1);
     default:
       // Update implementation to prevent undefined or SensorType::Unknown from
       // being used.
@@ -187,6 +197,8 @@ SensorSampleType getSensorSampleTypeFromSensorType(SensorType sensorType) {
       return SensorSampleType::Byte;
     case SensorType::VendorType0:
       return SensorSampleType::Vendor0;
+    case SensorType::VendorType1:
+      return SensorSampleType::Vendor1;
     default:
       CHRE_ASSERT(false);
       return SensorSampleType::Unknown;
@@ -212,18 +224,26 @@ SensorMode getSensorModeFromEnum(enum chreSensorConfigureMode enumSensorMode) {
 }
 
 bool sensorTypeIsOneShot(SensorType sensorType) {
-  return (sensorType == SensorType::InstantMotion ||
-          sensorType == SensorType::StationaryDetect);
+  return (sensorType == SensorType::InstantMotion
+          || sensorType == SensorType::StationaryDetect
+#ifdef CHREX_SENSOR_SUPPORT
+          || extension::vendorSensorTypeIsOneShot(sensorType)
+#endif
+         );
 }
 
 bool sensorTypeIsOnChange(SensorType sensorType) {
-  return (sensorType == SensorType::Light ||
-          sensorType == SensorType::Proximity);
+  return (sensorType == SensorType::Light
+          || sensorType == SensorType::Proximity
+#ifdef CHREX_SENSOR_SUPPORT
+          || extension::vendorSensorTypeIsOnChange(sensorType)
+#endif
+         );
 }
 
 bool sensorTypeIsContinuous(SensorType sensorType) {
-  return (!sensorTypeIsOneShot(sensorType) &&
-          !sensorTypeIsOnChange(sensorType));
+  return (!sensorTypeIsOneShot(sensorType)
+          && !sensorTypeIsOnChange(sensorType));
 }
 
 }  // namespace chre
