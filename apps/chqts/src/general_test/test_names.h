@@ -202,6 +202,16 @@ enum class TestNames : uint32_t {
    * Test: NanoAppInfoEventsTest
    */
   kNanoAppInfoEventsObserver = 0x0421,
+
+  /**
+   * Test: BasicAudioTest
+   */
+  kBasicAudioTest = 0x0422,
+
+  /**
+   * Test: HostAwakeSuspendTest
+   */
+  kHostAwakeSuspend = 0x0423,
 };
 
 }  // namespace general_test

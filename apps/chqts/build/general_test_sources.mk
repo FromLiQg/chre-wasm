@@ -3,6 +3,7 @@
 
 GENERAL_TEST_SRC_FILES = \
     app.cc \
+    basic_audio_test.cc \
     basic_sensor_test_base.cc \
     basic_sensor_tests.cc \
     cell_info_base.cc \
@@ -18,6 +19,7 @@ GENERAL_TEST_SRC_FILES = \
     heap_alloc_stress_test.cc \
     heap_exhaustion_stability_test.cc \
     hello_world_test.cc \
+    host_awake_suspend_test.cc \
     logging_sanity_test.cc \
     nanoapp_info.cc \
     nanoapp_info_by_app_id_test.cc \
