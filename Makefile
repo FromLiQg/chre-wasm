@@ -72,9 +72,11 @@ include $(CHRE_PREFIX)/util/util.mk
 # implementation of CHRE. Example: this CHRE implementation is never built for
 # google_cm4_nanohub as Nanohub itself is a CHRE implementation.
 include $(CHRE_PREFIX)/build/variant/google_arm64_android.mk
+include $(CHRE_PREFIX)/build/variant/google_hexagonv55_slpi-see.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv60_slpi.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv62_slpi.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv62_slpi-uimg.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv65_slpi-see.mk
+include $(CHRE_PREFIX)/build/variant/google_hexagonv65_slpi-see-uimg.mk
 include $(CHRE_PREFIX)/build/variant/google_x86_linux.mk
 include $(CHRE_PREFIX)/build/variant/google_x86_googletest.mk
