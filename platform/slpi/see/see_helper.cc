@@ -29,6 +29,10 @@
 #include "stringl.h"
 #include "timer.h"
 
+#ifdef CHRE_SLPI_UIMG_ENABLED
+#include "sns_qmi_client.h"
+#endif
+
 #include <algorithm>
 #include <cfloat>
 #include <cinttypes>
@@ -93,7 +97,6 @@ struct SeeDataArg {
   size_t totalSamples;
   UniquePtr<uint8_t> event;
   UniquePtr<SeeHelperCallbackInterface::SamplingStatusData> status;
-  SeeCalData *cal;
   SensorType sensorType;
   bool isHostWakeSuspendEvent;
   bool isHostAwake;
@@ -108,7 +111,7 @@ struct SeeInfoArg {
   SeeDataArg *data;
   bool decodeMsgIdOnly;
   Optional<sns_std_suid> *remoteProcSuid;
-  SeeCalInfo *calInfo;
+  SeeCalHelper *calHelper;
 };
 
 //! A struct to facilitate decoding sensor attributes.
@@ -124,48 +127,6 @@ struct SeeAttrArg {
   };
   bool initialized;
 };
-
-size_t getCalIndexFromSensorType(SensorType sensorType) {
-  SeeCalSensor index;
-  switch (sensorType) {
-    case SensorType::Accelerometer:
-      index = SeeCalSensor::AccelCal;
-      break;
-    case SensorType::Gyroscope:
-      index = SeeCalSensor::GyroCal;
-      break;
-    case SensorType::GeomagneticField:
-      index = SeeCalSensor::MagCal;
-      break;
-    default:
-      index = SeeCalSensor::NumCalSensors;
-  }
-  return static_cast<size_t>(index);
-}
-
-size_t getCalIndexFromDataType(const char *dataType) {
-  SensorType sensorType = SensorType::Unknown;
-  if (strcmp(dataType, "accel_cal") == 0) {
-    sensorType = SensorType::Accelerometer;
-  } else if (strcmp(dataType, "gyro_cal") == 0) {
-    sensorType = SensorType::Gyroscope;
-  } else if (strcmp(dataType, "mag_cal") == 0) {
-    sensorType = SensorType::GeomagneticField;
-  }
-  return getCalIndexFromSensorType(sensorType);
-}
-
-size_t getCalIndexFromSuid(const sns_std_suid& suid,
-                           const SeeCalInfo *calInfo) {
-  size_t i = 0;
-  for (; i < kNumSeeCalSensors; i++) {
-    if (calInfo[i].suid.has_value()
-        && suidsMatch(suid, calInfo[i].suid.value())) {
-      break;
-    }
-  }
-  return i;
-}
 
 /**
  * Copy an encoded pb message to a wrapper proto's field.
@@ -727,20 +688,8 @@ bool decodeSnsStdProtoEvent(pb_istream_t *stream, const pb_field_t *field,
   return success;
 }
 
-// TODO: Support compensation matrix and scaling factor calibration
-void applyThreeAxisCalibration(
-    chreSensorThreeAxisData::chreSensorThreeAxisSampleData *sample,
-    const float *val, const SeeCalData *cal) {
-  float bias[3] = {};
-  if (cal != nullptr && cal->hasBias) {
-    memcpy(bias, cal->bias, sizeof(bias));
-  }
-  sample->x = val[0] - bias[0];
-  sample->y = val[1] - bias[1];
-  sample->z = val[2] - bias[2];
-}
-
-void populateEventSample(SeeDataArg *data, const float *val) {
+void populateEventSample(SeeInfoArg *info, const float *val) {
+  SeeDataArg *data = info->data;
   size_t index = data->sampleIndex;
   if (!data->event.isNull() && index < data->totalSamples) {
     SensorSampleType sampleType = getSensorSampleTypeFromSensorType(
@@ -751,7 +700,8 @@ void populateEventSample(SeeDataArg *data, const float *val) {
       case SensorSampleType::ThreeAxis: {
         auto *event = reinterpret_cast<chreSensorThreeAxisData *>(
             data->event.get());
-        applyThreeAxisCalibration(&event->readings[index], val, data->cal);
+        info->calHelper->applyCalibration(
+            data->sensorType, val, event->readings[index].values);
         timestampDelta = &event->readings[index].timestampDelta;
         break;
       }
@@ -802,6 +752,15 @@ void populateEventSample(SeeDataArg *data, const float *val) {
         auto *event = reinterpret_cast<chrexSensorVendor2Data *>(
             data->event.get());
         event->readings[index].value = *val;
+        timestampDelta = &event->readings[index].timestampDelta;
+        break;
+      }
+
+      case SensorSampleType::Vendor3: {
+        auto *event = reinterpret_cast<chrexSensorVendor3Data *>(
+            data->event.get());
+        memcpy(event->readings[index].values, val,
+               sizeof(event->readings[index].values));
         timestampDelta = &event->readings[index].timestampDelta;
         break;
       }
@@ -912,7 +871,7 @@ bool decodeSnsStdSensorEvent(pb_istream_t *stream, const pb_field_t *field,
     LOG_NANOPB_ERROR(stream);
   } else {
     auto *info = static_cast<SeeInfoArg *>(*arg);
-    populateEventSample(info->data, sample.val);
+    populateEventSample(info, sample.val);
   }
   return success;
 }
@@ -959,31 +918,16 @@ bool decodeSnsCalEvent(pb_istream_t *stream, const pb_field_t *field,
     LOG_NANOPB_ERROR(stream);
   } else {
     auto *info = static_cast<SeeInfoArg *>(*arg);
-    SeeCalInfo *calInfo = info->calInfo;
-    size_t calIndex = getCalIndexFromSuid(info->suid, calInfo);
-    if (calIndex >= kNumSeeCalSensors) {
-      LOGW("Cal sensor index out of bounds 0x%" PRIx64 " %" PRIx64,
-           info->suid.suid_high, info->suid.suid_low);
-    } else {
-      SeeCalData *cal = &calInfo[calIndex].cal;
+    SeeCalHelper *calHelper = info->calHelper;
 
-      cal->hasBias = (offset.index == 3);
-      if (cal->hasBias) {
-        memcpy(cal->bias, offset.val, sizeof(cal->bias));
-      }
+    bool hasBias = (offset.index == 3);
+    bool hasScale = (scale.index == 3);
+    bool hasMatrix = (matrix.index == 9);
+    uint8_t accuracy = static_cast<uint8_t>(event.status);
 
-      cal->hasScale = (scale.index == 3);
-      if (cal->hasScale) {
-        memcpy(cal->scale, scale.val, sizeof(cal->scale));
-      }
-
-      cal->hasMatrix = (matrix.index == 9);
-      if (cal->hasScale) {
-        memcpy(cal->matrix, matrix.val, sizeof(cal->matrix));
-      }
-
-      cal->accuracy = static_cast<uint8_t>(event.status);
-    }
+    calHelper->updateCalibration(
+        info->suid, hasBias, offset.val, hasScale, scale.val,
+        hasMatrix, matrix.val, accuracy);
   }
   return success;
 }
@@ -1017,7 +961,7 @@ bool decodeSnsProximityEvent(pb_istream_t *stream, const pb_field_t *field,
   } else {
     float value = static_cast<float>(event.proximity_event_type);
     auto *info = static_cast<SeeInfoArg *>(*arg);
-    populateEventSample(info->data, &value);
+    populateEventSample(info, &value);
   }
   return success;
 }
@@ -1245,6 +1189,10 @@ void *allocateEvent(SensorType sensorType, size_t numSamples) {
     case SensorSampleType::Vendor2:
       sampleSize = sizeof(chrexSensorVendor2SampleData);
       break;
+
+    case SensorSampleType::Vendor3:
+      sampleSize = sizeof(chrexSensorVendor3SampleData);
+      break;
 #endif  // CHREX_SENSOR_SUPPORT
 
     default:
@@ -1300,12 +1248,36 @@ const SeeHelper::SnsClientApi SeeHelper::kDefaultApi = {
   .sns_client_send   = sns_client_send,
 };
 
+#ifdef CHRE_SLPI_UIMG_ENABLED
+const SeeHelper::SnsClientApi BigImageSeeHelper::kQmiApi = {
+  .sns_client_init   = sns_qmi_client_init,
+  .sns_client_deinit = sns_qmi_client_deinit,
+  .sns_client_send   = sns_qmi_client_send,
+};
+#endif  // CHRE_SLPI_UIMG_ENABLED
+
+SeeHelper::SeeHelper() {
+  mCalHelper = memoryAlloc<SeeCalHelper>();
+  if (mCalHelper == nullptr) {
+    FATAL_ERROR("Failed to allocate SeeCalHelper");
+  }
+  mOwnsCalHelper = true;
+}
+
+SeeHelper::SeeHelper(SeeCalHelper *calHelper)
+    : mCalHelper(calHelper), mOwnsCalHelper(false) {}
+
 SeeHelper::~SeeHelper() {
   for (auto *client : mSeeClients) {
     int status = mSnsClientApi->sns_client_deinit(client);
     if (status != 0) {
       LOGE("Failed to release sensor client: %d", status);
     }
+  }
+
+  if (mOwnsCalHelper) {
+    mCalHelper->~SeeCalHelper();
+    memoryFree(mCalHelper);
   }
 }
 
@@ -1336,7 +1308,7 @@ void SeeHelper::handleSnsClientEventMsg(
     data->info.data = &data->dataArg;
     data->info.decodeMsgIdOnly = true;
     data->info.remoteProcSuid = &mRemoteProcSuid;
-    data->info.calInfo = &mCalInfo[0];
+    data->info.calHelper = mCalHelper;
     data->event.events.funcs.decode = decodeSnsClientEventMsg;
     data->event.events.arg = &data->info;
 
@@ -1346,7 +1318,6 @@ void SeeHelper::handleSnsClientEventMsg(
     } else {
       data->info.suid = data->event.suid;
       data->info.decodeMsgIdOnly = false;
-      data->info.data->cal = getCalDataFromSuid(data->info.suid);
       data->info.data->sensorType = getSensorTypeFromSensorInfo(
           data->info.client, data->info.suid, mSensorInfos);
 
@@ -1480,7 +1451,8 @@ bool SeeHelper::getAttributesSync(const sns_std_suid& suid,
   return success;
 }
 
-bool SeeHelper::init(SeeHelperCallbackInterface *cbIf, Microseconds timeout) {
+bool SeeHelper::init(SeeHelperCallbackInterface *cbIf, Microseconds timeout,
+                     bool skipDefaultSensorInit) {
   CHRE_ASSERT(cbIf);
 
   mCbIf = cbIf;
@@ -1489,8 +1461,9 @@ bool SeeHelper::init(SeeHelperCallbackInterface *cbIf, Microseconds timeout) {
   // Initialize cal/remote_proc_state sensors before making sensor data request.
   return (waitForService(&client, timeout)
           && mSeeClients.push_back(client)
-          && initCalSensors()
-          && initRemoteProcSensor());
+          && (skipDefaultSensorInit
+              || (mCalHelper->registerForCalibrationUpdates(*this)
+                  && initRemoteProcSensor())));
 }
 
 bool SeeHelper::makeRequest(const SeeSensorRequest& request) {
@@ -1529,15 +1502,15 @@ bool SeeHelper::makeRequest(const SeeSensorRequest& request) {
   return success;
 }
 
-const sns_std_suid& SeeHelper::getCalSuidFromSensorType(
-    SensorType sensorType) const {
-  static sns_std_suid suid = sns_suid_sensor_init_zero;
-
-  size_t calIndex = getCalIndexFromSensorType(sensorType);
-  if (calIndex < kNumSeeCalSensors && mCalInfo[calIndex].suid.has_value()) {
-    suid = mCalInfo[calIndex].suid.value();
-  }
-  return suid;
+bool SeeHelper::configureOnChangeSensor(const sns_std_suid& suid, bool enable) {
+  uint32_t msgId = (enable)
+      ? SNS_STD_SENSOR_MSGID_SNS_STD_ON_CHANGE_CONFIG
+      : SNS_CLIENT_MSGID_SNS_CLIENT_DISABLE_REQ;
+  return sendReq(
+      suid, nullptr /* syncData */, nullptr /* syncDataType */,
+      msgId, nullptr /* msg */, 0 /* msgLen */,
+      false /* batchValid */, 0 /* batchPeriodUs */,
+      false /* passive */, false /* waitForIndication */);
 }
 
 /**
@@ -1737,50 +1710,6 @@ bool SeeHelper::waitForService(sns_client **client,
   return success;
 }
 
-bool SeeHelper::initCalSensors() {
-  bool success = true;
-
-  // Zero out mCalInfo to avoid accidental suid and data match.
-  memset(mCalInfo, 0, sizeof(mCalInfo));
-
-  const char *kCalTypes[] = {
-    "accel_cal",
-    "gyro_cal",
-    "mag_cal",
-  };
-
-  // Find the cal sensor's SUID, assign it to mCalInfo, and make cal sensor data
-  // request.
-  DynamicVector<sns_std_suid> suids;
-  for (size_t i = 0; i < ARRAY_SIZE(kCalTypes); i++) {
-    const char *calType = kCalTypes[i];
-    if (!findSuidSync(calType, &suids)) {
-      success = false;
-      LOGE("Failed to find sensor '%s'", calType);
-    } else {
-      size_t index = getCalIndexFromDataType(calType);
-      if (index >= kNumSeeCalSensors) {
-        success = false;
-        LOGE("Cal sensor '%s' index out of bounds", calType);
-      } else {
-        mCalInfo[index].suid = suids[0];
-
-        if (!sendReq(suids[0], nullptr /* syncData */,
-                     nullptr /* syncDataType */,
-                     SNS_STD_SENSOR_MSGID_SNS_STD_ON_CHANGE_CONFIG,
-                     nullptr /* msg */, 0 /* msgLen */,
-                     false /* batchValid */, 0 /* batchPeriodUs */,
-                     false /* passive */, false /* waitForIndication */)) {
-          success = false;
-          LOGE("Failed to request '%s' data", calType);
-        }
-      }
-    }
-  }
-
-  return success;
-}
-
 bool SeeHelper::initRemoteProcSensor() {
   bool success = false;
 
@@ -1809,11 +1738,6 @@ bool SeeHelper::initRemoteProcSensor() {
   }
 
   return success;
-}
-
-SeeCalData *SeeHelper::getCalDataFromSuid(const sns_std_suid& suid) {
-  size_t calIndex = getCalIndexFromSuid(suid, mCalInfo);
-  return (calIndex < kNumSeeCalSensors) ? &mCalInfo[calIndex].cal : nullptr;
 }
 
 const SeeHelper::SensorInfo *SeeHelper::getSensorInfo(
