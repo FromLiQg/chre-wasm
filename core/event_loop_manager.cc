@@ -48,15 +48,21 @@ UniquePtr<char> EventLoopManager::debugDump() {
     } else if (!mSensorRequestManager.logStateToBuffer(debugStr, &debugStrPos,
                                                        kDebugStringSize)) {
       LOG_OOM();
+#ifdef CHRE_GNSS_SUPPORT_ENABLED
     } else if (!mGnssManager.logStateToBuffer(debugStr, &debugStrPos,
                                               kDebugStringSize)) {
       LOG_OOM();
+#endif  // CHRE_GNSS_SUPPORT_ENABLED
+#ifdef CHRE_WIFI_SUPPORT_ENABLED
     } else if (!mWifiRequestManager.logStateToBuffer(debugStr, &debugStrPos,
                                                      kDebugStringSize)) {
       LOG_OOM();
+#endif  // CHRE_WIFI_SUPPORT_ENABLED
+#ifdef CHRE_WWAN_SUPPORT_ENABLED
     } else if (!mWwanRequestManager.logStateToBuffer(debugStr, &debugStrPos,
                                                      kDebugStringSize)) {
       LOG_OOM();
+#endif  // CHRE_WWAN_SUPPORT_ENABLED
 #ifdef CHRE_AUDIO_SUPPORT_ENABLED
     } else if (!mAudioRequestManager.logStateToBuffer(debugStr, &debugStrPos,
                                                       kDebugStringSize)) {
@@ -85,9 +91,17 @@ uint32_t EventLoopManager::getNextInstanceId() {
 }
 
 void EventLoopManager::lateInit() {
+#ifdef CHRE_GNSS_SUPPORT_ENABLED
   mGnssManager.init();
+#endif  // CHRE_GNSS_SUPPORT_ENABLED
+
+#ifdef CHRE_WIFI_SUPPORT_ENABLED
   mWifiRequestManager.init();
+#endif  // CHRE_WIFI_SUPPORT_ENABLED
+
+#ifdef CHRE_WWAN_SUPPORT_ENABLED
   mWwanRequestManager.init();
+#endif  // CHRE_WWAN_SUPPORT_ENABLED
 
 #ifdef CHRE_AUDIO_SUPPORT_ENABLED
   mAudioRequestManager.init();

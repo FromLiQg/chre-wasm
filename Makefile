@@ -36,6 +36,21 @@ ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
 COMMON_CFLAGS += -DCHRE_AUDIO_SUPPORT_ENABLED
 endif
 
+# Optional GNSS support.
+ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
+COMMON_CFLAGS += -DCHRE_GNSS_SUPPORT_ENABLED
+endif
+
+# Optional Wi-Fi support.
+ifeq ($(CHRE_WIFI_SUPPORT_ENABLED), true)
+COMMON_CFLAGS += -DCHRE_WIFI_SUPPORT_ENABLED
+endif
+
+# Optional WWAN support.
+ifeq ($(CHRE_WWAN_SUPPORT_ENABLED), true)
+COMMON_CFLAGS += -DCHRE_WWAN_SUPPORT_ENABLED
+endif
+
 # Determine the CHRE_HOST_OS to resolve build discrepancies across Darwin and
 # Linux.
 CHRE_HOST_OS := $(shell uname)
