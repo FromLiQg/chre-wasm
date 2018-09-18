@@ -35,6 +35,50 @@ class DynamicVectorBase : public NonCopyable {
    */
   DynamicVectorBase(DynamicVectorBase&& other);
 
+  /**
+   * Performs a reserve operation for DynamicVector when the underlying type is
+   * trivial. See {@link DynamicVector::reserve} for further details.
+   *
+   * @param elementSize The size of the element used to determine the effective
+   *        size of the underlying data.
+   */
+  bool doReserve(size_t newCapacity, size_t elementSize);
+
+  /**
+   * Performs a prepare for push operation for DynamicVector when the underlying
+   * type is trivial. See {@link DynamicVector::prepareForPush} for further
+   * details.
+   *
+   * @param elementSize The size of the element used to determine the effective
+   *        size of the underlying data.
+   */
+  bool doPrepareForPush(size_t elementSize);
+
+  /**
+   * @return the next size of allocation to perform when growing the size of
+   *         this vector. If no growth is required (mSize is less than
+   *         mCapacity), the current capacity is returned.
+   */
+  size_t getNextGrowthCapacity() const;
+
+  /*
+   * Performs an erase operation for DynamicVector when the underlying type is
+   * trivial. See {@link DynamicVector::erase} for further details.
+   *
+   * @param elementSize The size of the element used to determine the effective
+   *        size of the underlying data.
+   */
+  void doErase(size_t index, size_t elementSize);
+
+  /**
+   * Performs a push back operation for DynamicVector when the underlying type
+   * is trivial. See {@link DynamicVector::push_back} for further details.
+   *
+   * @param elementSize The size of the element used to determine the effective
+   *        size of the underlying data.
+   */
+  bool doPushBack(const void *element, size_t elementSize);
+
   //! A pointer to the underlying data buffer.
   void *mData = nullptr;
 

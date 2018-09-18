@@ -17,6 +17,8 @@
 #ifndef CHRE_UTIL_DYNAMIC_VECTOR_H_
 #define CHRE_UTIL_DYNAMIC_VECTOR_H_
 
+#include <type_traits>
+
 #include "chre/util/dynamic_vector_base.h"
 
 namespace chre {
@@ -308,6 +310,60 @@ class DynamicVector : private DynamicVectorBase {
    * @return true
    */
   bool prepareInsert(size_t index);
+
+  /**
+   * Performs the reserve operation for DynamicVector when ElementType is a
+   * trivial type. See {@link DynamicVector::reserve} for the rest of the
+   * details.
+   */
+  bool doReserve(size_type newCapacity, std::true_type);
+
+  /**
+   * Performs the reserve operation for DynamicVector when ElementType is a
+   * non-trivial type. See {@link DynamicVector::reserve} for the rest of the
+   * details.
+   */
+  bool doReserve(size_type newCapacity, std::false_type);
+
+  /**
+   * Performs the prepare for push operation for DynamicVector when ElementType
+   * is a trivial type. See {@link DynamicVector::prepareForPush} for the rest
+   * of the details.
+   */
+  bool doPrepareForPush(std::true_type);
+
+  /**
+   * Performs the prepare for push operation for DynamicVector when ElementType
+   * is a non-trivial type. See {@link DynamicVector::prepareForPush} for the
+   * rest of the details.
+   */
+  bool doPrepareForPush(std::false_type);
+
+  /**
+   * Performs the erase operation for DynamicVector when ElementType is a
+   * trivial type. See {@link DynamicVector::erase} for the rest of the details.
+   */
+  void doErase(size_type index, std::true_type);
+
+  /**
+   * Performs the erase operation for DynamicVector when ElementType is a
+   * non-trivial type. See {@link DynamicVector::erase} for the rest of the
+   * details.
+   */
+  void doErase(size_type index, std::false_type);
+
+  /**
+   * Performs the push back operation for DynamicVector when ElementType is a
+   * trivial type. See {@link DynamicVector::push_back} for the rest of the details.
+   */
+  bool doPushBack(const ElementType& element, std::true_type);
+
+  /**
+   * Performs the push back operation for DynamicVector when ElementType is a
+   * non-trivial type. See {@link DynamicVector::push_back} for the rest of the
+   * details.
+   */
+  bool doPushBack(const ElementType& element, std::false_type);
 };
 
 }  // namespace chre

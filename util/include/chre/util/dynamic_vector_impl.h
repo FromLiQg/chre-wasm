@@ -99,6 +99,19 @@ void DynamicVector<ElementType>::pop_back() {
 
 template<typename ElementType>
 bool DynamicVector<ElementType>::push_back(const ElementType& element) {
+  return doPushBack(element, typename std::is_trivial<ElementType>::type());
+}
+
+template<typename ElementType>
+bool DynamicVector<ElementType>::doPushBack(const ElementType& element,
+                                            std::true_type) {
+  return DynamicVectorBase::doPushBack(static_cast<const void *>(&element),
+                                       sizeof(ElementType));
+}
+
+template<typename ElementType>
+bool DynamicVector<ElementType>::doPushBack(const ElementType& element,
+                                            std::false_type) {
   bool spaceAvailable = prepareForPush();
   if (spaceAvailable) {
     new (&data()[mSize++]) ElementType(element);
@@ -159,6 +172,18 @@ bool DynamicVector<ElementType>::operator==(const DynamicVector<ElementType>& ot
 
 template<typename ElementType>
 bool DynamicVector<ElementType>::reserve(size_type newCapacity) {
+  return doReserve(newCapacity, typename std::is_trivial<ElementType>::type());
+}
+
+template<typename ElementType>
+bool DynamicVector<ElementType>::doReserve(size_type newCapacity,
+                                           std::true_type) {
+  return DynamicVectorBase::doReserve(newCapacity, sizeof(ElementType));
+}
+
+template<typename ElementType>
+bool DynamicVector<ElementType>::doReserve(size_type newCapacity,
+                                           std::false_type) {
   bool success = (newCapacity <= mCapacity);
   if (!success) {
     ElementType *newData = static_cast<ElementType *>(
@@ -241,6 +266,16 @@ bool DynamicVector<ElementType>::prepareInsert(size_type index) {
 template<typename ElementType>
 void DynamicVector<ElementType>::erase(size_type index) {
   CHRE_ASSERT(index < mSize);
+  doErase(index, typename std::is_trivial<ElementType>::type());
+}
+
+template<typename ElementType>
+void DynamicVector<ElementType>::doErase(size_type index, std::true_type) {
+  DynamicVectorBase::doErase(index, sizeof(ElementType));
+}
+
+template<typename ElementType>
+void DynamicVector<ElementType>::doErase(size_type index, std::false_type) {
   mSize--;
   for (size_type i = index; i < mSize; i++) {
     moveOrCopyAssign(data()[i], data()[i + 1]);
@@ -302,19 +337,17 @@ const ElementType& DynamicVector<ElementType>::back() const {
 
 template<typename ElementType>
 bool DynamicVector<ElementType>::prepareForPush() {
-  bool spaceAvailable = true;
-  if (mSize == mCapacity) {
-    size_type newCapacity = mCapacity * 2;
-    if (newCapacity == 0) {
-      newCapacity = 1;
-    }
+  return doPrepareForPush(typename std::is_trivial<ElementType>::type());
+}
 
-    if (!reserve(newCapacity)) {
-      spaceAvailable = false;
-    }
-  }
+template<typename ElementType>
+bool DynamicVector<ElementType>::doPrepareForPush(std::true_type) {
+  return DynamicVectorBase::doPrepareForPush(sizeof(ElementType));
+}
 
-  return spaceAvailable;
+template<typename ElementType>
+bool DynamicVector<ElementType>::doPrepareForPush(std::false_type) {
+  return reserve(getNextGrowthCapacity());
 }
 
 template<typename ElementType>
