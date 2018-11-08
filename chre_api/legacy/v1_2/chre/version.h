@@ -183,4 +183,3 @@ uint64_t chreGetPlatformId(void);
 #endif
 
 #endif  /* _CHRE_VERSION_H_ */
-
