@@ -330,9 +330,7 @@ void BasicWifiTest::validateWifiScanResult(
 
     if (results[i].band != CHRE_WIFI_BAND_2_4_GHZ
         && results[i].band != CHRE_WIFI_BAND_5_GHZ) {
-      chreLog(CHRE_LOG_ERROR, "Got unexpected band %d", results[i].band);
-      // TODO (b/111260580) Uncomment this line after the bug is fixed.
-      //sendFatalFailureToHostUint8("Got unexpected band %d", results[i].band);
+      sendFatalFailureToHostUint8("Got unexpected band %d", results[i].band);
     }
 
     // It's possible for WiFi RSSI be positive if the phone is placed
@@ -340,8 +338,9 @@ void BasicWifiTest::validateWifiScanResult(
     // in which case RSSI will be < 20 dBm. Place a high threshold to check
     // against values likely to be erroneous (36 dBm/4W).
     if (results[i].rssi >= 36) {
-      sendFatalFailureToHostUint8(
-          "RSSI should be less than 36, got: %d", results[i].rssi);
+      // TODO (b/120556143) Change below to fatal failure after the bug is fixed.
+      chreLog(CHRE_LOG_ERROR, "RSSI should be less than 36, got: %d",
+              results[i].rssi);
     }
 
     validatePrimaryChannel(results[i]);
