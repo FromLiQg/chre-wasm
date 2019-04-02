@@ -351,4 +351,26 @@ bool getSensorBiasEventType(SensorType sensorType, uint16_t *eventType) {
   return success;
 }
 
+bool sensorTypeIsCalibrated(SensorType sensorType) {
+  return (sensorType == SensorType::Accelerometer
+          || sensorType == SensorType::Gyroscope
+          || sensorType == SensorType::GeomagneticField);
+}
+
+SensorType toCalibratedSensorType(SensorType sensorType) {
+  switch (sensorType) {
+    case SensorType::UncalibratedAccelerometer:
+      return SensorType::Accelerometer;
+    case SensorType::UncalibratedGyroscope:
+      return SensorType::Gyroscope;
+    case SensorType::UncalibratedGeomagneticField:
+      return SensorType::GeomagneticField;
+    default:
+      /* empty */
+      break;
+  }
+
+  return sensorType;
+}
+
 }  // namespace chre

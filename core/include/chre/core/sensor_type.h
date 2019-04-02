@@ -303,6 +303,21 @@ bool sensorTypeReportsBias(SensorType sensorType);
  */
 bool getSensorBiasEventType(SensorType sensorType, uint16_t *eventType);
 
+/**
+ * @param sensorType The sensor type.
+ *
+ * @return true if the sensor is a runtime-calibrated sensor.
+ */
+bool sensorTypeIsCalibrated(SensorType sensorType);
+
+/**
+ * @param sensorType The sensor type.
+ *
+ * @return The corresponding runtime-calibrated sensor type. If the sensor does
+ *     not have one, then the input sensorType is returned.
+ */
+SensorType toCalibratedSensorType(SensorType sensorType);
+
 }  // namespace chre
 
 #endif  // CHRE_CORE_SENSOR_TYPE_H_

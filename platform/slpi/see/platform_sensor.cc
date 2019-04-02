@@ -776,6 +776,31 @@ bool PlatformSensor::getSamplingStatus(
   return true;
 }
 
+bool PlatformSensor::getThreeAxisBias(
+    struct chreSensorThreeAxisData *bias) const {
+  SensorType sensorType = getSensorType();
+  SeeCalHelper *calHelper =
+      getSeeHelperForSensorType(sensorType)->getCalHelper();
+
+  bool success = sensorTypeReportsBias(sensorType);
+  if (success) {
+    // We use the runtime-calibrated sensor type here, per documentation
+    // of SeeCalHelper::getBias(), but overwrite the sensorHandle to that of
+    // the curent sensor, because the calibration data itself is equivalent
+    // for both calibrated/uncalibrated sensor types.
+    SensorType calSensorType = toCalibratedSensorType(sensorType);
+    if (calHelper->getBias(calSensorType, bias)) {
+      bias->header.sensorHandle = getSensorHandleFromSensorType(sensorType);
+    } else {
+      // Set to zero value + unknown accuracy per CHRE API requirements.
+      memset(bias, 0, sizeof(chreSensorThreeAxisData));
+      bias->header.accuracy = CHRE_SENSOR_ACCURACY_UNKNOWN;
+    }
+  }
+
+  return success;
+}
+
 void PlatformSensorBase::initBase(
     SensorType sensorType,uint64_t minInterval, const char *sensorName,
     ChreSensorData *lastEvent, size_t lastEventSize, bool passiveSupported) {
