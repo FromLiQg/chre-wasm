@@ -29,9 +29,6 @@
  *  Prototypes
  ***********************************************/
 
-static void chppEnqueueTxPacket(struct ChppTransportState *context,
-                                enum ChppErrorCode errorCode);
-
 static void chppSetRxState(struct ChppTransportState *context,
                            enum ChppRxState newState);
 static size_t chppConsumePreamble(struct ChppTransportState *context,
@@ -249,9 +246,9 @@ static size_t chppConsumePayload(struct ChppTransportState *context,
 
   LOGD("Copying %zu bytes of payload", bytesToCopy);
 
-  memcpy(context->rxDatagram.payload + context->rxDatagram.loc, buf,
+  memcpy(context->rxDatagram.payload + context->rxDatagramLoc, buf,
          bytesToCopy);
-  context->rxDatagram.loc += bytesToCopy;
+  context->rxDatagramLoc += bytesToCopy;
 
   context->rxStatus.loc += bytesToCopy;
   if (context->rxStatus.loc == context->rxHeader.length) {
@@ -298,7 +295,7 @@ static size_t chppConsumeFooter(struct ChppTransportState *context,
 
       if (hasPayload) {
         context->rxDatagram.length -= context->rxHeader.length;
-        context->rxDatagram.loc -= context->rxHeader.length;
+        context->rxDatagramLoc -= context->rxHeader.length;
 
         if (context->rxDatagram.length == 0) {
           // Discarding this packet == discarding entire datagram
@@ -325,7 +322,9 @@ static size_t chppConsumeFooter(struct ChppTransportState *context,
       chppEnqueueTxPacket(context, CHPP_ERROR_CHECKSUM);
 
     } else {
-      // Packet is good. Save received ACK seq number and process payload if any
+      // Packet is good. Save received ACK info and process payload if any
+
+      context->rxStatus.receivedErrorCode = context->rxHeader.errorCode;
 
       if (context->txStatus.ackedSeq != context->rxHeader.ackSeq) {
         // A previously sent packet was ACKed
@@ -379,7 +378,7 @@ static void chppProcessRxPayload(struct ChppTransportState *context) {
 
     // TODO: do something with the data
 
-    context->rxDatagram.loc = 0;
+    context->rxDatagramLoc = 0;
     context->rxDatagram.length = 0;
     chppFree(context->rxDatagram.payload);
     context->rxDatagram.payload = NULL;
@@ -489,4 +488,63 @@ bool chppRxDataCb(struct ChppTransportState *context, const uint8_t *buf,
 
   return (context->rxStatus.state == CHPP_STATE_PREAMBLE &&
           context->rxStatus.loc == 0);
+}
+
+void chppTxTimeoutTimerCb(struct ChppTransportState *context) {
+  chppMutexLock(&context->mutex);
+
+  // Implicit NACK. Set received error code accordingly
+  context->rxStatus.receivedErrorCode = CHPP_ERROR_TIMEOUT;
+
+  // Enqueue Tx packet which will be a retransmission based on the above
+  chppEnqueueTxPacket(context, CHPP_ERROR_NONE);
+
+  chppMutexUnlock(&context->mutex);
+}
+
+bool chppEnqueueTxDatagram(struct ChppTransportState *context, size_t len,
+                           uint8_t *buf) {
+  bool success = false;
+  chppMutexLock(&context->mutex);
+
+  if (context->txDatagramQueue.pending < CHPP_TX_DATAGRAM_QUEUE_LEN) {
+    uint16_t end =
+        (context->txDatagramQueue.front + context->txDatagramQueue.pending) %
+        CHPP_TX_DATAGRAM_QUEUE_LEN;
+
+    context->txDatagramQueue.datagram[end].length = len;
+    context->txDatagramQueue.datagram[end].payload = buf;
+    context->txDatagramQueue.pending++;
+
+    success = true;
+  }
+
+  chppEnqueueTxPacket(context, CHPP_ERROR_NONE);
+
+  chppMutexUnlock(&context->mutex);
+
+  return success;
+}
+
+bool chppDequeueTxDatagram(struct ChppTransportState *context) {
+  bool success = false;
+  chppMutexLock(&context->mutex);
+
+  if (context->txDatagramQueue.pending > 0) {
+    chppFree(context->txDatagramQueue.datagram[context->txDatagramQueue.front]
+                 .payload);
+    context->txDatagramQueue.datagram[context->txDatagramQueue.front].payload =
+        NULL;
+    context->txDatagramQueue.datagram[context->txDatagramQueue.front].length =
+        0;
+
+    context->txDatagramQueue.pending--;
+    context->txDatagramQueue.front++;
+    context->txDatagramQueue.front %= CHPP_TX_DATAGRAM_QUEUE_LEN;
+
+    success = true;
+  }
+
+  chppMutexUnlock(&context->mutex);
+  return success;
 }
