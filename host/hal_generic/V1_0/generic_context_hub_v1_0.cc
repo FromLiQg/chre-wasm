@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 The Android Open Source Project
+ * Copyright (C) 2017 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_SETTINGS_TEST_UTIL_H_
-#define CHRE_SETTINGS_TEST_UTIL_H_
+#include "generic_context_hub_v1_0.h"
 
-#include <cinttypes>
+namespace android {
+namespace hardware {
+namespace contexthub {
+namespace V1_0 {
+namespace implementation {
 
-namespace chre {
+extern "C" V1_0::IContexthub *HIDL_FETCH_IContexthub(const char * /* name */) {
+  return new GenericContextHub();
+}
 
-namespace settings_test {
-
-void sendTestResultToHost(uint16_t hostEndpointId, bool success);
-
-void sendEmptyMessageToHost(uint16_t hostEndpointId, uint32_t messageType);
-
-}  // namespace settings_test
-
-}  // namespace chre
-
-#endif  // CHRE_SETTINGS_TEST_UTIL_H_
+}  // namespace implementation
+}  // namespace V1_0
+}  // namespace contexthub
+}  // namespace hardware
+}  // namespace android

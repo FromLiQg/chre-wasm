@@ -20,6 +20,7 @@
 #include <cstdint>
 
 #include "chre/core/nanoapp.h"
+#include "chre/core/settings.h"
 #include "chre/platform/platform_gnss.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/system/debug_dump.h"
@@ -82,6 +83,22 @@ class GnssSession {
    *        released through the PlatformGnss instance.
    */
   void handleReportEvent(void *event);
+
+  /**
+   * Invoked when the host notifies CHRE of a settings change.
+   *
+   * @param setting The setting that changed.
+   * @param state The new setting state.
+   */
+  void onSettingChanged(Setting setting, SettingState state);
+
+  /**
+   * Handles a change in the Location setting, making a GNSS request if
+   * necessary according to the new state.
+   *
+   * @param state The new setting state.
+   */
+  void handleLocationSettingChange(SettingState state);
 
   /**
    * Prints state in a string buffer. Must only be called from the context of
@@ -166,6 +183,15 @@ class GnssSession {
   //! The current report interval being sent to the session. This is only valid
   //! if the mRequests is non-empty.
   Milliseconds mCurrentInterval = Milliseconds(UINT64_MAX);
+
+  //! The state of the last successful request to the platform.
+  bool mPlatformEnabled = false;
+
+  //! True if a request from the CHRE framework is currently pending.
+  bool mInternalRequestPending = false;
+
+  //! True if a setting change event is pending to be processed.
+  bool mSettingChangePending = false;
 
   // Allows GnssManager to access constructor.
   friend class GnssManager;
@@ -316,6 +342,12 @@ class GnssSession {
    */
   void addSessionRequestLog(uint32_t nanoappInstanceId, Milliseconds interval,
                             bool start);
+
+  /**
+   * Dispatches pending state transitions on the queue until the first one
+   * succeeds.
+   */
+  void dispatchQueuedStateTransitions();
 };
 
 /**
@@ -351,6 +383,14 @@ class GnssManager : public NonCopyable {
   GnssSession &getMeasurementSession() {
     return mMeasurementSession;
   };
+
+  /**
+   * Invoked when the host notifies CHRE of a settings change.
+   *
+   * @param setting The setting that changed.
+   * @param state The new setting state.
+   */
+  void onSettingChanged(Setting setting, SettingState state);
 
   /**
    * Prints state in a string buffer. Must only be called from the context of

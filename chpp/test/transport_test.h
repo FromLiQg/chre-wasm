@@ -14,27 +14,24 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_TOOLCHAIN_H_
-#define CHRE_TOOLCHAIN_H_
+#ifndef CHPP_TRANSPORT_TEST_H_
+#define CHPP_TRANSPORT_TEST_H_
 
-/**
- * @file
- * Compiler/build toolchain-specific macros used by the CHRE API
- */
-
-#if defined(__GNUC__) || defined(__clang__)
-
-#define CHRE_DEPRECATED(message) \
-  __attribute__((deprecated(message)))
-
-// Enable printf-style compiler warnings for mismatched format string and args
-#define CHRE_PRINTF_ATTR(formatPos, argStart) \
-  __attribute__((format(printf, formatPos, argStart)))
-
-#else  // if !defined(__GNUC__) && !defined(__clang__)
-
-#error Need to add support for new compiler
-
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-#endif  // CHRE_TOOLCHAIN_H_
+/************************************************
+ *  Functions necessary for unit testing
+ ***********************************************/
+
+bool chppDequeueTxDatagram(struct ChppTransportState *context);
+void chppTransportDoWork(struct ChppTransportState *context);
+size_t chppAddPreamble(uint8_t *buf);
+uint32_t chppCalculateChecksum(uint8_t *buf, size_t len);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif  // CHPP_TRANSPORT_TEST_H_
