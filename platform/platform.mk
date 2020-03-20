@@ -29,6 +29,7 @@ SLPI_CFLAGS += -I$(SLPI_PREFIX)/core/api/mproc
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/core/api/systemdrivers
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc/HAP
+SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc/a1std
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc/stddef
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/rtld/inc
 
@@ -40,6 +41,10 @@ SLPI_CFLAGS += $(FLATBUFFERS_CFLAGS)
 
 ifneq ($(CHRE_ENABLE_ACCEL_CAL), false)
 SLPI_CFLAGS += -DCHRE_ENABLE_ACCEL_CAL
+endif
+
+ifneq ($(CHRE_ENABLE_ASH_DEBUG_DUMP), false)
+SLPI_CFLAGS += -DCHRE_ENABLE_ASH_DEBUG_DUMP
 endif
 
 # SLPI/SMGR-specific Compiler Flags ############################################
