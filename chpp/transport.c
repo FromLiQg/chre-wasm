@@ -16,7 +16,6 @@
 
 #include "chpp/transport.h"
 
-
 /************************************************
  *  Prototypes
  ***********************************************/
@@ -671,6 +670,15 @@ void chppTransportInit(struct ChppTransportState *transportContext,
   chppMutexInit(&transportContext->mutex);
   chppNotifierInit(&transportContext->notifier);
   transportContext->appContext = appContext;
+}
+
+void chppTransportDeinit(struct ChppTransportState *transportContext) {
+  CHPP_NOT_NULL(transportContext);
+
+  chppNotifierDeinit(&transportContext->notifier);
+  chppMutexDeinit(&transportContext->mutex);
+
+  // TODO: Do other cleanup
 }
 
 bool chppRxDataCb(struct ChppTransportState *context, const uint8_t *buf,
