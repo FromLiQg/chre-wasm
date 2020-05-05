@@ -296,6 +296,14 @@ bool HostLink::sendMessage(const MessageToHost *message) {
   return transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
 }
 
+void HostLink::sendLogMessage(const char *logMessage, size_t logMessageSize) {
+  constexpr size_t kInitialSize = 128;
+  flatbuffers::FlatBufferBuilder builder(logMessageSize + kInitialSize);
+  HostProtocolChre::encodeLogMessages(builder, logMessage, logMessageSize);
+
+  transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+}
+
 void HostMessageHandlers::handleDebugDumpRequest(uint16_t hostClientId) {
   chre::EventLoopManagerSingleton::get()
       ->getDebugDumpManager()

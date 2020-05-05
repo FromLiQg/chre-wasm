@@ -166,6 +166,7 @@ FREERTOS_CFLAGS += -Iplatform/shared/include
 AOC_SRCS += platform/aoc/chre_api_re.cc
 AOC_SRCS += platform/aoc/fatal_error.cc
 AOC_SRCS += platform/aoc/host_link.cc
+AOC_SRCS += platform/aoc/log.cc
 AOC_SRCS += platform/aoc/platform_sensor_type_helpers.cc
 AOC_SRCS += platform/aoc/power_control_manager.cc
 AOC_SRCS += platform/aoc/system_time.cc

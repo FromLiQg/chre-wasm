@@ -16,6 +16,9 @@
 #ifndef CHRE_PLATFORM_AOC_LOG_H_
 #define CHRE_PLATFORM_AOC_LOG_H_
 
+#include <chre.h>
+#include <stdio.h>
+
 #ifndef __FILENAME__
 #ifdef __BASE_FILE__
 #define __FILENAME__ __BASE_FILE__
@@ -24,16 +27,26 @@
 #endif  // __BASE_FILE__
 #endif  // __FILE_NAME__
 
-#include <stdio.h>
+// TODO(b/149317051): The printf in the below macro is needed until CHRE can log
+// to the AP before the daemon has connected to AoC.
+#define CHRE_AOC_LOG(level, fmt, ...)                                       \
+  do {                                                                      \
+    CHRE_LOG_PREAMBLE                                                       \
+    chre::log(level, fmt, ##__VA_ARGS__);                                   \
+    printf("CHRE:%s:%d\t" fmt "\n", __FILENAME__, __LINE__, ##__VA_ARGS__); \
+    CHRE_LOG_EPILOGUE                                                       \
+  } while (0)
 
-// TODO: b/146164384 - We will need to batch logs rather than send them
-// one at a time to avoid waking the AP.
-#define CHRE_AOC_LOG(level, fmt, ...)                               \
-  printf("CHRE:%s %s:%d\t" fmt "\n", level, __FILENAME__, __LINE__, \
-         ##__VA_ARGS__)
-#define LOGE(fmt, ...) CHRE_AOC_LOG("E", fmt, ##__VA_ARGS__)
-#define LOGW(fmt, ...) CHRE_AOC_LOG("W", fmt, ##__VA_ARGS__)
-#define LOGI(fmt, ...) CHRE_AOC_LOG("I", fmt, ##__VA_ARGS__)
-#define LOGD(fmt, ...) CHRE_AOC_LOG("D", fmt, ##__VA_ARGS__)
+#define LOGE(fmt, ...) CHRE_AOC_LOG(CHRE_LOG_ERROR, fmt, ##__VA_ARGS__)
+#define LOGW(fmt, ...) CHRE_AOC_LOG(CHRE_LOG_WARN, fmt, ##__VA_ARGS__)
+#define LOGI(fmt, ...) CHRE_AOC_LOG(CHRE_LOG_INFO, fmt, ##__VA_ARGS__)
+#define LOGD(fmt, ...) CHRE_AOC_LOG(CHRE_LOG_DEBUG, fmt, ##__VA_ARGS__)
+
+namespace chre {
+
+void log(enum chreLogLevel level, const char *formatStr, ...);
+void vaLog(enum chreLogLevel level, const char *format, va_list args);
+
+}  // namespace chre
 
 #endif  // CHRE_PLATFORM_AOC_LOG_H_
