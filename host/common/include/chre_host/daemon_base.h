@@ -66,7 +66,8 @@ class ChreDaemonBase {
    * @param message A buffer containing the message
    * @param messageLen size of the message buffer in bytes
    */
-  virtual void onMessageReceived(unsigned char *message, size_t messageLen) = 0;
+  virtual void onMessageReceived(const unsigned char *message,
+                                 size_t messageLen) = 0;
 
   /**
    * Function to query if a graceful shutdown of CHRE was requested
@@ -112,8 +113,9 @@ class ChreDaemonBase {
    * @param name The filename of the nanoapp to load.
    * @param transactionId The transaction ID to use when loading the app.
    */
-  void loadPreloadedNanoapp(const std::string &directory,
-                            const std::string &name, uint32_t transactionId);
+  virtual void loadPreloadedNanoapp(const std::string &directory,
+                                    const std::string &name,
+                                    uint32_t transactionId);
 
   /**
    * Sends a preloaded nanoapp filename / metadata to CHRE.
@@ -178,7 +180,7 @@ class ChreDaemonBase {
    *
    * @param message The message sent to the daemon.
    */
-  void handleDaemonMessage(const uint8_t *message);
+  virtual void handleDaemonMessage(const uint8_t *message);
 
  private:
   //! Set to true when we request a graceful shutdown of CHRE

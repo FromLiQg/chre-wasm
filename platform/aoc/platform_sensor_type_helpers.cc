@@ -1,0 +1,94 @@
+/*
+ * Copyright (C) 2020 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#include "chre/platform/platform_sensor_type_helpers.h"
+#include "chre/target_platform/assert.h"
+
+#ifdef CHREX_SENSOR_SUPPORT
+#include "chre/extensions/platform/vendor_sensor_types.h"
+#endif  // CHREX_SENSOR_SUPPORT
+
+namespace chre {
+
+ReportingMode PlatformSensorTypeHelpers::getVendorSensorReportingMode(
+    uint8_t /* sensorType */) {
+  // TODO: Stubbed out, implement this
+  return ReportingMode::Continuous;
+}
+
+bool PlatformSensorTypeHelpers::getVendorSensorIsCalibrated(
+    uint8_t /* sensorType */) {
+  // TODO: Stubbed out, implement this
+  return false;
+}
+
+bool PlatformSensorTypeHelpers::getVendorSensorBiasEventType(
+    uint8_t /* sensorType */, uint16_t * /* eventType */) {
+  // TODO: Stubbed out, implement this
+  return false;
+}
+
+const char *PlatformSensorTypeHelpers::getVendorSensorTypeName(
+    uint8_t /* sensorType */) {
+  // TODO: Stubbed out, implement this
+  return "";
+}
+
+uint8_t PlatformSensorTypeHelpersBase::toUncalibratedSensorType(
+    uint8_t sensorType) {
+  // TODO: Stubbed out, implement this
+  return sensorType;
+}
+
+bool PlatformSensorTypeHelpersBase::reportsBias(uint8_t sensorType) {
+  // TODO: Stubbed out, implement this
+  return false;
+}
+
+SensorSampleType
+PlatformSensorTypeHelpersBase::getSensorSampleTypeFromSensorType(
+    uint8_t sensorType) {
+  switch (sensorType) {
+    case CHRE_SENSOR_TYPE_ACCELEROMETER:
+    case CHRE_SENSOR_TYPE_GYROSCOPE:
+    case CHRE_SENSOR_TYPE_GEOMAGNETIC_FIELD:
+    case CHRE_SENSOR_TYPE_UNCALIBRATED_ACCELEROMETER:
+    case CHRE_SENSOR_TYPE_UNCALIBRATED_GYROSCOPE:
+    case CHRE_SENSOR_TYPE_UNCALIBRATED_GEOMAGNETIC_FIELD:
+      return SensorSampleType::ThreeAxis;
+    case CHRE_SENSOR_TYPE_PRESSURE:
+    case CHRE_SENSOR_TYPE_LIGHT:
+    case CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE:
+    case CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE:
+    case CHRE_SENSOR_TYPE_GEOMAGNETIC_FIELD_TEMPERATURE:
+      return SensorSampleType::Float;
+    case CHRE_SENSOR_TYPE_INSTANT_MOTION_DETECT:
+    case CHRE_SENSOR_TYPE_STATIONARY_DETECT:
+    case CHRE_SENSOR_TYPE_STEP_DETECT:
+      return SensorSampleType::Occurrence;
+    case CHRE_SENSOR_TYPE_PROXIMITY:
+      return SensorSampleType::Byte;
+    default:
+#ifdef CHREX_SENSOR_SUPPORT
+      return extension::vendorSensorSampleTypeFromSensorType(sensorType);
+#else
+      // Update implementation to prevent undefined from being used.
+      CHRE_ASSERT(false);
+      return SensorSampleType::Unknown;
+#endif
+  }
+}
+
+}  // namespace chre
