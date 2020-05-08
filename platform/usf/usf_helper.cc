@@ -261,6 +261,15 @@ bool convertUsfToChreSensorType(usf::UsfMsgSensorType usfSensorType,
     case usf::UsfMsgSensorType_kUsfSensorAmbientLight:
       *chreSensorType = CHRE_SENSOR_TYPE_LIGHT;
       break;
+    case usf::UsfMsgSensorType_kUsfSensorMotionDetect:
+      *chreSensorType = CHRE_SENSOR_TYPE_INSTANT_MOTION_DETECT;
+      break;
+    case usf::UsfMsgSensorType_kUsfSensorStationaryDetect:
+      *chreSensorType = CHRE_SENSOR_TYPE_STATIONARY_DETECT;
+      break;
+    case usf::UsfMsgSensorType_kUsfSensorStepDetector:
+      *chreSensorType = CHRE_SENSOR_TYPE_STEP_DETECT;
+      break;
     default:
       // Don't print anything as USF exposes sensor types CHRE doesn't care
       // about (e.g. Camera Vsync, and color)
