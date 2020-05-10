@@ -26,12 +26,19 @@ SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc/HAP
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc/a1std
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc/stddef
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/rtld/inc
+SLPI_CFLAGS += -I$(SLPI_PREFIX)/ssc/goog/api
+SLPI_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc
+SLPI_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc/internal
 
 SLPI_CFLAGS += -Iplatform/shared/include
 SLPI_CFLAGS += -Iplatform/slpi/include
 
 # We use FlatBuffers in the SLPI platform layer
 SLPI_CFLAGS += $(FLATBUFFERS_CFLAGS)
+
+# Needed to define __SIZEOF_ATTR_THREAD in sns_osa_thread.h, included in
+# sns_memmgr.h.
+SLPI_CFLAGS += -DSSC_TARGET_HEXAGON
 
 ifneq ($(CHRE_ENABLE_ACCEL_CAL), false)
 SLPI_CFLAGS += -DCHRE_ENABLE_ACCEL_CAL
@@ -49,18 +56,11 @@ SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/core/api/kernel/libstd/stringl
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/qmimsgs/common/api
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc_api/pb
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/framework/cm/inc
-SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/goog/api
-SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc
-SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc/internal
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc/utils/nanopb
 
 SLPI_SEE_CFLAGS += -Iplatform/slpi/see/include
 
 SLPI_SEE_CFLAGS += -DCHRE_SLPI_SEE
-
-# Needed to define __SIZEOF_ATTR_THREAD in sns_osa_thread.h, included in
-# sns_memmgr.h.
-SLPI_SEE_CFLAGS += -DSSC_TARGET_HEXAGON
 
 # Defined in slpi_proc/ssc/build/ssc.scons
 SLPI_SEE_CFLAGS += -DPB_FIELD_16BIT
@@ -145,6 +145,58 @@ SLPI_SEE_SRCS += $(SLPI_PREFIX)/ssc_api/pb/sns_std_type.pb.c
 
 SLPI_SEE_QSK_SRCS += $(SLPI_PREFIX)/chre/chre/src/system/chre/platform/slpi/sns_qmi_client_alt.c
 SLPI_SEE_QMI_SRCS += $(SLPI_PREFIX)/chre/chre/src/system/chre/platform/slpi/sns_qmi_client.c
+
+# FreeRTOS-specific Source Files ###############################################
+
+FREERTOS_SRCS += platform/freertos/context.cc
+FREERTOS_SRCS += platform/freertos/init.cc
+FREERTOS_SRCS += platform/freertos/memory_manager.cc
+FREERTOS_SRCS += platform/freertos/memory.cc
+FREERTOS_SRCS += platform/freertos/nanoapp_loader.cc
+FREERTOS_SRCS += platform/freertos/platform_debug_dump_manager.cc
+FREERTOS_SRCS += platform/freertos/platform_nanoapp.cc
+
+# FreeRTOS-specific Compiler Flags #############################################
+FREERTOS_CFLAGS += -I$(AOC_TOP_DIR)/external/FreeRTOS/FreeRTOS/Source/include
+FREERTOS_CFLAGS += -Iplatform/freertos/include
+FREERTOS_CFLAGS += -Iplatform/shared/include
+
+# AoC-specific Source Files ####################################################
+
+AOC_SRCS += platform/aoc/chre_api_re.cc
+AOC_SRCS += platform/aoc/fatal_error.cc
+AOC_SRCS += platform/aoc/host_link.cc
+AOC_SRCS += platform/aoc/platform_sensor_type_helpers.cc
+AOC_SRCS += platform/aoc/power_control_manager.cc
+AOC_SRCS += platform/aoc/system_time.cc
+AOC_SRCS += platform/aoc/system_timer.cc
+AOC_SRCS += platform/shared/chre_api_re.cc
+AOC_SRCS += platform/shared/chre_api_version.cc
+AOC_SRCS += platform/shared/host_protocol_chre.cc
+AOC_SRCS += platform/shared/host_protocol_common.cc
+AOC_SRCS += platform/shared/memory_manager.cc
+AOC_SRCS += platform/shared/pal_system_api.cc
+AOC_SRCS += platform/shared/pal_sensor_stub.cc
+AOC_SRCS += platform/shared/system_time.cc
+AOC_SRCS += platform/usf/platform_sensor.cc
+AOC_SRCS += platform/usf/platform_sensor_manager.cc
+AOC_SRCS += platform/usf/usf_helper.cc
+
+# AoC-specific Compiler Flags ##################################################
+AOC_CFLAGS += -Iplatform/aoc/include
+AOC_CFLAGS += -Iplatform/usf/include
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/efw/include
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/basic/include
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/os/common/include
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/platform/common/include
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/core/include
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/core/fbs
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/pal/include
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/pal/efw/include
+
+# We use FlatBuffers in the AOC platform layer
+AOC_CFLAGS += $(FLATBUFFERS_CFLAGS)
 
 # Simulator-specific Compiler Flags ############################################
 

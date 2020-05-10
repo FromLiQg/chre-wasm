@@ -7,6 +7,9 @@
 COMMON_CFLAGS += -Iapps/include
 
 # App makefiles ################################################################
+ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
+include apps/audio_world/audio_world.mk
+endif
 
 ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
 include apps/audio_world/audio_world.mk

@@ -53,6 +53,7 @@ enum class SystemCallbackType : uint16_t {
   SettingChangeEvent,
   GnssLocationReportEvent,
   GnssMeasurementReportEvent,
+  TimerSyncRequest,
 };
 
 //! The function signature of a system callback mirrors the CHRE event free
