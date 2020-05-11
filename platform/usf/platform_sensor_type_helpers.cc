@@ -103,4 +103,61 @@ PlatformSensorTypeHelpersBase::getSensorSampleTypeFromSensorType(
   }
 }
 
+usf::UsfSensorReportingMode PlatformSensorTypeHelpersBase::getUsfReportingMode(
+    ReportingMode mode) {
+  if (mode == ReportingMode::OnChange) {
+    return usf::kUsfSensorReportOnChange;
+  } else if (mode == ReportingMode::OneShot) {
+    return usf::kUsfSensorReportOneShot;
+  } else {
+    return usf::kUsfSensorReportContinuous;
+  }
+}
+
+bool PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
+    usf::UsfSensorType usfSensorType, uint8_t *chreSensorType) {
+  bool success = true;
+  switch (usfSensorType) {
+    case usf::UsfSensorType::kUsfSensorAccelerometer:
+      *chreSensorType = CHRE_SENSOR_TYPE_ACCELEROMETER;
+      break;
+    case usf::UsfSensorType::kUsfSensorGyroscope:
+      *chreSensorType = CHRE_SENSOR_TYPE_GYROSCOPE;
+      break;
+    case usf::UsfSensorType::kUsfSensorProx:
+      *chreSensorType = CHRE_SENSOR_TYPE_PROXIMITY;
+      break;
+    case usf::UsfSensorType::kUsfSensorBaro:
+      *chreSensorType = CHRE_SENSOR_TYPE_PRESSURE;
+      break;
+    case usf::UsfSensorType::kUsfSensorMag:
+      *chreSensorType = CHRE_SENSOR_TYPE_GEOMAGNETIC_FIELD;
+      break;
+    case usf::UsfSensorType::kUsfSensorMagTemp:
+      *chreSensorType = CHRE_SENSOR_TYPE_GEOMAGNETIC_FIELD_TEMPERATURE;
+      break;
+    case usf::UsfSensorType::kUsfSensorImuTemp:
+      *chreSensorType = CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE;
+      break;
+    case usf::UsfSensorType::kUsfSensorAmbientLight:
+      *chreSensorType = CHRE_SENSOR_TYPE_LIGHT;
+      break;
+    case usf::UsfSensorType::kUsfSensorMotionDetect:
+      *chreSensorType = CHRE_SENSOR_TYPE_INSTANT_MOTION_DETECT;
+      break;
+    case usf::UsfSensorType::kUsfSensorStationaryDetect:
+      *chreSensorType = CHRE_SENSOR_TYPE_STATIONARY_DETECT;
+      break;
+    case usf::UsfSensorType::kUsfSensorStepDetector:
+      *chreSensorType = CHRE_SENSOR_TYPE_STEP_DETECT;
+      break;
+    default:
+      // Don't print anything as USF exposes sensor types CHRE doesn't care
+      // about (e.g. Camera Vsync, and color)
+      success = false;
+      break;
+  }
+  return success;
+}
+
 }  // namespace chre

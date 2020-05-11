@@ -223,62 +223,6 @@ void populateSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
 
 }  // namespace
 
-usf::UsfSensorReportingMode getUsfReportingMode(ReportingMode mode) {
-  if (mode == ReportingMode::OnChange) {
-    return usf::kUsfSensorReportOnChange;
-  } else if (mode == ReportingMode::OneShot) {
-    return usf::kUsfSensorReportOneShot;
-  } else {
-    return usf::kUsfSensorReportContinuous;
-  }
-}
-
-bool convertUsfToChreSensorType(usf::UsfMsgSensorType usfSensorType,
-                                uint8_t *chreSensorType) {
-  bool success = true;
-  switch (usfSensorType) {
-    case usf::UsfMsgSensorType_kUsfSensorAccelerometer:
-      *chreSensorType = CHRE_SENSOR_TYPE_ACCELEROMETER;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorGyroscope:
-      *chreSensorType = CHRE_SENSOR_TYPE_GYROSCOPE;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorProx:
-      *chreSensorType = CHRE_SENSOR_TYPE_PROXIMITY;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorBaro:
-      *chreSensorType = CHRE_SENSOR_TYPE_PRESSURE;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorMag:
-      *chreSensorType = CHRE_SENSOR_TYPE_GEOMAGNETIC_FIELD;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorMagTemp:
-      *chreSensorType = CHRE_SENSOR_TYPE_GEOMAGNETIC_FIELD_TEMPERATURE;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorImuTemp:
-      *chreSensorType = CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorAmbientLight:
-      *chreSensorType = CHRE_SENSOR_TYPE_LIGHT;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorMotionDetect:
-      *chreSensorType = CHRE_SENSOR_TYPE_INSTANT_MOTION_DETECT;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorStationaryDetect:
-      *chreSensorType = CHRE_SENSOR_TYPE_STATIONARY_DETECT;
-      break;
-    case usf::UsfMsgSensorType_kUsfSensorStepDetector:
-      *chreSensorType = CHRE_SENSOR_TYPE_STEP_DETECT;
-      break;
-    default:
-      // Don't print anything as USF exposes sensor types CHRE doesn't care
-      // about (e.g. Camera Vsync, and color)
-      success = false;
-      break;
-  }
-  return success;
-}
-
 UsfHelper::~UsfHelper() {
   deinit();
 }
@@ -310,28 +254,13 @@ void UsfHelper::init(UsfHelperCallbackInterface *callback,
   }
 }
 
-bool UsfHelper::getSensorList(usf::UsfReqSyncCallback &callback,
-                              const usf::UsfMsgSensorListResp **list) {
-  bool success = false;
-  if (mTransportClient.get() != nullptr) {
-    usf::UsfReq req;
-    req.SetReqType(usf::UsfMsgReqType_GET_SENSOR_LIST);
-    req.SetServerHandle(mSensorMgrHandle);
-
-    success = sendUsfReqSync(&req, &callback) && getRespMsg(callback, list);
+bool UsfHelper::getSensorList(
+    usf::UsfVector<refcount::reffed_ptr<usf::UsfSensor>> *sensorList) {
+  UsfErr err = usf::UsfSensorMgr::GetSensorList(sensorList);
+  if (err != kErrNone) {
+    LOG_USF_ERR(err);
   }
-
-  return success;
-}
-
-bool UsfHelper::getSensorInfo(usf::UsfServerHandle serverHandle,
-                              usf::UsfReqSyncCallback &callback,
-                              const usf::UsfMsgSensorInfoResp **info) {
-  usf::UsfReq req;
-  req.SetReqType(usf::UsfMsgReqType_GET_SENSOR_INFO);
-  req.SetServerHandle(serverHandle);
-
-  return sendUsfReqSync(&req, &callback) && getRespMsg(callback, info);
+  return err == kErrNone;
 }
 
 void UsfHelper::deinit() {
@@ -388,9 +317,10 @@ void UsfHelper::processSensorSample(const usf::UsfMsgEvent *event) {
   } else if (sampleMsg->sample_list()->size() == 0) {
     LOGE("Received empty sample batch");
   } else {
-    usf::UsfMsgSensorType usfType = sampleMsg->sensor_type();
+    auto usfType = static_cast<usf::UsfSensorType>(sampleMsg->sensor_type());
 
-    if (convertUsfToChreSensorType(usfType, &sensorType) &&
+    if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
+            usfType, &sensorType) &&
         !createSensorEvent(sampleMsg, sensorType, sensorSample)) {
       // USF shares the same sensor type between calibrated and uncalibrated
       // sensors. Try the uncalibrated type to see if the sampling ID matches.
@@ -399,6 +329,10 @@ void UsfHelper::processSensorSample(const usf::UsfMsgEvent *event) {
       if (uncalType != sensorType) {
         sensorType = uncalType;
         createSensorEvent(sampleMsg, uncalType, sensorSample);
+        // USF shares a sensor type for both gyro and accel temp.
+      } else if (sensorType == CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE) {
+        createSensorEvent(sampleMsg, CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE,
+                          sensorSample);
       }
     }
   }

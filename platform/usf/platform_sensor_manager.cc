@@ -21,34 +21,29 @@
 namespace chre {
 namespace {
 
-void addSensor(usf::UsfServerHandle sensorHandle, uint8_t sensorType,
-               const usf::UsfMsgSensorInfoResp *sensorInfoResp,
-               DynamicVector<Sensor> *chreSensors) {
-  uint64_t minInterval = SensorTypeHelpers::isOneShot(sensorType)
-                             ? CHRE_SENSOR_INTERVAL_DEFAULT
-                             : sensorInfoResp->min_delay_ns();
-  const char *sensorName =
-      reinterpret_cast<const char *>(sensorInfoResp->name()->data());
-  LOGI("%s, type %" PRIu8 ", minInterval %" PRIu64 " handle %" PRId32,
-       sensorName, sensorType, minInterval, sensorHandle);
-
+void addSensor(refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
+               uint8_t sensorType, DynamicVector<Sensor> *chreSensors) {
   if (!chreSensors->emplace_back()) {
     FATAL_ERROR("Failed to allocate new sensor");
   }
 
   // The sensor base class must be initialized before the main Sensor init()
   // can be invoked as init() is allowed to invoke base class methods.
-  chreSensors->back().initBase(sensorHandle, sensorType, minInterval,
-                               sensorName);
+  chreSensors->back().initBase(usfSensor, sensorType);
   chreSensors->back().init();
+
+  const Sensor &newSensor = chreSensors->back();
+  LOGI("%s, type %" PRIu8 ", minInterval %" PRIu64 " handle %" PRId32,
+       newSensor.getSensorName(), newSensor.getSensorType(),
+       newSensor.getMinInterval(), newSensor.getServerHandle());
 }
 
-void addSensorsWithInfo(usf::UsfServerHandle sensorHandle,
-                        const usf::UsfMsgSensorInfoResp *sensorInfoResp,
+void addSensorsWithInfo(refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
                         DynamicVector<Sensor> *chreSensors) {
   uint8_t sensorType;
-  if (convertUsfToChreSensorType(sensorInfoResp->type(), &sensorType)) {
-    addSensor(sensorHandle, sensorType, sensorInfoResp, chreSensors);
+  if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
+          usfSensor->GetType(), &sensorType)) {
+    addSensor(usfSensor, sensorType, chreSensors);
 
     // USF shares the same sensor type for calibrated and uncalibrated sensors
     // so populate a calibrated / uncalibrated sensor for known calibrated
@@ -56,13 +51,13 @@ void addSensorsWithInfo(usf::UsfServerHandle sensorHandle,
     uint8_t calibratedType =
         PlatformSensorTypeHelpersBase::toUncalibratedSensorType(sensorType);
     if (calibratedType != sensorType) {
-      addSensor(sensorHandle, calibratedType, sensorInfoResp, chreSensors);
+      addSensor(usfSensor, sensorType, chreSensors);
     }
 
     // USF shares a sensor type for both gyro and accel temp.
     if (sensorType == CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE) {
-      addSensor(sensorHandle, CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE,
-                sensorInfoResp, chreSensors);
+      addSensor(usfSensor, CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE,
+                chreSensors);
     }
   }
 }
@@ -103,17 +98,11 @@ void PlatformSensorManager::init() {
 DynamicVector<Sensor> PlatformSensorManager::getSensors() {
   DynamicVector<Sensor> sensors;
 
-  usf::UsfReqSyncCallback callback;
-  const usf::UsfMsgSensorListResp *list;
-  if (mHelper.getSensorList(callback, &list)) {
-    for (size_t i = 0; i < list->handle_list()->size(); i++) {
-      usf::UsfServerHandle serverHandle = list->handle_list()->Get(i);
-
-      usf::UsfReqSyncCallback infoCallback;
-      const usf::UsfMsgSensorInfoResp *info;
-      if (mHelper.getSensorInfo(serverHandle, infoCallback, &info)) {
-        addSensorsWithInfo(serverHandle, info, &sensors);
-      }
+  usf::UsfVector<refcount::reffed_ptr<usf::UsfSensor>> sensorList;
+  if (mHelper.getSensorList(&sensorList)) {
+    for (size_t i = 0; i < sensorList.size(); i++) {
+      refcount::reffed_ptr<usf::UsfSensor> &sensor = sensorList[i];
+      addSensorsWithInfo(sensor, &sensors);
     }
   }
 
@@ -156,7 +145,8 @@ bool PlatformSensorManager::configureSensor(Sensor &sensor,
     usfReq.SetReqType(usf::UsfMsgReqType_START_SAMPLING);
     usfReq.SetServerHandle(sensor.getServerHandle());
     // TODO(147438885): Make setting the reporting mode of a sensor optional
-    usfReq.SetReportingMode(getUsfReportingMode(getReportingMode(sensor)));
+    usfReq.SetReportingMode(PlatformSensorTypeHelpersBase::getUsfReportingMode(
+        getReportingMode(sensor)));
     usfReq.SetPeriodNs(request.getInterval().toRawNanoseconds());
     usfReq.SetMaxLatencyNs(
         sensor.isContinuous() ? request.getLatency().toRawNanoseconds() : 0);
