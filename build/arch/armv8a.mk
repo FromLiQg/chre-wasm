@@ -8,6 +8,7 @@ TARGET_AR = $(ARMV8A_AR)
 TARGET_CC = $(ARMV8A_CC)
 TARGET_LD = $(ARMV8A_LD)
 
+TARGET_CFLAGS += $(DEFINES)
 TARGET_CFLAGS += $(CPPFLAGS)
 COMMON_CXX_CFLAGS += $(CXXFLAGS)
 COMMON_C_CFLAGS += $(CFLAGS)
@@ -18,10 +19,6 @@ TARGET_SO_EARLY_LIBS += $(LDLIBS)
 # Needed so nanoapps can resolve stdlib deps.
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/libc/include
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/external/libcxx/include
-
-# Flags used to configure stdlib correctly.
-TARGET_CFLAGS += -D_LIBCPP_HAS_THREAD_API_EXTERNAL
-TARGET_CFLAGS += -D_GNU_SOURCE
 
 # TODO: Fix ar_client so the following two can be removed.
 TARGET_CFLAGS += -Wno-strict-prototypes
