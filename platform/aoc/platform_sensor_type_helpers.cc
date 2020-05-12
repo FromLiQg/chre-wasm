@@ -46,6 +46,18 @@ const char *PlatformSensorTypeHelpers::getVendorSensorTypeName(
   return "";
 }
 
+size_t PlatformSensorTypeHelpers::getVendorSensorLastEventSize(
+    uint8_t /* sensorType */) {
+  // TODO: Stubbed out, implement this
+  return 0;
+}
+
+void PlatformSensorTypeHelpers::getVendorLastSample(
+    uint8_t /* sensorType */, const ChreSensorData * /* event */,
+    ChreSensorData * /* lastEvent */) {
+  // TODO: Stubbed out, implement this
+}
+
 uint8_t PlatformSensorTypeHelpersBase::toUncalibratedSensorType(
     uint8_t sensorType) {
   // TODO: Stubbed out, implement this
