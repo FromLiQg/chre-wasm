@@ -28,6 +28,7 @@ SRC_DIR=$(AOC_TOP_DIR)/AOC
 endif
 
 include $(AOC_TOP_DIR)/AOC/build/$(AOC_PLATFORM)/toolchain.mk
+include $(AOC_TOP_DIR)/AOC/targets/aoc.$(AOC_PLATFORM)/local.mk
 
 # Sized based on the buffer allocated in the host daemon (4096 bytes), minus
 # FlatBuffer overhead (max 80 bytes), minus some extra space to make a nice

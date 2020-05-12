@@ -19,6 +19,11 @@
 
 #include "chre_host/daemon_base.h"
 #include "chre_host/socket_server.h"
+#ifdef CHRE_USE_TOKENIZED_LOGGING
+#include "chre_host/tokenized_log_message_parser.h"
+#else
+#include "chre_host/log_message_parser_base.h"
+#endif
 
 #include "usf/usf_transport_client.h"
 
@@ -27,12 +32,6 @@
 // Disable verbose logging
 // TODO: use property_get_bool to make verbose logging runtime configurable
 // #define LOG_NDEBUG 0
-
-#ifdef CHRE_USE_TOKENIZED_LOGGING
-#include "chre_host/tokenized_log_message_parser.h"
-#else
-#include "chre_host/log_message_parser_base.h"
-#endif
 
 namespace android {
 namespace chre {
