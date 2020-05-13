@@ -26,10 +26,6 @@
 #include "chpp/memory.h"
 #include "chpp/transport.h"
 
-#include "chpp/services/discovery.h"
-#include "chpp/services/loopback.h"
-#include "chpp/services/nonhandle.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -163,7 +159,7 @@ struct ChppService {
   ChppDispatchFunction *dispatchFunctionPtr;
 
   //! Minimum valid length of datagrams for the service.
-  uint8_t minLength;
+  size_t minLength;
 };
 
 struct ChppAppState {

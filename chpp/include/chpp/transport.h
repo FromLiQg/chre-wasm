@@ -120,6 +120,8 @@ enum ChppTransportErrorCode {
   CHPP_TRANSPORT_ERROR_HEADER = 4,
   //! Out of order
   CHPP_TRANSPORT_ERROR_ORDER = 5,
+  //! Message incomprehensible at App Layer
+  CHPP_TRANSPORT_ERROR_APPLAYER = 6,
   //! Timeout (implicit, deduced and used internally only)
   CHPP_TRANSPORT_ERROR_TIMEOUT = 0xF,
 };
@@ -352,29 +354,12 @@ void chppTxTimeoutTimerCb(struct ChppTransportState *context);
 void chppRxTimeoutTimerCb(struct ChppTransportState *context);
 
 /**
- * Enqueues an outgoing datagram of a specified length. The payload must have
- * been allocated by the caller using chppMalloc.
+ * Enqueues an outgoing datagram of a specified length and ffrees the payload
+ * asynchronously after it is sent. The payload must have been allocated by the
+ * caller using chppMalloc.
  *
- * If enqueueing is successful, the payload shall be freed by the transport
- * layer once it has been sent out.
- * If enqueueing is unsuccessful, it is up to the sender to decide whether to
- * free the payload and/or resend it later.
- *
- * @param context Maintains status for each transport layer instance.
- * @param buf Datagram payload allocated through chppMalloc. Cannot be null.
- * @param len Datagram length in bytes.
- *
- * @return True informs the sender that the datagram was successfully enqueued.
- * False informs the sender that the queue was full.
- */
-bool chppEnqueueTxDatagram(struct ChppTransportState *context, void *buf,
-                           size_t len);
-
-/**
- * Identical to chppEnqueueTxDatagram() but with the following behaviour if
- * enqueueing a datagram is unsuccessful:
- * 1. An error message is printed.
- * 2. The payload is freed (discarded).
+ * If enqueueing a datagram is unsuccessful, the payload is freed (discarded)
+ * and an error message printed.
  *
  * @param context Maintains status for each transport layer instance.
  * @param buf Datagram payload allocated through chppMalloc. Cannot be null.
@@ -385,6 +370,16 @@ bool chppEnqueueTxDatagram(struct ChppTransportState *context, void *buf,
  */
 bool chppEnqueueTxDatagramOrFail(struct ChppTransportState *context, void *buf,
                                  size_t len);
+
+/**
+ * Enables the App Layer to enqueue an outgoing error datagram, for example for
+ * an OOM situation over the wire.
+ *
+ * @param context Maintains status for each transport layer instance.
+ * @param errorCode Error code to be sent
+ */
+void chppEnqueueTxErrorDatagram(struct ChppTransportState *context,
+                                enum ChppTransportErrorCode errorCode);
 
 /**
  * Starts the main thread for CHPP's Transport Layer. This thread needs to be
