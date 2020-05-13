@@ -38,30 +38,6 @@ void addSensor(refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
        newSensor.getMinInterval(), newSensor.getServerHandle());
 }
 
-void addSensorsWithInfo(refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
-                        DynamicVector<Sensor> *chreSensors) {
-  uint8_t sensorType;
-  if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
-          usfSensor->GetType(), &sensorType)) {
-    addSensor(usfSensor, sensorType, chreSensors);
-
-    // USF shares the same sensor type for calibrated and uncalibrated sensors
-    // so populate a calibrated / uncalibrated sensor for known calibrated
-    // sensor types
-    uint8_t calibratedType =
-        PlatformSensorTypeHelpersBase::toUncalibratedSensorType(sensorType);
-    if (calibratedType != sensorType) {
-      addSensor(usfSensor, sensorType, chreSensors);
-    }
-
-    // USF shares a sensor type for both gyro and accel temp.
-    if (sensorType == CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE) {
-      addSensor(usfSensor, CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE,
-                chreSensors);
-    }
-  }
-}
-
 ReportingMode getReportingMode(Sensor &sensor) {
   if (sensor.isOneShot()) {
     return ReportingMode::OneShot;
@@ -195,6 +171,25 @@ void PlatformSensorManager::releaseBiasEvent(void *biasData) {
   memoryFree(biasData);
 }
 
+void PlatformSensorManagerBase::onSamplingStatusUpdate(
+    uint8_t sensorType, const usf::UsfSensorSamplingEvent *update) {
+  uint32_t sensorHandle;
+  if (getSensorRequestManager().getSensorHandle(sensorType, &sensorHandle)) {
+    // Memory will be freed via releaseSamplingStatusUpdate once core framework
+    // performs its updates.
+    auto statusUpdate = MakeUniqueZeroFill<struct chreSensorSamplingStatus>();
+    if (statusUpdate.isNull()) {
+      LOG_OOM();
+    } else {
+      statusUpdate->interval = update->GetPeriodNs();
+      statusUpdate->latency = update->GetMaxLatencyNs();
+      statusUpdate->enabled = update->GetActive();
+      getSensorRequestManager().handleSamplingStatusUpdate(
+          sensorHandle, statusUpdate.release());
+    }
+  }
+}
+
 bool PlatformSensorManagerBase::getSensorInfo(uint8_t sensorType,
                                               SensorInfo *sensorInfo) {
   bool success = false;
@@ -219,6 +214,38 @@ void PlatformSensorManagerBase::onSensorDataEvent(
   if (getSensorRequestManager().getSensorHandle(sensorType, &sensorHandle)) {
     getSensorRequestManager().handleSensorDataEvent(sensorHandle,
                                                     eventData.release());
+  }
+}
+
+void PlatformSensorManagerBase::addSensorsWithInfo(
+    refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
+    DynamicVector<Sensor> *chreSensors) {
+  uint8_t sensorType;
+  if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
+          usfSensor->GetType(), &sensorType)) {
+    // Only register for a USF sensor once. If it maps to multiple sensors,
+    // code down the line will handle sending multiple updates.
+    if (!mHelper.registerForStatusUpdates(usfSensor)) {
+      LOGE("Failed to register for status updates for %s",
+           usfSensor->GetName());
+    }
+
+    addSensor(usfSensor, sensorType, chreSensors);
+
+    // USF shares the same sensor type for calibrated and uncalibrated sensors
+    // so populate a calibrated / uncalibrated sensor for known calibrated
+    // sensor types
+    uint8_t uncalibratedType =
+        PlatformSensorTypeHelpersBase::toUncalibratedSensorType(sensorType);
+    if (uncalibratedType != sensorType) {
+      addSensor(usfSensor, uncalibratedType, chreSensors);
+    }
+
+    // USF shares a sensor type for both gyro and accel temp.
+    if (sensorType == CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE) {
+      addSensor(usfSensor, CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE,
+                chreSensors);
+    }
   }
 }
 

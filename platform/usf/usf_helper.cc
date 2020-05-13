@@ -58,6 +58,16 @@ void eventHandler(void *context, usf::UsfEvent *event) {
   }
 }
 
+void statusUpdateHandler(void *context, usf::UsfEvent *event) {
+  const usf::UsfSensorSamplingEvent *updateEvent =
+      static_cast<usf::UsfSensorSamplingEvent *>(event);
+
+  if (updateEvent != nullptr) {
+    auto *mgr = static_cast<UsfHelper *>(context);
+    mgr->processStatusUpdate(updateEvent);
+  }
+}
+
 void *allocateEvent(uint8_t sensorType, size_t numSamples) {
   SensorSampleType sampleType =
       PlatformSensorTypeHelpers::getSensorSampleTypeFromSensorType(sensorType);
@@ -237,16 +247,20 @@ void UsfHelper::init(UsfHelperCallbackInterface *callback,
   } else {
     err = usf::UsfWorkMgr::CreateWorker(&mWorker);
   }
-  if ((err != kErrNone) ||
-      ((err = usf::UsfTransportClient::Create(&mTransportClient)) !=
-       kErrNone) ||
-      ((err = mTransportClient->Connect()) != kErrNone) ||
-      ((err = mTransportClient->GetMsgEventType()->AddListener(
-            mWorker.get(), eventHandler, this, &mUsfEventListener)) !=
-       kErrNone) ||
-      ((err = usf::UsfClientGetServer(mTransportClient.get(),
-                                      &usf::kUsfSensorMgrServerUuid,
-                                      &mSensorMgrHandle)) != kErrNone)) {
+
+  if (!mUsfEventListeners.emplace_back()) {
+    LOG_OOM();
+    deinit();
+  } else if ((err != kErrNone) ||
+             ((err = usf::UsfTransportClient::Create(&mTransportClient)) !=
+              kErrNone) ||
+             ((err = mTransportClient->Connect()) != kErrNone) ||
+             ((err = mTransportClient->GetMsgEventType()->AddListener(
+                   mWorker.get(), eventHandler, this,
+                   &mUsfEventListeners.back())) != kErrNone) ||
+             ((err = usf::UsfClientGetServer(mTransportClient.get(),
+                                             &usf::kUsfSensorMgrServerUuid,
+                                             &mSensorMgrHandle)) != kErrNone)) {
     LOG_USF_ERR(err);
     deinit();
   } else {
@@ -264,9 +278,8 @@ bool UsfHelper::getSensorList(
 }
 
 void UsfHelper::deinit() {
-  if (mUsfEventListener != nullptr) {
-    mTransportClient->GetMsgEventType()->RemoveListener(mUsfEventListener);
-    mUsfEventListener = nullptr;
+  for (usf::UsfEventListener *listener : mUsfEventListeners) {
+    listener->event_type->RemoveListener(listener);
   }
 
   if (mWorker.get() != nullptr) {
@@ -304,6 +317,23 @@ bool UsfHelper::stopSampling(usf::UsfStopSamplingReq *request) {
   return sendUsfReqSync(request, &callback);
 }
 
+bool UsfHelper::registerForStatusUpdates(
+    refcount::reffed_ptr<usf::UsfSensor> &sensor) {
+  bool success = false;
+  if (!mUsfEventListeners.emplace_back()) {
+    LOG_OOM();
+  } else {
+    UsfErr err = sensor->GetSamplingEventType()->AddListener(
+        mWorker.get(), statusUpdateHandler, this, &mUsfEventListeners.back());
+    success = err == kErrNone;
+    if (!success) {
+      LOG_USF_ERR(err);
+    }
+  }
+
+  return success;
+}
+
 void UsfHelper::processSensorSample(const usf::UsfMsgEvent *event) {
   const usf::UsfMsgSampleBatch *sampleMsg;
   UniquePtr<uint8_t> sensorSample;
@@ -339,6 +369,32 @@ void UsfHelper::processSensorSample(const usf::UsfMsgEvent *event) {
 
   if (!sensorSample.isNull() && mCallback != nullptr) {
     mCallback->onSensorDataEvent(sensorType, std::move(sensorSample));
+  }
+}
+
+void UsfHelper::processStatusUpdate(const usf::UsfSensorSamplingEvent *update) {
+  // TODO(stange): See if the latest status can be shared among sensor types
+  // with the same underlying physical sensor to avoid allocating multiple
+  // updates.
+  uint8_t sensorType;
+  if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
+          update->GetSensor()->GetType(), &sensorType)) {
+    mCallback->onSamplingStatusUpdate(sensorType, update);
+
+    // USF shares the same sensor type for calibrated and uncalibrated sensors
+    // so populate a calibrated / uncalibrated sensor for known calibrated
+    // sensor types
+    uint8_t uncalibratedType =
+        PlatformSensorTypeHelpersBase::toUncalibratedSensorType(sensorType);
+    if (uncalibratedType != sensorType) {
+      mCallback->onSamplingStatusUpdate(uncalibratedType, update);
+    }
+
+    // USF shares a sensor type for both gyro and accel temp.
+    if (sensorType == CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE) {
+      mCallback->onSamplingStatusUpdate(
+          CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE, update);
+    }
   }
 }
 

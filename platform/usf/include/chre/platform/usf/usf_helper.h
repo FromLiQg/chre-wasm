@@ -24,6 +24,7 @@
 #include "usf/error.h"
 #include "usf/fbs/usf_msg_sample_root_generated.h"
 #include "usf/reffed_ptr.h"
+#include "usf/usf_sensor.h"
 #include "usf/usf_sensor_req.h"
 #include "usf/usf_transport_client.h"
 
@@ -58,6 +59,20 @@ class UsfHelperCallbackInterface {
    * @return true if all sensor info was obtained.
    */
   virtual bool getSensorInfo(uint8_t sensorType, SensorInfo *sensorInfo) = 0;
+
+  //! Invoked from the USF worker thread to provide a sensor sampling status
+  //! update. All fields are guaranteed to be valid.
+  virtual void onSamplingStatusUpdate(
+      uint8_t sensorType, const usf::UsfSensorSamplingEvent *update) = 0;
+};
+
+//! Class that allows clients of UsfHelper that only want to listen for sensor
+//! events to implement only functions that relate to those events.
+class SensorEventCallbackInterface : public UsfHelperCallbackInterface {
+ public:
+  void onSamplingStatusUpdate(
+      uint8_t /*sensorType*/,
+      const usf::UsfSensorSamplingEvent * /*update*/) override {}
 };
 
 //! Default timeout to wait for the USF transport client to return a response
@@ -120,12 +135,29 @@ class UsfHelper {
   bool stopSampling(usf::UsfStopSamplingReq *request);
 
   /**
+   * Registers the helper for sensor sampling status updates from USF for the
+   * given sensor.
+   *
+   * @param sensor The sensor to listen to sampling status updates from.
+   * @return true if registration was successful.
+   */
+  bool registerForStatusUpdates(refcount::reffed_ptr<usf::UsfSensor> &sensor);
+
+  /**
    * Used to process sensor samples delivered through a listener registered with
    * USF.
    *
    * @param event Pointer containing a valid sensor sample
    */
   void processSensorSample(const usf::UsfMsgEvent *event);
+
+  /**
+   * Used to process a sensor sampling status update delivered through a
+   * listener registered with USF.
+   *
+   * @param update Update containing the latest state from USF.
+   */
+  void processStatusUpdate(const usf::UsfSensorSamplingEvent *update);
 
  private:
   /**
@@ -177,8 +209,8 @@ class UsfHelper {
   //! UsfWorker used to dispatch messages to CHRE on its own thread
   refcount::reffed_ptr<usf::UsfWorker> mWorker;
 
-  //! Listener for events sent from USF
-  usf::UsfEventListener *mUsfEventListener = nullptr;
+  //! All registered USF event listeners.
+  DynamicVector<usf::UsfEventListener *> mUsfEventListeners;
 
   //! Handle to the USF sensor manager
   usf::UsfServerHandle mSensorMgrHandle;
