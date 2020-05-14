@@ -173,12 +173,17 @@ AOC_SRCS += platform/aoc/fatal_error.cc
 AOC_SRCS += platform/aoc/host_link.cc
 AOC_SRCS += platform/aoc/log.cc
 AOC_SRCS += platform/aoc/memory.cc
-AOC_SRCS += platform/aoc/platform_sensor_type_helpers.cc
 AOC_SRCS += platform/aoc/power_control_manager.cc
 AOC_SRCS += platform/aoc/system_time.cc
 AOC_SRCS += platform/aoc/system_timer.cc
+AOC_SRCS += platform/shared/chre_api_audio.cc
+AOC_SRCS += platform/shared/chre_api_core.cc
+AOC_SRCS += platform/shared/chre_api_gnss.cc
 AOC_SRCS += platform/shared/chre_api_re.cc
+AOC_SRCS += platform/shared/chre_api_sensor.cc
 AOC_SRCS += platform/shared/chre_api_version.cc
+AOC_SRCS += platform/shared/chre_api_wifi.cc
+AOC_SRCS += platform/shared/chre_api_wwan.cc
 AOC_SRCS += platform/shared/host_protocol_chre.cc
 AOC_SRCS += platform/shared/host_protocol_common.cc
 AOC_SRCS += platform/shared/memory_manager.cc
@@ -187,6 +192,7 @@ AOC_SRCS += platform/shared/pal_sensor_stub.cc
 AOC_SRCS += platform/shared/system_time.cc
 AOC_SRCS += platform/usf/platform_sensor.cc
 AOC_SRCS += platform/usf/platform_sensor_manager.cc
+AOC_SRCS += platform/usf/platform_sensor_type_helpers.cc
 AOC_SRCS += platform/usf/usf_helper.cc
 
 # AoC-specific Compiler Flags ##################################################

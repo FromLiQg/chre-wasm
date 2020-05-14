@@ -64,11 +64,6 @@ class UsfHelperCallbackInterface {
 //! to a request
 constexpr Nanoseconds kDefaultUsfWaitTimeout = Seconds(5);
 
-//! Helper functions used to convert between USF and CHRE types
-usf::UsfSensorReportingMode getUsfReportingMode(ReportingMode mode);
-bool convertUsfToChreSensorType(usf::UsfMsgSensorType usfSensorType,
-                                uint8_t *chreSensorType);
-
 /**
  * Helper class used to abstract away most details of communicating with USF.
  */
@@ -88,31 +83,12 @@ class UsfHelper {
   /**
    * Retrieves the list of sensors available from USF.
    *
-   * @param callback Callback used to issue the request to USF. This inherently
-   *     contains the UsfMsgSensorListResp data so it must remain in scope to
-   *     access the returned list.
-   * @param list Non-null pointer to a list response pointer that will be filled
-   *     in by this method if it is successful.
+   * @param sensorList Non-null pointer to a UsfVector that will be populated
+   *     with all the available sensors from USF.
    * @return true if the list of sensors was retrieved successfully.
    */
-  bool getSensorList(usf::UsfReqSyncCallback &callback,
-                     const usf::UsfMsgSensorListResp **list);
-
-  /**
-   * Retrieves sensor info for the given server handle from USF.
-   *
-   * @param serverHandle Server handle corresponding to the sensor that should
-   *     have its info retrieved.
-   * @param callback Callback used to issue the request to USF. This inherently
-   *     contains the UsfMsgSensorInfoResp data so it must remain in scope to
-   *     access the returned info.
-   * @param info Non-null pointer to a info response pointer that will be filled
-   *     in by this method if it is successful.
-   * @return true if the sensor info was retrieved successfully.
-   */
-  bool getSensorInfo(usf::UsfServerHandle serverHandle,
-                     usf::UsfReqSyncCallback &callback,
-                     const usf::UsfMsgSensorInfoResp **info);
+  bool getSensorList(
+      usf::UsfVector<refcount::reffed_ptr<usf::UsfSensor>> *sensorList);
 
   /**
    * Starts sampling sensor data from the given sensor.

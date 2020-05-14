@@ -20,16 +20,10 @@
 
 namespace chre {
 
-void PlatformSensorBase::initBase(usf::UsfServerHandle serverHandle,
-                                  uint8_t sensorType, uint64_t minInterval,
-                                  const char *sensorName) {
-  mServerHandle = serverHandle;
+void PlatformSensorBase::initBase(
+    refcount::reffed_ptr<usf::UsfSensor> &usfSensor, uint8_t sensorType) {
+  mUsfSensor = usfSensor;
   mSensorType = sensorType;
-  mMinInterval = minInterval;
-
-  // TODO(b/143139477): Move back to strlcpy when AOC exposes it
-  strncpy(mSensorName, sensorName, kSensorNameMaxLen);
-  mSensorName[kSensorNameMaxLen - 1] = '\0';
 }
 
 uint8_t PlatformSensor::getSensorType() const {
@@ -37,11 +31,14 @@ uint8_t PlatformSensor::getSensorType() const {
 }
 
 uint64_t PlatformSensor::getMinInterval() const {
-  return mMinInterval;
+  return SensorTypeHelpers::isOneShot(mSensorType)
+             ? CHRE_SENSOR_INTERVAL_DEFAULT
+             : mUsfSensor->GetMinDelayNs();
+  ;
 }
 
 bool PlatformSensor::reportsBiasEvents() const {
-  return PlatformSensorTypeHelpersBase::reportsBias(mSensorType);
+  return PlatformSensorTypeHelpersBase::reportsBias(getSensorType());
 }
 
 bool PlatformSensor::supportsPassiveMode() const {
@@ -49,7 +46,7 @@ bool PlatformSensor::supportsPassiveMode() const {
 }
 
 const char *PlatformSensor::getSensorName() const {
-  return mSensorName;
+  return mUsfSensor->GetName();
 }
 
 PlatformSensor::PlatformSensor(PlatformSensor &&other) {
@@ -59,12 +56,8 @@ PlatformSensor::PlatformSensor(PlatformSensor &&other) {
 PlatformSensor &PlatformSensor::operator=(PlatformSensor &&other) {
   // Note: if this implementation is ever changed to depend on "this" containing
   // initialized values, the move constructor implementation must be updated.
-  mServerHandle = other.mServerHandle;
+  mUsfSensor = other.mUsfSensor;
   mSensorType = other.mSensorType;
-  mMinInterval = other.mMinInterval;
-  mSamplingId = other.mSamplingId;
-
-  memcpy(mSensorName, other.mSensorName, kSensorNameMaxLen);
 
   return *this;
 }
