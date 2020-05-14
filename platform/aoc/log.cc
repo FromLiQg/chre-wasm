@@ -23,10 +23,8 @@
 
 namespace chre {
 namespace {
-
-static constexpr size_t kChreLogBufferSize = CHRE_MESSAGE_TO_HOST_MAX_SIZE;
-static char logBuffer[kChreLogBufferSize];
-
+constexpr size_t kChreLogBufferSize = CHRE_MESSAGE_TO_HOST_MAX_SIZE;
+char logBuffer[kChreLogBufferSize];
 }  // namespace
 
 void log(enum chreLogLevel level, const char *formatStr, ...) {
@@ -39,7 +37,8 @@ void log(enum chreLogLevel level, const char *formatStr, ...) {
 // TODO: b/146164384 - We will need to batch logs rather than send them
 // one at a time to avoid waking the AP.
 void vaLog(enum chreLogLevel level, const char *format, va_list args) {
-  HostLink &hostLink = EventLoopManagerSingleton::get()->getHostLink();
+  HostLink &hostLink =
+      EventLoopManagerSingleton::get()->getHostCommsManager().getHostLink();
 
   // See host_messages.fbs for the log message format.
   size_t logBufIndex = 0;

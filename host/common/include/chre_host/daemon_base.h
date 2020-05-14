@@ -78,6 +78,16 @@ class ChreDaemonBase {
     return mChreShutdownRequested;
   }
 
+  /**
+   * Loads the supplied file into the provided buffer.
+   *
+   * @param filename The name of the file to load.
+   * @param buffer The buffer to load into.
+   * @return true if successful, false otherwise.
+   */
+  static bool readFileContents(const char *filename,
+                               std::vector<uint8_t> *buffer);
+
  protected:
   //! The host ID to use when preloading nanoapps. This is used before the
   //! server is started and is sufficiently high enough so as to not collide
@@ -165,15 +175,6 @@ class ChreDaemonBase {
    */
   bool sendTimeSyncWithRetry(size_t numRetries, useconds_t retryDelayUs,
                              bool logOnError);
-
-  /**
-   * Loads the supplied file into the provided buffer.
-   *
-   * @param filename The name of the file to load.
-   * @param buffer The buffer to load into.
-   * @return true if successful, false otherwise.
-   */
-  bool readFileContents(const char *filename, std::vector<uint8_t> *buffer);
 
   /**
    * Handles a message that is directed towards the daemon.

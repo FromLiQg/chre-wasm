@@ -13,15 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <chre.h>
 #include <cinttypes>
 
-#include "chre/platform/log.h"
-#include "chre/util/macros.h"
-#include "chre_api/chre/re.h"
+namespace chre {
 
-void chreLog(enum chreLogLevel level, const char *formatStr, ...) {
-  va_list args;
-  va_start(args, formatStr);
-  chre::vaLog(level, formatStr, args);
-  va_end(args);
+extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
+                                   uint16_t eventType, const void *eventData) {}
+
+extern "C" bool nanoappStart(void) {
+  return true;
 }
+
+extern "C" void nanoappEnd(void) {}
+
+}  // namespace chre
