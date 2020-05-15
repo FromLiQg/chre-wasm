@@ -151,10 +151,15 @@ SLPI_SEE_QMI_SRCS += $(SLPI_PREFIX)/chre/chre/src/system/chre/platform/slpi/sns_
 FREERTOS_SRCS += platform/freertos/context.cc
 FREERTOS_SRCS += platform/freertos/init.cc
 FREERTOS_SRCS += platform/freertos/memory_manager.cc
-FREERTOS_SRCS += platform/freertos/memory.cc
 FREERTOS_SRCS += platform/freertos/nanoapp_loader.cc
 FREERTOS_SRCS += platform/freertos/platform_debug_dump_manager.cc
 FREERTOS_SRCS += platform/freertos/platform_nanoapp.cc
+
+# Optional FreeRTOS-specific Source Files ######################################
+
+# memory.cc is only needed if the given platform doesn't have its own memory
+# allocation setup.
+FREERTOS_OPTIONAL_SRCS += platform/freertos/memory.cc
 
 # FreeRTOS-specific Compiler Flags #############################################
 FREERTOS_CFLAGS += -I$(AOC_TOP_DIR)/external/FreeRTOS/FreeRTOS/Source/include
@@ -167,6 +172,7 @@ AOC_SRCS += platform/aoc/chre_api_re.cc
 AOC_SRCS += platform/aoc/fatal_error.cc
 AOC_SRCS += platform/aoc/host_link.cc
 AOC_SRCS += platform/aoc/log.cc
+AOC_SRCS += platform/aoc/memory.cc
 AOC_SRCS += platform/aoc/platform_sensor_type_helpers.cc
 AOC_SRCS += platform/aoc/power_control_manager.cc
 AOC_SRCS += platform/aoc/system_time.cc

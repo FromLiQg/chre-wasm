@@ -16,8 +16,9 @@ COMMON_C_CFLAGS += $(CFLAGS)
 TARGET_SO_LDFLAGS += $(LDFLAGS)
 TARGET_SO_EARLY_LIBS += $(LDLIBS)
 
-# Needed so nanoapps can resolve stdlib deps.
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/basic/include
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/libc/include
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/heap/common/include
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/external/libcxx/include
 
 # TODO: Fix ar_client so the following two can be removed.
