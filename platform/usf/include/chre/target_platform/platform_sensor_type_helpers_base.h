@@ -17,6 +17,8 @@
 #ifndef CHRE_TARGET_PLATFORM_SENSOR_TYPE_HELPERS_BASE_H_
 #define CHRE_TARGET_PLATFORM_SENSOR_TYPE_HELPERS_BASE_H_
 
+#include "usf/usf_sensor_defs.h"
+
 namespace chre {
 
 /**
@@ -60,6 +62,11 @@ class PlatformSensorTypeHelpersBase {
    * @return Whether the given sensor type reports bias events.
    */
   static bool reportsBias(uint8_t sensorType);
+
+  //! Helper functions used to convert between USF and CHRE types
+  static usf::UsfSensorReportingMode getUsfReportingMode(ReportingMode mode);
+  static bool convertUsfToChreSensorType(usf::UsfSensorType usfSensorType,
+                                         uint8_t *chreSensorType);
 };
 
 }  // namespace chre

@@ -20,6 +20,7 @@
 #include "chre/util/optional.h"
 
 #include "usf/usf.h"
+#include "usf/usf_sensor.h"
 
 namespace chre {
 
@@ -31,11 +32,11 @@ class PlatformSensorBase {
   /**
    * Initializes various members of PlatformSensorBase.
    */
-  void initBase(usf::UsfServerHandle serverHandle, uint8_t sensorType,
-                uint64_t minInterval, const char *sensorName);
+  void initBase(refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
+                uint8_t sensorType);
 
   usf::UsfServerHandle getServerHandle() const {
-    return mServerHandle;
+    return mUsfSensor->GetHandle();
   }
 
   bool isSamplingIdValid() const {
@@ -55,19 +56,15 @@ class PlatformSensorBase {
   }
 
  protected:
-  //! The name (type and model) of this sensor.
-  char mSensorName[kSensorNameMaxLen];
-
-  //! The minimum interval of this sensor.
-  uint64_t mMinInterval;
-
-  //! The server handle for this sensor,
-  usf::UsfServerHandle mServerHandle;
+  //! The USF sensor instance for this sensor.
+  refcount::reffed_ptr<usf::UsfSensor> mUsfSensor;
 
   //! The sampling ID of the active request with this sensor.
   Optional<uint32_t> mSamplingId;
 
-  //! The sensor type of this sensor.
+  //! Sensor type of this sensor. Needed because USF shares the same sensor
+  //! type for two different CHRE sensors (ACCELEROMETER_TEMPERATURE and
+  //! GYROSCOPE_TEMPERATURE).
   uint8_t mSensorType;
 };
 
