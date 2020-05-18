@@ -20,6 +20,7 @@
 #include "chre/core/settings.h"
 #include "chre/platform/aoc/system_time.h"
 #include "chre/platform/shared/host_protocol_chre.h"
+#include "chre/platform/shared/nanoapp_load_manager.h"
 #include "chre/util/fixed_size_blocking_queue.h"
 #include "chre_api/chre/version.h"
 
@@ -42,6 +43,14 @@ union HostClientIdCallbackData {
 };
 static_assert(sizeof(uint16_t) <= sizeof(void *),
               "Pointer must at least fit a u16 for passing the host client ID");
+
+struct LoadNanoappCallbackData {
+  uint64_t appId;
+  uint32_t transactionId;
+  uint16_t hostClientId;
+  UniquePtr<Nanoapp> nanoapp;
+  uint32_t fragmentId;
+};
 
 /**
  * Sends a request to the host for a time sync message.
@@ -266,6 +275,38 @@ void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
   }
 }
 
+void sendFragmentResponse(uint16_t hostClientId, uint32_t transactionId,
+                          uint32_t fragmentId, bool success) {
+  constexpr size_t kInitialBufferSize = 52;
+  flatbuffers::FlatBufferBuilder builder(kInitialBufferSize);
+  HostProtocolChre::encodeLoadNanoappResponse(
+      builder, hostClientId, transactionId, success, fragmentId);
+
+  if (!transportMgr.send(builder.GetBufferPointer(), builder.GetSize())) {
+    LOGE(
+        "Failed to send fragment response for HostClientID: %x FragmentID: %x"
+        "transactionID: 0x%x",
+        hostClientId, fragmentId, transactionId);
+  }
+}
+
+void finishLoadingNanoappCallback(uint16_t /*eventType*/, void *data) {
+  UniquePtr<LoadNanoappCallbackData> cbData(
+      static_cast<LoadNanoappCallbackData *>(data));
+  constexpr size_t kInitialBufferSize = 48;
+  flatbuffers::FlatBufferBuilder builder(kInitialBufferSize);
+
+  CHRE_ASSERT(cbData != nullptr);
+  LOGD("Finished loading nanoapp cb on fragment ID: %u", cbData->fragmentId);
+
+  EventLoop &eventLoop = EventLoopManagerSingleton::get()->getEventLoop();
+  bool success =
+      cbData->nanoapp->isLoaded() && eventLoop.startNanoapp(cbData->nanoapp);
+
+  sendFragmentResponse(cbData->hostClientId, cbData->transactionId,
+                       cbData->fragmentId, success);
+}
+
 }  // anonymous namespace
 
 void sendDebugDumpResultToHost(uint16_t hostClientId, const char *debugStr,
@@ -342,13 +383,62 @@ void HostMessageHandlers::handleHubInfoRequest(uint16_t hostClientId) {
 }
 
 void HostMessageHandlers::handleLoadNanoappRequest(
-    uint16_t /* hostClientId */, uint32_t /* transactionId */,
-    uint64_t /* appId */, uint32_t /* appVersion */,
-    uint32_t /* targetApiVersion */, const void * /*buffer */,
-    size_t /* bufferLen */, const char * /*appFileName */,
-    uint32_t /* fragmentId */, size_t /* appBinaryLen */) {
-  // TODO: stubbed out, needs to be implemented
-  LOGI("LoadNanoappRequest messages are currently unsupported");
+    uint16_t hostClientId, uint32_t transactionId, uint64_t appId,
+    uint32_t appVersion, uint32_t targetApiVersion, const void *buffer,
+    size_t bufferLen, const char *appFileName, uint32_t fragmentId,
+    size_t appBinaryLen) {
+  bool success = true;
+  static NanoappLoadManager sLoadManager;
+
+  if (fragmentId == 0 || fragmentId == 1) {
+    size_t totalAppBinaryLen = (fragmentId == 0) ? bufferLen : appBinaryLen;
+    LOGD("Load nanoapp request for app ID 0x%016" PRIx64 " ver 0x%" PRIx32
+         " target API 0x%08" PRIx32 " size %zu (txnId %" PRIu32
+         " client %" PRIu16 ")",
+         appId, appVersion, targetApiVersion, totalAppBinaryLen, transactionId,
+         hostClientId);
+
+    if (sLoadManager.hasPendingLoadTransaction()) {
+      FragmentedLoadInfo info = sLoadManager.getTransactionInfo();
+      sendFragmentResponse(info.hostClientId, info.transactionId,
+                           0 /* fragmentId */, false /* success */);
+      sLoadManager.markFailure();
+    }
+
+    success = sLoadManager.prepareForLoad(hostClientId, transactionId, appId,
+                                          appVersion, totalAppBinaryLen);
+  }
+
+  if (success) {
+    success = sLoadManager.copyNanoappFragment(
+        hostClientId, transactionId, (fragmentId == 0) ? 1 : fragmentId, buffer,
+        bufferLen);
+  } else {
+    LOGE("Failed to prepare for load");
+  }
+
+  if (sLoadManager.isLoadComplete()) {
+    LOGD("Load manager load complete...");
+    auto cbData = MakeUnique<LoadNanoappCallbackData>();
+    if (cbData.isNull()) {
+      LOG_OOM();
+    } else {
+      cbData->transactionId = transactionId;
+      cbData->hostClientId = hostClientId;
+      cbData->appId = appId;
+      cbData->fragmentId = fragmentId;
+      cbData->nanoapp = sLoadManager.releaseNanoapp();
+
+      // Note that if this fails, we'll generate the error response in
+      // the normal deferred callback
+      EventLoopManagerSingleton::get()->deferCallback(
+          SystemCallbackType::FinishLoadingNanoapp, cbData.release(),
+          finishLoadingNanoappCallback);
+    }
+  } else {
+    // send a response for this fragment
+    sendFragmentResponse(hostClientId, transactionId, fragmentId, success);
+  }
 }
 
 void HostMessageHandlers::handleNanoappListRequest(uint16_t hostClientId) {
