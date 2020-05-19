@@ -310,11 +310,15 @@ bool UsfChreDaemon::sendFragmentAndWaitOnResponse(
 bool UsfChreDaemon::sendFragmentedNanoappLoad(
     uint64_t appId, uint32_t appVersion, uint32_t appTargetApiVersion,
     const uint8_t *appBinary, size_t appSize, uint32_t transactionId) {
+  // TODO: This is currently limited by the USF Message size, revisit
+  // and increase this when the USF message size increases.
+  constexpr size_t kFragmentSize = 512;
   std::vector<uint8_t> binary(appSize);
   std::copy(appBinary, appBinary + appSize, binary.begin());
 
   FragmentedLoadTransaction transaction(transactionId, appId, appVersion,
-                                        appTargetApiVersion, binary);
+                                        appTargetApiVersion, binary,
+                                        kFragmentSize);
 
   bool success = true;
 
