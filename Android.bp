@@ -133,10 +133,6 @@ cc_library_shared {
     static_libs: ["chre_client"],
 }
 
-// TODO(b/152789581): This target is not yet supported for
-// master-hammersmith-dev. Re-enable this target once we have
-// contexthub@1.1 support
-/*
 cc_binary {
     name: "android.hardware.contexthub@1.1-service.generic",
     defaults: ["hidl_defaults"],
@@ -162,7 +158,6 @@ cc_binary {
     static_libs: ["chre_client"],
     vintf_fragments: ["host/hal_generic/V1_1/android.hardware.contexthub@1.1-generic.xml"],
 }
-*/
 
 cc_library_headers {
     name: "chre_api",
