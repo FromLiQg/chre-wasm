@@ -40,6 +40,8 @@ BaseType_t init();
  */
 void deinit();
 
+const char *getChreTaskName();
+
 }  // namespace freertos
 }  // namespace chre
 
