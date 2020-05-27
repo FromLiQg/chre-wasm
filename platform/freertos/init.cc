@@ -27,7 +27,6 @@ namespace {
 
 constexpr configSTACK_DEPTH_TYPE kChreTaskStackDepthWords = 0x800;
 constexpr UBaseType_t kChreTaskPriority = tskIDLE_PRIORITY + 1;
-constexpr char kChreTaskName[] = "CHRE";
 
 TaskHandle_t gChreTaskHandle;
 
@@ -50,9 +49,9 @@ void chreThreadEntry(void *context) {
 }  // namespace
 
 BaseType_t init() {
-  BaseType_t rc =
-      xTaskCreate(chreThreadEntry, kChreTaskName, kChreTaskStackDepthWords,
-                  nullptr /* args */, kChreTaskPriority, &gChreTaskHandle);
+  BaseType_t rc = xTaskCreate(chreThreadEntry, freertos::getChreTaskName(),
+                              kChreTaskStackDepthWords, nullptr /* args */,
+                              kChreTaskPriority, &gChreTaskHandle);
   CHRE_ASSERT(rc == pdPASS);
   return rc;
 }
@@ -63,6 +62,11 @@ void deinit() {
     vTaskDelete(gChreTaskHandle);
     gChreTaskHandle = nullptr;
   }
+}
+
+const char *getChreTaskName() {
+  static constexpr char kChreTaskName[] = "CHRE";
+  return kChreTaskName;
 }
 
 }  // namespace freertos

@@ -15,6 +15,7 @@
  */
 
 #include "chre/platform/context.h"
+#include "chre/target_platform/init.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -22,10 +23,7 @@
 namespace chre {
 
 bool inEventLoopThread() {
-  // Note that for this to work, the CHRE event loop
-  // MUST be running in a thread named 'CHRE'!
-  const char *evtLoopTaskName = "CHRE";
-  TaskHandle_t evtLoopTaskHandle = xTaskGetHandle(evtLoopTaskName);
+  TaskHandle_t evtLoopTaskHandle = xTaskGetHandle(freertos::getChreTaskName());
   TaskHandle_t currentTaskHandle = xTaskGetCurrentTaskHandle();
 
   return (evtLoopTaskHandle == currentTaskHandle);
