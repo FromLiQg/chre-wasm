@@ -152,7 +152,7 @@ void *dlopenbuf(void *binary, size_t /* binarySize */) {
   LoadedBinaryData *data =
       static_cast<LoadedBinaryData *>(memoryAlloc(sizeof(LoadedBinaryData)));
   if (data != nullptr) {
-    memset(data, sizeof(data), 0);
+    memset(data, 0, sizeof(*data));
     data->binaryLocation = reinterpret_cast<uintptr_t>(binary);
     if (!(verifyAllHeaders(data))) {
       memoryFree(data);
