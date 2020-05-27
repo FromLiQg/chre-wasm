@@ -22,6 +22,15 @@
 void chreLog(enum chreLogLevel level, const char *formatStr, ...) {
   va_list args;
   va_start(args, formatStr);
+
+  // TODO(karthikmb): Remove this once log buffering is implemented.
+  char logBuf[500];
+  va_list vsnargs;
+  va_copy(vsnargs, args);
+  vsnprintf(logBuf, sizeof(logBuf), formatStr, args);
+  va_end(vsnargs);
+  printf("CHRE: %s\n", logBuf);
+
   chre::vaLog(level, formatStr, args);
   va_end(args);
 }
