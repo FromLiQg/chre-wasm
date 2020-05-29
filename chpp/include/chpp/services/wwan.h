@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHPP_WWAN_H_
-#define CHPP_WWAN_H_
+#ifndef CHPP_WWAN_SERVICE_H_
+#define CHPP_WWAN_SERVICE_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -46,4 +46,4 @@ void chppRegisterWwanService(struct ChppAppState *appContext);
 }
 #endif
 
-#endif  // CHPP_WWAN_H_
+#endif  // CHPP_WWAN_SERVICE_H_
