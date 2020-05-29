@@ -32,6 +32,9 @@ class PlatformSensorManagerBase : public UsfHelperCallbackInterface {
 
   bool getSensorInfo(uint8_t sensorType, SensorInfo *sensorInfo) override;
 
+  void onFlushComplete(usf::UsfErr err, uint32_t requestId,
+                       void *cookie) override;
+
   /**
    * Converts the given UsfSensor into one or more CHRE sensors and adds them
    * to the given dynamic vector.

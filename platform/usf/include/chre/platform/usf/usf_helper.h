@@ -64,6 +64,11 @@ class UsfHelperCallbackInterface {
   //! update. All fields are guaranteed to be valid.
   virtual void onSamplingStatusUpdate(
       uint8_t sensorType, const usf::UsfSensorSamplingEvent *update) = 0;
+
+  //! Invoked from the USF worker thread to indicate that flushing the given
+  //! sensor has completed.
+  virtual void onFlushComplete(usf::UsfErr err, uint32_t requestId,
+                               void *cookie) = 0;
 };
 
 //! Class that allows clients of UsfHelper that only want to listen for sensor
@@ -73,6 +78,9 @@ class SensorEventCallbackInterface : public UsfHelperCallbackInterface {
   void onSamplingStatusUpdate(
       uint8_t /*sensorType*/,
       const usf::UsfSensorSamplingEvent * /*update*/) override {}
+
+  void onFlushComplete(usf::UsfErr /*err*/, uint32_t /*requestId*/,
+                       void * /*cookie*/) override {}
 };
 
 //! Default timeout to wait for the USF transport client to return a response
@@ -85,6 +93,9 @@ constexpr Nanoseconds kDefaultUsfWaitTimeout = Seconds(5);
 class UsfHelper {
  public:
   ~UsfHelper();
+
+  //! Maps USF error codes to CHRE error codes.
+  static uint8_t usfErrorToChreError(usf::UsfErr err);
 
   /**
    * Initializes connection to USF.
@@ -142,6 +153,20 @@ class UsfHelper {
    * @return true if registration was successful.
    */
   bool registerForStatusUpdates(refcount::reffed_ptr<usf::UsfSensor> &sensor);
+
+  /**
+   * Flushes sensor data from the provided sensor asynchronously. Once all data
+   * has been flushed, {@link #onFlushCompleteEvent} will be invoked on the
+   * callback the helper was initialized with.
+   *
+   * @param usfSensorHandle The USF handle corresponding to the sensor to flush
+   * @param cookie A cookie that will be delivered when the flush has completed
+   * @param requestId The ID associated with this flush request, if it was
+   *     made successfully
+   * @return True if the flush request was successfully sent.
+   */
+  bool flushAsync(const usf::UsfServerHandle usfSensorHandle, void *cookie,
+                  uint32_t *requestId);
 
   /**
    * Used to process sensor samples delivered through a listener registered with

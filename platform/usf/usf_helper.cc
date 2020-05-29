@@ -40,6 +40,13 @@ using usf::UsfErr::kErrNone;
 namespace chre {
 namespace {
 
+//! Callback data delivered to async callback from USF. This struct must be
+//! freed using memoryFree.
+struct AsyncCallbackData {
+  UsfHelperCallbackInterface *callback;
+  void *cookie;
+};
+
 void eventHandler(void *context, usf::UsfEvent *event) {
   const usf::UsfMsgEvent *msgEvent =
       static_cast<usf::UsfTransportMsgEvent *>(event)->GetMsgEvent();
@@ -66,6 +73,15 @@ void statusUpdateHandler(void *context, usf::UsfEvent *event) {
     auto *mgr = static_cast<UsfHelper *>(context);
     mgr->processStatusUpdate(updateEvent);
   }
+}
+
+void asyncCallback(usf::UsfReq *req, const usf::UsfResp *resp, void *data) {
+  auto callbackData = static_cast<AsyncCallbackData *>(data);
+  callbackData->callback->onFlushComplete(resp->GetErr(), req->GetReqId(),
+                                          callbackData->cookie);
+
+  memoryFree(data);
+  memoryFree(req);
 }
 
 void *allocateEvent(uint8_t sensorType, size_t numSamples) {
@@ -237,6 +253,23 @@ UsfHelper::~UsfHelper() {
   deinit();
 }
 
+uint8_t UsfHelper::usfErrorToChreError(UsfErr err) {
+  switch (err) {
+    case UsfErr::kErrNone:
+      return CHRE_ERROR_NONE;
+    case UsfErr::kErrNotSupported:
+      return CHRE_ERROR_NOT_SUPPORTED;
+    case UsfErr::kErrMemAlloc:
+      return CHRE_ERROR_NO_MEMORY;
+    case UsfErr::kErrNotAvailable:
+      return CHRE_ERROR_BUSY;
+    case UsfErr::kErrTimedOut:
+      return CHRE_ERROR_TIMEOUT;
+    default:
+      return CHRE_ERROR;
+  }
+}
+
 void UsfHelper::init(UsfHelperCallbackInterface *callback,
                      usf::UsfWorker *worker) {
   usf::UsfDeviceMgr::GetDeviceProbeCompletePrecondition()->Wait();
@@ -328,6 +361,34 @@ bool UsfHelper::registerForStatusUpdates(
     success = err == kErrNone;
     if (!success) {
       LOG_USF_ERR(err);
+    }
+  }
+
+  return success;
+}
+
+bool UsfHelper::flushAsync(const usf::UsfServerHandle usfSensorHandle,
+                           void *cookie, uint32_t *requestId) {
+  bool success = false;
+  auto req = MakeUnique<usf::UsfReq>();
+  auto callbackData = MakeUnique<AsyncCallbackData>();
+  if (req.isNull() || callbackData.isNull()) {
+    LOG_OOM();
+  } else {
+    req->SetReqType(usf::UsfMsgReqType_FLUSH_SAMPLES);
+    req->SetServerHandle(usfSensorHandle);
+    callbackData->callback = mCallback;
+    callbackData->cookie = cookie;
+
+    UsfErr err = mTransportClient->SendRequest(req.get(), asyncCallback,
+                                               callbackData.get());
+    success = (err == kErrNone);
+    if (!success) {
+      LOG_USF_ERR(err);
+    } else {
+      *requestId = req->GetReqId();
+      req.release();
+      callbackData.release();
     }
   }
 

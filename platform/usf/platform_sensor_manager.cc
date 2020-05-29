@@ -17,6 +17,7 @@
 #include "chre/platform/platform_sensor_manager.h"
 
 #include "chre/core/event_loop_manager.h"
+#include "chre/util/nested_data_ptr.h"
 
 namespace chre {
 namespace {
@@ -155,7 +156,9 @@ bool PlatformSensorManager::getThreeAxisBias(
 
 bool PlatformSensorManager::flush(const Sensor &sensor,
                                   uint32_t *flushRequestId) {
-  return false;
+  NestedDataPtr<uint32_t> cookie(sensor.getSensorType());
+  return mHelper.flushAsync(sensor.getServerHandle(), cookie.dataPtr,
+                            flushRequestId);
 }
 
 void PlatformSensorManager::releaseSamplingStatusUpdate(
@@ -214,6 +217,20 @@ void PlatformSensorManagerBase::onSensorDataEvent(
   if (getSensorRequestManager().getSensorHandle(sensorType, &sensorHandle)) {
     getSensorRequestManager().handleSensorDataEvent(sensorHandle,
                                                     eventData.release());
+  }
+}
+
+void PlatformSensorManagerBase::onFlushComplete(usf::UsfErr err,
+                                                uint32_t requestId,
+                                                void *cookie) {
+  NestedDataPtr<uint32_t> nestedSensorType;
+  nestedSensorType.dataPtr = cookie;
+
+  uint32_t sensorHandle;
+  if (getSensorRequestManager().getSensorHandle(nestedSensorType.data,
+                                                &sensorHandle)) {
+    getSensorRequestManager().handleFlushCompleteEvent(
+        sensorHandle, requestId, UsfHelper::usfErrorToChreError(err));
   }
 }
 
