@@ -14,41 +14,36 @@
  * limitations under the License.
  */
 
-#ifndef CHPP_SERVICE_DISCOVERY_H_
-#define CHPP_SERVICE_DISCOVERY_H_
+#ifndef CHPP_WWAN_CLIENT_H_
+#define CHPP_WWAN_CLIENT_H_
 
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "chpp/app.h"
-#include "chpp/common/discovery.h"
-#include "chpp/platform/log.h"
+#include "chpp/clients.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Forward declaration
-struct ChppAppState;
+/************************************************
+ *  Public Definitions
+ ***********************************************/
 
 /************************************************
  *  Public functions
  ***********************************************/
 
-/*
- * Dispatches a client request that is determined to be for the CHPP Discovery
- * Service.
+/**
+ * Called by the App layer to register the WWAN (cellular) common client.
  *
- * @param context Maintains status for each app layer instance.
- * @param buf Input (request) datagram. Cannot be null.
- * @param len Length of input data in bytes.
+ * @param appContext Maintains status for each app layer instance.
  */
-bool chppDispatchDiscoveryClientRequest(struct ChppAppState *context,
-                                        const uint8_t *buf, size_t len);
+void chppRegisterWwanClient(struct ChppAppState *appContext);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // CHPP_SERVICE_DISCOVERY_H_
+#endif  // CHPP_WWAN_CLIENT_H_

@@ -107,6 +107,13 @@ bool SystemTimer::set(SystemTimerCallback *callback, void *data,
     mCallback = callback;
     mData = data;
 
+    // TODO(karthikmb): The capping on the maximum delay is temporary,
+    // remove after b/157537617 is implemented. See the note on
+    // kMaxSupportedDelayNs for some additional context.
+    if (delay > kMaxSupportedDelayNs) {
+      delay = kMaxSupportedDelayNs;
+    }
+
     Timer *timer = Timer::Instance();
     int rc =
         timer->EventAddAtOffset(timer->NsToTicks(delay.toRawNanoseconds()),
