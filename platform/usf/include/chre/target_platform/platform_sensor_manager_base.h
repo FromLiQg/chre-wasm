@@ -27,7 +27,23 @@ class PlatformSensorManagerBase : public UsfHelperCallbackInterface {
   void onSensorDataEvent(uint8_t sensorType,
                          UniquePtr<uint8_t> &&eventData) override;
 
+  void onSamplingStatusUpdate(
+      uint8_t sensorType, const usf::UsfSensorSamplingEvent *update) override;
+
   bool getSensorInfo(uint8_t sensorType, SensorInfo *sensorInfo) override;
+
+  void onFlushComplete(usf::UsfErr err, uint32_t requestId,
+                       void *cookie) override;
+
+  /**
+   * Converts the given UsfSensor into one or more CHRE sensors and adds them
+   * to the given dynamic vector.
+   *
+   * @param usfSensor UsfSensor to be converted to one or more CHRE sensors
+   * @param chreSensors Dynamic vector that converted sensors must be added to
+   */
+  void addSensorsWithInfo(refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
+                          DynamicVector<Sensor> *chreSensors);
 
  protected:
   //! Helper used to communicate with USF.

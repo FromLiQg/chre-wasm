@@ -14,25 +14,17 @@
  * limitations under the License.
  */
 
-#include <chre.h>
-#include <cinttypes>
-#include "chre_cross_validator_wifi_manager.h"
+#ifndef CHRE_PLATFORM_AOC_PLATFORM_AUDIO_BASE_H_
+#define CHRE_PLATFORM_AOC_PLATFORM_AUDIO_BASE_H_
 
 namespace chre {
 
-extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
-                                   uint16_t eventType, const void *eventData) {
-  cross_validator_wifi::ManagerSingleton::get()->handleEvent(
-      senderInstanceId, eventType, eventData);
-}
-
-extern "C" bool nanoappStart(void) {
-  cross_validator_wifi::ManagerSingleton::init();
-  return true;
-}
-
-extern "C" void nanoappEnd(void) {
-  cross_validator_wifi::ManagerSingleton::deinit();
-}
+/**
+ * The base PlatformAudio class for AoC to inject platform
+ * specific functionality from.
+ */
+class PlatformAudioBase {};
 
 }  // namespace chre
+
+#endif  // CHRE_PLATFORM_AOC_PLATFORM_AUDIO_BASE_H_

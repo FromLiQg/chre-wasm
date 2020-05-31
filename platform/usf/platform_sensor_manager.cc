@@ -17,6 +17,7 @@
 #include "chre/platform/platform_sensor_manager.h"
 
 #include "chre/core/event_loop_manager.h"
+#include "chre/util/nested_data_ptr.h"
 
 namespace chre {
 namespace {
@@ -36,30 +37,6 @@ void addSensor(refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
   LOGI("%s, type %" PRIu8 ", minInterval %" PRIu64 " handle %" PRId32,
        newSensor.getSensorName(), newSensor.getSensorType(),
        newSensor.getMinInterval(), newSensor.getServerHandle());
-}
-
-void addSensorsWithInfo(refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
-                        DynamicVector<Sensor> *chreSensors) {
-  uint8_t sensorType;
-  if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
-          usfSensor->GetType(), &sensorType)) {
-    addSensor(usfSensor, sensorType, chreSensors);
-
-    // USF shares the same sensor type for calibrated and uncalibrated sensors
-    // so populate a calibrated / uncalibrated sensor for known calibrated
-    // sensor types
-    uint8_t calibratedType =
-        PlatformSensorTypeHelpersBase::toUncalibratedSensorType(sensorType);
-    if (calibratedType != sensorType) {
-      addSensor(usfSensor, sensorType, chreSensors);
-    }
-
-    // USF shares a sensor type for both gyro and accel temp.
-    if (sensorType == CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE) {
-      addSensor(usfSensor, CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE,
-                chreSensors);
-    }
-  }
 }
 
 ReportingMode getReportingMode(Sensor &sensor) {
@@ -179,7 +156,9 @@ bool PlatformSensorManager::getThreeAxisBias(
 
 bool PlatformSensorManager::flush(const Sensor &sensor,
                                   uint32_t *flushRequestId) {
-  return false;
+  NestedDataPtr<uint32_t> cookie(sensor.getSensorType());
+  return mHelper.flushAsync(sensor.getServerHandle(), cookie.dataPtr,
+                            flushRequestId);
 }
 
 void PlatformSensorManager::releaseSamplingStatusUpdate(
@@ -193,6 +172,25 @@ void PlatformSensorManager::releaseSensorDataEvent(void *data) {
 
 void PlatformSensorManager::releaseBiasEvent(void *biasData) {
   memoryFree(biasData);
+}
+
+void PlatformSensorManagerBase::onSamplingStatusUpdate(
+    uint8_t sensorType, const usf::UsfSensorSamplingEvent *update) {
+  uint32_t sensorHandle;
+  if (getSensorRequestManager().getSensorHandle(sensorType, &sensorHandle)) {
+    // Memory will be freed via releaseSamplingStatusUpdate once core framework
+    // performs its updates.
+    auto statusUpdate = MakeUniqueZeroFill<struct chreSensorSamplingStatus>();
+    if (statusUpdate.isNull()) {
+      LOG_OOM();
+    } else {
+      statusUpdate->interval = update->GetPeriodNs();
+      statusUpdate->latency = update->GetMaxLatencyNs();
+      statusUpdate->enabled = update->GetActive();
+      getSensorRequestManager().handleSamplingStatusUpdate(
+          sensorHandle, statusUpdate.release());
+    }
+  }
 }
 
 bool PlatformSensorManagerBase::getSensorInfo(uint8_t sensorType,
@@ -219,6 +217,52 @@ void PlatformSensorManagerBase::onSensorDataEvent(
   if (getSensorRequestManager().getSensorHandle(sensorType, &sensorHandle)) {
     getSensorRequestManager().handleSensorDataEvent(sensorHandle,
                                                     eventData.release());
+  }
+}
+
+void PlatformSensorManagerBase::onFlushComplete(usf::UsfErr err,
+                                                uint32_t requestId,
+                                                void *cookie) {
+  NestedDataPtr<uint32_t> nestedSensorType;
+  nestedSensorType.dataPtr = cookie;
+
+  uint32_t sensorHandle;
+  if (getSensorRequestManager().getSensorHandle(nestedSensorType.data,
+                                                &sensorHandle)) {
+    getSensorRequestManager().handleFlushCompleteEvent(
+        sensorHandle, requestId, UsfHelper::usfErrorToChreError(err));
+  }
+}
+
+void PlatformSensorManagerBase::addSensorsWithInfo(
+    refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
+    DynamicVector<Sensor> *chreSensors) {
+  uint8_t sensorType;
+  if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
+          usfSensor->GetType(), &sensorType)) {
+    // Only register for a USF sensor once. If it maps to multiple sensors,
+    // code down the line will handle sending multiple updates.
+    if (!mHelper.registerForStatusUpdates(usfSensor)) {
+      LOGE("Failed to register for status updates for %s",
+           usfSensor->GetName());
+    }
+
+    addSensor(usfSensor, sensorType, chreSensors);
+
+    // USF shares the same sensor type for calibrated and uncalibrated sensors
+    // so populate a calibrated / uncalibrated sensor for known calibrated
+    // sensor types
+    uint8_t uncalibratedType =
+        PlatformSensorTypeHelpersBase::toUncalibratedSensorType(sensorType);
+    if (uncalibratedType != sensorType) {
+      addSensor(usfSensor, uncalibratedType, chreSensors);
+    }
+
+    // USF shares a sensor type for both gyro and accel temp.
+    if (sensorType == CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE) {
+      addSensor(usfSensor, CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE,
+                chreSensors);
+    }
   }
 }
 
