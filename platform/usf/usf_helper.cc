@@ -285,8 +285,8 @@ void UsfHelper::init(UsfHelperCallbackInterface *callback,
     LOG_OOM();
     deinit();
   } else if ((err != kErrNone) ||
-             ((err = usf::UsfTransportClient::Create(&mTransportClient)) !=
-              kErrNone) ||
+             ((err = usf::UsfTransportClient::Create(
+                   &mTransportClient, usf::kUsfHeapLowPower)) != kErrNone) ||
              ((err = mTransportClient->Connect()) != kErrNone) ||
              ((err = mTransportClient->GetMsgEventType()->AddListener(
                    mWorker.get(), eventHandler, this,
