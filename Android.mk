@@ -16,6 +16,14 @@
 
 LOCAL_PATH := $(call my-dir)
 
+# If the daemon is using USF, but USF isn't enabled, disable the daemon.
+# TODO (b/157659611): Remove when USF is available on partner with a prebuilt.
+ifeq ($(CHRE_DAEMON_USES_USF),true)
+  ifneq ($(USF_ENABLED),true)
+    CHRE_DAEMON_ENABLED := false
+  endif
+endif
+
 # Don't build the daemon for targets that don't contain a vendor image as
 # libsdsprpc and libadsprpc are provided by vendor code
 ifeq ($(BUILDING_VENDOR_IMAGE),true)
