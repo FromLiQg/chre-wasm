@@ -16,17 +16,32 @@
 
 #include "chre/platform/freertos/nanoapp_loader.h"
 
+#include <cinttypes>
 #include <cstring>
 
 #include "chre.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/freertos/loader_util.h"
+#include "chre/platform/freertos/memory.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/macros.h"
 
 #ifndef CHRE_LOADER_ARCH
 #define CHRE_LOADER_ARCH EM_ARM
 #endif  // CHRE_LOADER_ARCH
+
+#ifndef CHRE_DL_VERBOSE
+#define CHRE_DL_VERBOSE false
+#endif  // CHRE_DL_VERBOSE
+
+#if CHRE_DL_VERBOSE
+#define LOGV(fmt, ...) LOGD(fmt, ##__VA_ARGS__)
+#else
+#define LOGV(fmt, ...)
+#endif  // CHRE_DL_VERBOSE
+
+namespace chre {
+namespace {
 
 using ElfHeader = ElfW(Ehdr);
 using DynamicHeader = ElfW(Dyn);
@@ -39,15 +54,15 @@ using ElfRel = ElfW(Rel);  // Relocation table entry,
 using ElfRela = ElfW(Rela);
 using ElfSym = ElfW(Sym);
 
-namespace chre {
-namespace {
-
 constexpr char kSymTableName[] = ".symtab";
 constexpr size_t kSymTableNameLen = sizeof(kSymTableName) - 1;
 constexpr char kStrTableName[] = ".strtab";
 constexpr size_t kStrTableNameLen = sizeof(kStrTableName) - 1;
 constexpr char kInitArrayName[] = ".init_array";
 constexpr size_t kInitArrayNameLen = sizeof(kInitArrayName) - 1;
+// For now, assume all segments are 4K aligned.
+// TODO(karthikmb/stange): See about reducing this.
+constexpr size_t kBinaryAlignment = 4096;
 
 struct LoadedBinaryData {
   // TODO(stange): Store this elsewhere since the location will be invalid after
@@ -59,22 +74,22 @@ struct LoadedBinaryData {
 
   // TODO(stange): Look into using inline functions rather than storing the
   // pointers directly.
-  ElfHeader *elfHeader;
-  ProgramHeader *programHeaders;
-  DynamicHeader *dynamicHeader;
-  SectionHeader *sectionHeaders;
-  SectionHeader *symbolTableHeader;
-  SectionHeader *stringTableHeader;
-  size_t numSectionHeaders;
+  ElfHeader elfHeader;
+  SectionHeader symbolTableHeader;
+  SectionHeader stringTableHeader;
+  DynamicHeader *dynamicHeaderPtr;
+  ProgramHeader *programHeadersPtr;
+  SectionHeader *sectionHeadersPtr;
   size_t numProgramHeaders;
-  char *sectionNames;
-  uint8_t *dynamicSection;
-  char *dynamicStringTable;
-  uint8_t *dynamicSymbolTable;
+  size_t numSectionHeaders;
+  char *sectionNamesPtr;
+  char *dynamicStringTablePtr;
+  uint8_t *dynamicSymbolTablePtr;
   ElfAddr initArrayLoc;
-  uint8_t *symbolTable;
+  uint8_t *symbolTablePtr;
   size_t symbolTableSize;
-  char *stringTable;
+  size_t dynamicSymbolTableSize;
+  char *stringTablePtr;
   ElfAddr loadBias;
 };
 
@@ -98,16 +113,7 @@ const char *getSectionHeaderName(LoadedBinaryData *data, size_t sh_name) {
     return "";
   }
 
-  if (data->sectionNames[0] == 0) {
-    SectionHeader &stringSection =
-        data->sectionHeaders[data->elfHeader->e_shstrndx];
-    size_t sectionSize = stringSection.sh_size;
-    memcpy(data->sectionNames,
-           (void *)(data->binary.location + stringSection.sh_offset),
-           sectionSize);
-  }
-
-  return &data->sectionNames[sh_name];
+  return &data->sectionNamesPtr[sh_name];
 }
 
 bool verifyProgramHeaders(LoadedBinaryData *data) {
@@ -115,7 +121,7 @@ bool verifyProgramHeaders(LoadedBinaryData *data) {
   // there should be at least one load segment.
   bool success = false;
   for (size_t i = 0; i < data->numProgramHeaders; ++i) {
-    if (data->programHeaders[i].p_type == PT_LOAD) {
+    if (data->programHeadersPtr[i].p_type == PT_LOAD) {
       success = true;
       break;
     }
@@ -126,23 +132,19 @@ bool verifyProgramHeaders(LoadedBinaryData *data) {
 bool verifySectionHeaders(LoadedBinaryData *data) {
   for (size_t i = 0; i < data->numSectionHeaders; ++i) {
     const char *name =
-        getSectionHeaderName(data, data->sectionHeaders[i].sh_name);
+        getSectionHeaderName(data, data->sectionHeadersPtr[i].sh_name);
 
     if (strncmp(name, kSymTableName, kSymTableNameLen) == 0) {
-      data->symbolTableHeader = &data->sectionHeaders[i];
+      memcpy(&data->symbolTableHeader, &data->sectionHeadersPtr[i],
+             sizeof(SectionHeader));
     } else if (strncmp(name, kStrTableName, kStrTableNameLen) == 0) {
-      data->stringTableHeader = &data->sectionHeaders[i];
+      memcpy(&data->stringTableHeader, &data->sectionHeadersPtr[i],
+             sizeof(SectionHeader));
     } else if (strncmp(name, kInitArrayName, kInitArrayNameLen) == 0) {
-      data->initArrayLoc = data->sectionHeaders[i].sh_addr;
+      data->initArrayLoc = data->sectionHeadersPtr[i].sh_addr;
     }
   }
 
-  // While it's technically possible for a binary to have no symbol table, it
-  // wouldn't make a useful nanoapp if it didn't invoke some CHRE APIs so
-  // verify a symbol table exists.
-  if (data->symbolTable == nullptr || data->stringTable == nullptr) {
-    return false;
-  }
   return true;
 }
 
@@ -150,18 +152,17 @@ bool verifySectionHeaders(LoadedBinaryData *data) {
 //! in the provided data struct.
 bool verifyElfHeader(LoadedBinaryData *data) {
   bool success = false;
-  if ((data->elfHeader != nullptr) &&
-      (data->elfHeader->e_ident[EI_MAG0] == ELFMAG0) &&
-      (data->elfHeader->e_ident[EI_MAG1] == ELFMAG1) &&
-      (data->elfHeader->e_ident[EI_MAG2] == ELFMAG2) &&
-      (data->elfHeader->e_ident[EI_MAG3] == ELFMAG3) &&
-      (data->elfHeader->e_ehsize == sizeof(ElfHeader)) &&
-      (data->elfHeader->e_phentsize == sizeof(ProgramHeader)) &&
-      (data->elfHeader->e_shentsize == sizeof(SectionHeader)) &&
-      (data->elfHeader->e_shstrndx < data->elfHeader->e_shnum) &&
-      (data->elfHeader->e_version == EV_CURRENT) &&
-      (data->elfHeader->e_machine == CHRE_LOADER_ARCH) &&
-      (data->elfHeader->e_type == ET_DYN)) {
+  if ((data->elfHeader.e_ident[EI_MAG0] == ELFMAG0) &&
+      (data->elfHeader.e_ident[EI_MAG1] == ELFMAG1) &&
+      (data->elfHeader.e_ident[EI_MAG2] == ELFMAG2) &&
+      (data->elfHeader.e_ident[EI_MAG3] == ELFMAG3) &&
+      (data->elfHeader.e_ehsize == sizeof(ElfHeader)) &&
+      (data->elfHeader.e_phentsize == sizeof(ProgramHeader)) &&
+      (data->elfHeader.e_shentsize == sizeof(SectionHeader)) &&
+      (data->elfHeader.e_shstrndx < data->elfHeader.e_shnum) &&
+      (data->elfHeader.e_version == EV_CURRENT) &&
+      (data->elfHeader.e_machine == CHRE_LOADER_ARCH) &&
+      (data->elfHeader.e_type == ET_DYN)) {
     success = true;
   }
   return success;
@@ -173,29 +174,115 @@ bool copyAndVerifyHeaders(LoadedBinaryData *data) {
   uint8_t *pDataBytes = static_cast<uint8_t *>(data->binary.rawLocation);
 
   // Verify the ELF Header
-  memcpy(data->elfHeader, pDataBytes, sizeof(ElfHeader));
+  memcpy(&data->elfHeader, pDataBytes, sizeof(ElfHeader));
   success = verifyElfHeader(data);
+
+  LOGV("Verified ELF header %d", success);
 
   // Verify Program Headers
   if (success) {
-    offset = data->elfHeader->e_phoff;
+    offset = data->elfHeader.e_phoff;
     size_t programHeadersSizeBytes =
-        sizeof(ProgramHeader) * data->elfHeader->e_phnum;
-    memcpy(data->programHeaders, (pDataBytes + offset),
-           programHeadersSizeBytes);
-    data->numProgramHeaders = data->elfHeader->e_phnum;
-    success = verifyProgramHeaders(data);
+        sizeof(ProgramHeader) * data->elfHeader.e_phnum;
+    data->programHeadersPtr =
+        static_cast<ProgramHeader *>(memoryAlloc(programHeadersSizeBytes));
+    if (data->programHeadersPtr == nullptr) {
+      success = false;
+      LOG_OOM();
+    } else {
+      memcpy(data->programHeadersPtr, (pDataBytes + offset),
+             programHeadersSizeBytes);
+      data->numProgramHeaders = data->elfHeader.e_phnum;
+      success = verifyProgramHeaders(data);
+    }
   }
 
-  // Verify Section Headers
+  LOGV("Verified Program headers %d", success);
+
+  // Load Section Headers
   if (success) {
-    offset = data->elfHeader->e_shoff;
+    offset = data->elfHeader.e_shoff;
     size_t sectionHeaderSizeBytes =
-        sizeof(SectionHeader) * data->elfHeader->e_shnum;
-    memcpy(data->sectionHeaders, (pDataBytes + offset), sectionHeaderSizeBytes);
-    data->numSectionHeaders = data->elfHeader->e_shnum;
-    success = verifySectionHeaders(data);
+        sizeof(SectionHeader) * data->elfHeader.e_shnum;
+    data->sectionHeadersPtr =
+        static_cast<SectionHeader *>(memoryAlloc(sectionHeaderSizeBytes));
+    if (data->sectionHeadersPtr == nullptr) {
+      success = false;
+      LOG_OOM();
+    } else {
+      memcpy(data->sectionHeadersPtr, (pDataBytes + offset),
+             sectionHeaderSizeBytes);
+      data->numSectionHeaders = data->elfHeader.e_shnum;
+    }
   }
+
+  LOGV("Loaded section headers %d", success);
+
+  // Load section header names
+  if (success) {
+    SectionHeader &stringSection =
+        data->sectionHeadersPtr[data->elfHeader.e_shstrndx];
+    size_t sectionSize = stringSection.sh_size;
+    data->sectionNamesPtr = static_cast<char *>(memoryAlloc(sectionSize));
+    if (data->sectionNamesPtr == nullptr) {
+      LOG_OOM();
+      success = false;
+    } else {
+      memcpy(data->sectionNamesPtr,
+             (void *)(data->binary.location + stringSection.sh_offset),
+             sectionSize);
+    }
+  }
+
+  LOGV("Loaded section header names %d", success);
+
+  success = verifySectionHeaders(data);
+  LOGV("Verified Section headers %d", success);
+
+  // Load symbol table
+  if (success) {
+    data->symbolTableSize = data->symbolTableHeader.sh_size;
+    if (data->symbolTableSize == 0) {
+      LOGE("No symbols to resolve");
+      success = false;
+    } else {
+      data->symbolTablePtr =
+          static_cast<uint8_t *>(memoryAlloc(data->symbolTableSize));
+      if (data->symbolTablePtr == nullptr) {
+        LOG_OOM();
+        success = false;
+      } else {
+        memcpy(
+            data->symbolTablePtr,
+            (void *)(data->binary.location + data->symbolTableHeader.sh_offset),
+            data->symbolTableSize);
+      }
+    }
+  }
+
+  LOGV("Loaded symbol table %d", success);
+
+  // Load string table
+  if (success) {
+    size_t stringTableSize = data->stringTableHeader.sh_size;
+    if (data->symbolTableSize == 0) {
+      LOGE("No string table corresponding to symbols");
+      success = false;
+    } else {
+      data->stringTablePtr = static_cast<char *>(memoryAlloc(stringTableSize));
+      if (data->stringTablePtr == nullptr) {
+        LOG_OOM();
+        success = false;
+      } else {
+        memcpy(
+            data->stringTablePtr,
+            (void *)(data->binary.location + data->stringTableHeader.sh_offset),
+            stringTableSize);
+      }
+    }
+  }
+
+  LOGV("Loaded string table %d", success);
 
   return success;
 }
@@ -216,78 +303,99 @@ bool createMappings(LoadedBinaryData *data) {
   // ELF needs pt_load segments to be in contiguous ascending order of
   // virtual addresses. So the first and last segs can be used to
   // calculate the entire address span of the image.
-  const ProgramHeader *first = &data->programHeaders[0];
+  const ProgramHeader *first = &data->programHeadersPtr[0];
   const ProgramHeader *last =
-      &data->programHeaders[data->elfHeader->e_phnum - 1];
+      &data->programHeadersPtr[data->elfHeader.e_phnum - 1];
 
   // Find first load segment
-  // TODO fix this as it can crash because we blindly increment 'first'.
-  while (first->p_type != PT_LOAD) {
+  while (first->p_type != PT_LOAD && first <= last) {
     ++first;
   }
 
-  // Verify that the first load segment has a program header
-  // first byte of a valid load segment can't be greater than the
-  // program header offset
-  bool valid =
-      (first->p_offset < data->elfHeader->e_phoff) &&
-      (first->p_filesz > (data->elfHeader->e_phoff +
-                          (data->numProgramHeaders * sizeof(ProgramHeader))));
-  if (!valid) {
-    LOGE("Load segment program header validation failed");
-    return false;
+  bool success = false;
+  if (first->p_type != PT_LOAD) {
+    LOGE("Unable to find any load segments in the binary");
+  } else {
+    // Verify that the first load segment has a program header
+    // first byte of a valid load segment can't be greater than the
+    // program header offset
+    bool valid =
+        (first->p_offset < data->elfHeader.e_phoff) &&
+        (first->p_filesz > (data->elfHeader.e_phoff +
+                            (data->numProgramHeaders * sizeof(ProgramHeader))));
+    if (!valid) {
+      LOGE("Load segment program header validation failed");
+    } else {
+      // Get the last load segment
+      while (last > first && last->p_type != PT_LOAD) --last;
+
+      size_t memorySpan = last->p_vaddr + last->p_memsz - first->p_vaddr;
+      LOGV("Nanoapp image Memory Span: %u", memorySpan);
+
+      data->mapping.rawLocation =
+          memoryAllocAligned(kBinaryAlignment, memorySpan);
+      if (data->mapping.rawLocation == nullptr) {
+        LOG_OOM();
+      } else {
+        LOGV("Starting location of mappings %p", data->mapping.rawLocation);
+        // map the first segment while accounting for alignment
+        uintptr_t adjustedFirstLoadSegAddr =
+            roundDownToAlign(first->p_vaddr, kBinaryAlignment);
+        uintptr_t adjustedFirstLoadSegOffset =
+            roundDownToAlign(first->p_offset, kBinaryAlignment);
+
+        memcpy(data->mapping.rawLocation,
+               (void *)(data->binary.location + adjustedFirstLoadSegOffset),
+               memorySpan);
+        // mapping might not be aligned, store a load bias
+        data->loadBias = data->mapping.location - adjustedFirstLoadSegAddr;
+        LOGV("Load bias is %" PRIu32, data->loadBias);
+
+        if (first->p_offset > data->elfHeader.e_phoff ||
+            first->p_filesz <
+                data->elfHeader.e_phoff +
+                    (data->elfHeader.e_phnum * sizeof(ProgramHeader))) {
+          LOGE("First load segment of ELF does not contain phdrs!");
+        } else {
+          success = true;
+        }
+      }
+    }
   }
 
-  // Get the last load segment
-  while (last > first && last->p_type != PT_LOAD) --last;
+  if (success) {
+    // Map the remaining segments
+    for (const ProgramHeader *ph = first + 1; ph <= last; ++ph) {
+      if (ph->p_type == PT_LOAD) {
+        ElfAddr segStart = ph->p_vaddr + data->loadBias;
+        ElfAddr segEnd = segStart + ph->p_memsz;
+        ElfAddr startPage = roundDownToAlign(segStart, kBinaryAlignment);
+        ElfAddr endPage = roundUpToAlign(segEnd, kBinaryAlignment);
+        ElfAddr phOffsetPage = roundDownToAlign(ph->p_offset, kBinaryAlignment);
+        ElfAddr binaryStartPage = data->binary.location + phOffsetPage;
+        ElfAddr segmentLen = endPage - startPage;
 
-  size_t memorySpan = last->p_vaddr + last->p_memsz - first->p_vaddr;
-  LOGD("Nanoapp image Memory Span: %u", memorySpan);
-
-  // map the first segment while accounting for alignment
-  uintptr_t adjustedFirstLoadSegAddr = roundDownToAlign(first->p_vaddr, 4096);
-  uintptr_t adjustedFirstLoadSegOffset =
-      roundDownToAlign(first->p_offset, 4096);
-
-  memcpy(data->mapping.rawLocation,
-         (void *)(data->binary.location + adjustedFirstLoadSegOffset),
-         memorySpan);
-  // mapping might not be aligned, store a load bias
-  data->loadBias = data->mapping.location - adjustedFirstLoadSegAddr;
-
-  if (first->p_offset > data->elfHeader->e_phoff ||
-      first->p_filesz < data->elfHeader->e_phoff + (data->elfHeader->e_phnum *
-                                                    sizeof(ProgramHeader))) {
-    LOGE("First load segment of ELF does not contain phdrs!");
-    return false;
-  }
-
-  // maintain a variable to know where the previous segment load ended
-  ElfAddr prevSegEnd = first->p_vaddr + first->p_memsz + data->loadBias;
-
-  // Map the remaining segments
-  for (const ProgramHeader *ph = first + 1; ph <= last; ++ph) {
-    if (ph->p_type == PT_LOAD) {
-      prevSegEnd = ph->p_vaddr + data->loadBias + ph->p_memsz;
-
-      ElfAddr startPage = roundDownToAlign(ph->p_vaddr + data->loadBias, 4096);
-      ElfAddr endPage = roundUpToAlign(prevSegEnd, 4096);
-      ElfAddr phOffsetPage = roundDownToAlign(ph->p_offset, 4096);
-
-      memcpy((void *)startPage, (void *)(data->binary.location + phOffsetPage),
-             (endPage - startPage));
+        LOGV("Mapping start page %p from %p with length %zu", startPage,
+             (void *)binaryStartPage, segmentLen);
+        memcpy((void *)startPage, (void *)binaryStartPage, segmentLen);
+      } else {
+        LOGE("Non-load segment found between load segments");
+        success = false;
+        break;
+      }
     }
   }
 
   // TODO (karthikmb/stange) - bss isn't mapped yet
-  return true;
+  return success;
 }
 
 DynamicHeader *getDynamicHeader(LoadedBinaryData *data) {
   DynamicHeader *dyn = nullptr;
   for (size_t i = 0; i < data->numProgramHeaders; ++i) {
-    if (data->programHeaders[i].p_type == PT_DYNAMIC) {
-      dyn = (DynamicHeader *)(data->programHeaders[i].p_vaddr + data->loadBias);
+    if (data->programHeadersPtr[i].p_type == PT_DYNAMIC) {
+      dyn = (DynamicHeader *)(data->programHeadersPtr[i].p_vaddr +
+                              data->loadBias);
       break;
     }
   }
@@ -298,8 +406,8 @@ ProgramHeader *getFirstRoSegHeader(LoadedBinaryData *data) {
   // return the first read only segment found
   ProgramHeader *ro = nullptr;
   for (size_t i = 0; i < data->numProgramHeaders; ++i) {
-    if (!(data->programHeaders[i].p_flags & PF_W)) {
-      ro = &data->programHeaders[i];
+    if (!(data->programHeadersPtr[i].p_flags & PF_W)) {
+      ro = &data->programHeadersPtr[i];
       break;
     }
   }
@@ -325,52 +433,86 @@ SectionHeader *getSectionHeader(LoadedBinaryData *data,
   SectionHeader *rv = nullptr;
   for (size_t i = 0; i < data->numSectionHeaders; ++i) {
     const char *name =
-        getSectionHeaderName(data, data->sectionHeaders[i].sh_name);
+        getSectionHeaderName(data, data->sectionHeadersPtr[i].sh_name);
     if (strncmp(name, headerName, strlen(headerName)) == 0) {
-      rv = &data->sectionHeaders[i];
+      rv = &data->sectionHeadersPtr[i];
       break;
     }
   }
   return rv;
 }
 
+bool initDynamicSymbolTable(LoadedBinaryData *data) {
+  bool success = false;
+  SectionHeader *dynamicSymbolTablePtr = getSectionHeader(data, ".dynsym");
+  CHRE_ASSERT(dynamicSymbolTablePtr != nullptr);
+  if (dynamicSymbolTablePtr != nullptr) {
+    size_t sectionSize = dynamicSymbolTablePtr->sh_size;
+    data->dynamicSymbolTablePtr =
+        static_cast<uint8_t *>(memoryAlloc(sectionSize));
+    if (data->dynamicSymbolTablePtr == nullptr) {
+      LOG_OOM();
+    } else {
+      memcpy(data->dynamicSymbolTablePtr,
+             (void *)(data->binary.location + dynamicSymbolTablePtr->sh_offset),
+             sectionSize);
+      data->dynamicSymbolTableSize = sectionSize;
+      success = true;
+    }
+  }
+
+  return success;
+}
+
+bool initDynamicStringTable(LoadedBinaryData *data) {
+  bool success = false;
+
+  SectionHeader *dynamicStringTablePtr = getSectionHeader(data, ".dynstr");
+  CHRE_ASSERT(dynamicStringTablePtr != nullptr);
+  if (dynamicStringTablePtr != nullptr) {
+    size_t stringTableSize = dynamicStringTablePtr->sh_size;
+    data->dynamicStringTablePtr =
+        static_cast<char *>(memoryAlloc(stringTableSize));
+    if (data->dynamicStringTablePtr == nullptr) {
+      LOG_OOM();
+    } else {
+      memcpy(data->dynamicStringTablePtr,
+             (void *)(data->binary.location + dynamicStringTablePtr->sh_offset),
+             stringTableSize);
+      success = true;
+    }
+  }
+
+  return success;
+}
+
 const char *getDataName(size_t posInSymbolTable, LoadedBinaryData *data) {
-  SectionHeader *dynamicSymbolTable = getSectionHeader(data, ".dynsym");
-  CHRE_ASSERT(dynamicSymbolTable != nullptr);
-  size_t sectionSize = dynamicSymbolTable->sh_size;
+  size_t sectionSize = data->dynamicSymbolTableSize;
   size_t numElements = sectionSize / sizeof(ElfSym);
   CHRE_ASSERT(posInSymbolTable < numElements);
-
-  // TODO remove size restrictions when moving to dynamic allocations
-  CHRE_ASSERT_LOG(sectionSize < 256, "Section size > 256 = %u", sectionSize);
-  memcpy(data->dynamicSymbolTable,
-         (void *)(data->binary.location + dynamicSymbolTable->sh_offset),
-         sectionSize);
-
-  SectionHeader *dynamicStringTable = getSectionHeader(data, ".dynstr");
-  CHRE_ASSERT(dynamicStringTable != nullptr);
-
-  size_t stringTableSize = dynamicStringTable->sh_size;
-  CHRE_ASSERT_LOG(stringTableSize < 512, "string table section size > 512 = %u",
-                  stringTableSize);
-  memcpy(data->dynamicStringTable,
-         (void *)(data->binary.location + dynamicStringTable->sh_offset),
-         stringTableSize);
-
-  ElfSym *sym = reinterpret_cast<ElfSym *>(
-      &data->dynamicSymbolTable[posInSymbolTable * sizeof(ElfSym)]);
-  return &data->dynamicStringTable[sym->st_name];
+  char *dataName = nullptr;
+  if (posInSymbolTable < numElements) {
+    ElfSym *sym = reinterpret_cast<ElfSym *>(
+        &data->dynamicSymbolTablePtr[posInSymbolTable * sizeof(ElfSym)]);
+    dataName = &data->dynamicStringTablePtr[sym->st_name];
+  }
+  return dataName;
 }
 
 void *resolveData(size_t posInSymbolTable, LoadedBinaryData *data) {
   const char *dataName = getDataName(posInSymbolTable, data);
+  LOGV("Resolving %s", dataName);
 
-  for (size_t i = 0; i < ARRAY_SIZE(gExportedData); i++) {
-    if (strncmp(dataName, gExportedData[i].dataName,
-                strlen(gExportedData[i].dataName)) == 0) {
-      return gExportedData[i].data;
+  if (dataName != nullptr) {
+    for (size_t i = 0; i < ARRAY_SIZE(gExportedData); i++) {
+      if (strncmp(dataName, gExportedData[i].dataName,
+                  strlen(gExportedData[i].dataName)) == 0) {
+        return gExportedData[i].data;
+      }
     }
   }
+
+  LOGV("%s not found!", dataName);
 
   return nullptr;
 }
@@ -380,71 +522,78 @@ bool fixRelocations(LoadedBinaryData *data) {
   DynamicHeader *dyn = getDynamicHeader(data);
   ProgramHeader *roSeg = getFirstRoSegHeader(data);
 
+  bool success = false;
   if ((dyn == nullptr) || (roSeg == nullptr)) {
     LOGE("Mandatory headers missing from shared object, aborting load");
-    return false;
-  }
-
-  ElfWord relaCheck = getDynEntry(dyn, DT_RELA);
-  if (relaCheck != 0) {
+  } else if (getDynEntry(dyn, DT_RELA) != 0) {
     LOGE("Elf binaries with a DT_RELA dynamic entry are unsupported");
-    return false;
-  }
+  } else {
+    ElfRel *reloc =
+        (ElfRel *)(getDynEntry(dyn, DT_REL) + data->binary.location);
+    size_t relocSize = getDynEntry(dyn, DT_RELSZ);
+    size_t nRelocs = relocSize / sizeof(ElfRel);
+    LOGV("Relocation %zu entries in DT_REL table", nRelocs);
 
-  ElfRel *reloc = (ElfRel *)(getDynEntry(dyn, DT_REL) + data->binary.location);
-  size_t relocSize = getDynEntry(dyn, DT_RELSZ);
-  size_t nRelocs = relocSize / sizeof(ElfRel);
+    size_t i;
+    for (i = 0; i < nRelocs; ++i) {
+      ElfRel *curr = &reloc[i];
+      int relocType = ELFW_R_TYPE(curr->r_info);
+      switch (relocType) {
+        case R_ARM_RELATIVE:
+          LOGV("Resolving ARM_RELATIVE at offset %" PRIu32, curr->r_offset);
+          addr = reinterpret_cast<ElfAddr *>(curr->r_offset +
+                                             data->mapping.location);
+          // TODO: When we move to DRAM allocations, we need to check if the
+          // above address is in a Read-Only section of memory, and give it
+          // temporary write permission if that is the case.
+          *addr += data->mapping.location;
+          break;
 
-  for (size_t i = 0; i < nRelocs; ++i) {
-    ElfRel *curr = &reloc[i];
-    int relocType = ELFW_R_TYPE(curr->r_info);
-    switch (relocType) {
-      case R_ARM_RELATIVE:
-        addr = reinterpret_cast<ElfAddr *>(curr->r_offset +
-                                           data->mapping.location);
-        // TODO: When we move to DRAM allocations, we need to check if the
-        // above address is in a Read-Only section of memory, and give it
-        // temporary write permission if that is the case.
-        *addr += data->mapping.location;
-        break;
-
-      case R_ARM_GLOB_DAT: {
-        addr = reinterpret_cast<ElfAddr *>(curr->r_offset +
-                                           data->mapping.location);
-        size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
-        void *resolved = resolveData(posInSymbolTable, data);
-        if (resolved == nullptr) {
-          LOGE("Failed to resolve global symbol(%d) at offset 0x%x", i,
-               curr->r_offset);
-          return false;
+        case R_ARM_GLOB_DAT: {
+          LOGV("Resolving R_ARM_GLOB_DAT at offset %" PRIu32, curr->r_offset);
+          addr = reinterpret_cast<ElfAddr *>(curr->r_offset +
+                                             data->mapping.location);
+          size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
+          void *resolved = resolveData(posInSymbolTable, data);
+          if (resolved == nullptr) {
+            LOGE("Failed to resolve global symbol(%d) at offset 0x%x", i,
+                 curr->r_offset);
+            return false;
+          }
+          // TODO: When we move to DRAM allocations, we need to check if the
+          // above address is in a Read-Only section of memory, and give it
+          // temporary write permission if that is the case.
+          *addr = reinterpret_cast<ElfAddr>(resolved);
+          break;
         }
-        // TODO: When we move to DRAM allocations, we need to check if the
-        // above address is in a Read-Only section of memory, and give it
-        // temporary write permission if that is the case.
-        *addr = reinterpret_cast<ElfAddr>(resolved);
-        break;
+
+        case R_ARM_COPY:
+          LOGE("R_ARM_COPY is an invalid relocation for shared libraries");
+          break;
+        default:
+          LOGE("Invalid relocation type %u", relocType);
+          break;
       }
+    }
 
-      case R_ARM_COPY:
-        LOGE("R_ARM_COPY is an invalid relocation for shared libraries");
-        return false;
-
-      default:
-        LOGE("Invalid relocation type %u", relocType);
-        return false;
+    if (i != nRelocs) {
+      LOGE("Unable to resolve all symbols in the binary");
+    } else {
+      data->dynamicHeaderPtr = dyn;
+      success = true;
     }
   }
 
-  data->dynamicHeader = dyn;
-  return true;
+  return success;
 }
 
 bool resolveGot(LoadedBinaryData *data) {
   ElfAddr *addr;
-  ElfRel *reloc = (ElfRel *)(getDynEntry(data->dynamicHeader, DT_JMPREL) +
+  ElfRel *reloc = (ElfRel *)(getDynEntry(data->dynamicHeaderPtr, DT_JMPREL) +
                              data->mapping.location);
-  size_t relocSize = getDynEntry(data->dynamicHeader, DT_PLTRELSZ);
+  size_t relocSize = getDynEntry(data->dynamicHeaderPtr, DT_PLTRELSZ);
   size_t nRelocs = relocSize / sizeof(ElfRel);
+  LOGV("Resolving GOT with %zu relocations", nRelocs);
 
   for (size_t i = 0; i < nRelocs; ++i) {
     ElfRel *curr = &reloc[i];
@@ -452,6 +601,7 @@ bool resolveGot(LoadedBinaryData *data) {
 
     switch (relocType) {
       case R_ARM_JUMP_SLOT: {
+        LOGV("Resolving ARM_JUMP_SLOT at offset %" PRIu32, curr->r_offset);
         addr = reinterpret_cast<ElfAddr *>(curr->r_offset +
                                            data->mapping.location);
         size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
@@ -474,35 +624,12 @@ bool resolveGot(LoadedBinaryData *data) {
   return true;
 }
 
-bool readSymbolAndStringTables(LoadedBinaryData *data) {
-  data->symbolTableSize = data->symbolTableHeader->sh_size;
-
-  // TODO: Remove size restrictions when we move to dynamic allocations
-  if (data->symbolTable[0] == 0) {
-    CHRE_ASSERT_LOG(data->symbolTableSize < 512, "Symbol table size > 512 = %u",
-                    data->symbolTableSize);
-    memcpy(data->symbolTable,
-           (void *)(data->binary.location + data->symbolTableHeader->sh_offset),
-           data->symbolTableSize);
-  }
-
-  if (data->stringTable[0] == 0) {
-    size_t stringTableSize = data->stringTableHeader->sh_size;
-    CHRE_ASSERT_LOG(stringTableSize < 512, "string table size > 512 = %u",
-                    stringTableSize);
-    memcpy(data->stringTable,
-           (void *)(data->binary.location + data->stringTableHeader->sh_offset),
-           stringTableSize);
-  }
-  return true;
-}
-
 void *findSymbolByName(LoadedBinaryData *data, const char *cName) {
   void *symbol = nullptr;
-  uint8_t *index = data->symbolTable;
-  while (index < (data->symbolTable + data->symbolTableSize)) {
+  uint8_t *index = data->symbolTablePtr;
+  while (index < (data->symbolTablePtr + data->symbolTableSize)) {
     ElfSym *currSym = reinterpret_cast<ElfSym *>(index);
-    const char *symbolName = &data->stringTable[currSym->st_name];
+    const char *symbolName = &data->stringTablePtr[currSym->st_name];
 
     if (strncmp(symbolName, cName, strlen(cName)) == 0) {
       symbol = ((void *)(data->mapping.location + currSym->st_value));
@@ -514,82 +641,77 @@ void *findSymbolByName(LoadedBinaryData *data, const char *cName) {
   return symbol;
 }
 
-LoadedBinaryData *initializeBuffersStatic() {
-  // Temporary workaround function until we move to dynamic allocations
-  // - go ham and assign static memory to everything
-  static uint8_t dataBufferTemp[sizeof(LoadedBinaryData)];
-  static ElfHeader elfHdrTemp;
-  static ProgramHeader phdrTemp[8];
-  static SectionHeader shdrTemp[37];
-  static SectionHeader strtabTemp;
-  static SectionHeader symtabTemp;
-  static constexpr size_t kMaxMappingSize = 20000 + 4096;
-  static uint8_t mapping[kMaxMappingSize];
-  static char sectionNamesTemp[512];
-  static uint8_t dynamicSymoblTableTemp[256];
-  static char dynamicStringTableTemp[512];
-  static uint8_t symbolTableTemp[512];
-  static char stringTableTemp[512];
-
-  auto *data = reinterpret_cast<LoadedBinaryData *>(&dataBufferTemp[0]);
-  data->elfHeader = &elfHdrTemp;
-  data->programHeaders = &phdrTemp[0];
-  data->sectionHeaders = &shdrTemp[0];
-  data->stringTableHeader = &strtabTemp;
-  data->symbolTableHeader = &symtabTemp;
-  data->sectionNames = sectionNamesTemp;
-  data->dynamicSymbolTable = dynamicSymoblTableTemp;
-  data->dynamicStringTable = dynamicStringTableTemp;
-  data->symbolTable = symbolTableTemp;
-  data->stringTable = stringTableTemp;
-  data->mapping.location = roundDownToAlign((uintptr_t)mapping, 4096);
-
-  return data;
+void freeLoadedBinaryData(LoadedBinaryData *data) {
+  if (data != nullptr) {
+    memoryFree(data->mapping.rawLocation);
+    memoryFree(data->programHeadersPtr);
+    memoryFree(data->sectionHeadersPtr);
+    memoryFree(data->sectionNamesPtr);
+    memoryFree(data->dynamicStringTablePtr);
+    memoryFree(data->dynamicSymbolTablePtr);
+    memoryFree(data->symbolTablePtr);
+    memoryFree(data->stringTablePtr);
+    memoryFree(data);
+  }
 }
 
 }  // namespace
 
-void *dlopenbuf(void *binary, size_t /* binarySize */) {
+void *dlopenbuf(void *binary, size_t /*binarySize*/) {
   if (binary == nullptr) {
     return nullptr;
   }
 
-  bool success = false;
-  LoadedBinaryData *data = initializeBuffersStatic();
+  auto *data = memoryAlloc<LoadedBinaryData>();
 
   if (data != nullptr) {
+    bool success = false;
     data->binary.rawLocation = binary;
     if (!copyAndVerifyHeaders(data)) {
       LOGE("Failed to verify headers");
     } else if (!createMappings(data)) {
       LOGE("Failed to create mappings");
+    } else if (!initDynamicStringTable(data)) {
+      LOGE("Failed to initialize dynamic string table");
+    } else if (!initDynamicSymbolTable(data)) {
+      LOGE("Failed to initialize dynamic symbol table");
     } else if (!fixRelocations(data)) {
       LOGE("Failed to fix relocations");
     } else if (!resolveGot(data)) {
       LOGE("Failed to resolve GOT");
-    } else if (!readSymbolAndStringTables(data)) {
-      LOGE("Failed to read symbol and string tables");
     } else {
+      // TODO(karthikmb / stange): Initialize static variables
       success = true;
+    }
+    if (!success) {
+      freeLoadedBinaryData(data);
+      data = nullptr;
     }
   } else {
     LOG_OOM();
   }
 
-  return (success == true) ? data : nullptr;
+  return data;
 }
 
 void *dlsym(void *handle, const char *symbol) {
+  LOGV("Attempting to find %s", symbol);
+
   auto *data = reinterpret_cast<LoadedBinaryData *>(handle);
+  void *resolvedSymbol = nullptr;
   if (data != nullptr) {
-    return findSymbolByName(data, symbol);
+    resolvedSymbol = findSymbolByName(data, symbol);
+    LOGV("Found symbol at %p", resolvedSymbol);
   }
-  return nullptr;
+  return resolvedSymbol;
 }
 
 int dlclose(void *handle) {
-  // TODO(karthikmb/stange) - Free handle when it's allocated
-  handle = nullptr;
+  auto *data = static_cast<LoadedBinaryData *>(handle);
+
+  // TODO(karthikmb / stange): Destroy static variables
+  freeLoadedBinaryData(data);
+
   return 0;
 }
 

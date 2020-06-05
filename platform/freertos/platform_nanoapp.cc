@@ -26,7 +26,11 @@
 
 namespace chre {
 
-PlatformNanoapp::~PlatformNanoapp() {}
+PlatformNanoapp::~PlatformNanoapp() {
+  if (mAppBinary != nullptr) {
+    memoryFree(mAppBinary);
+  }
+}
 
 bool PlatformNanoapp::start() {
   bool success = false;
@@ -88,22 +92,15 @@ bool PlatformNanoappBase::reserveBuffer(uint64_t appId, uint32_t appVersion,
   CHRE_ASSERT(!isLoaded());
 
   bool success = false;
-  // hack until malloc actually works
-  // for prototyping hello world only
-  static uint8_t tempBuffer[20000];
-  static bool alreadyReserved = false;
+  mAppBinary = memoryAlloc(appBinaryLen);
 
-  // TODO: usf plat chre memoryAlloc is being called here
-  // mAppBinary = memoryAlloc(appBinaryLen);
-
-  if (!alreadyReserved && (mAppBinary == nullptr)) {
-    mAppBinary = (void *)(&tempBuffer[0]);
+  if (mAppBinary == nullptr) {
+    LOG_OOM();
+  } else {
     mExpectedAppId = appId;
     mExpectedAppVersion = appVersion;
     mAppBinaryLen = appBinaryLen;
     success = true;
-  } else {
-    LOG_OOM();
   }
 
   return success;
@@ -183,6 +180,10 @@ bool PlatformNanoappBase::openNanoapp() {
       LOGE("Trying to reopen an existing buffer");
     }
   }
+
+  memoryFree(mAppBinary);
+  mAppBinary = nullptr;
+
   return success;
 }
 
