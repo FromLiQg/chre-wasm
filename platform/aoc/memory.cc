@@ -21,6 +21,7 @@
 
 #include "basic.h"
 #include "heap.h"
+#include "sysmem.h"
 
 #include <cstdlib>
 
@@ -192,6 +193,21 @@ void memoryFreeDram(void *pointer) {
   } else {
     HeapFree(GetDramHeap(), pointer);
   }
+}
+
+bool requestDramAccess(bool enabled) {
+  int rc;
+  if (enabled) {
+    rc = SysMem::Instance()->MemoryRequest(SysMem::MIF, true);
+  } else {
+    rc = SysMem::Instance()->MemoryRelease(SysMem::MIF);
+  }
+
+  if (rc != 0) {
+    LOGE("Unable to change DRAM access to %d with error code %d", enabled, rc);
+  }
+
+  return rc == 0;
 }
 
 void *palSystemApiMemoryAlloc(size_t size) {

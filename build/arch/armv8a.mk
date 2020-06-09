@@ -16,6 +16,11 @@ COMMON_C_CFLAGS += $(CFLAGS)
 TARGET_SO_LDFLAGS += $(LDFLAGS)
 TARGET_SO_EARLY_LIBS += $(LDLIBS)
 
+# TODO(stange): Move most of these includes to platform.mk so nanoapps can't
+# refer to AoC APIs
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/core/arm/generic/include
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/processor/aoc/include
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/sys_mem/base/include
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/bionic_interface/include
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/basic/include
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/libc/include

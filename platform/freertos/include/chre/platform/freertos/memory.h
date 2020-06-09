@@ -28,6 +28,13 @@ namespace chre {
  */
 void *memoryAllocAligned(size_t alignment, size_t size);
 
+/**
+ * Requests or releases access to DRAM or another large capacity region, if
+ * available. If not such region exists, this method should return true and be a
+ * no-op.
+ */
+bool requestDramAccess(bool enabled);
+
 }  // namespace chre
 
 #endif  // CHRE_PLATFORM_FREERTOS_MEMORY_H_
