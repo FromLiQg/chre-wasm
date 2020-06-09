@@ -15,6 +15,7 @@
  */
 
 #include "chre/platform/platform_nanoapp.h"
+#include "chre/platform/freertos/memory.h"
 #include "chre/platform/freertos/nanoapp_loader.h"
 #include "chre/platform/shared/nanoapp_dso_util.h"
 
@@ -92,7 +93,7 @@ bool PlatformNanoappBase::reserveBuffer(uint64_t appId, uint32_t appVersion,
   CHRE_ASSERT(!isLoaded());
 
   bool success = false;
-  mAppBinary = memoryAlloc(appBinaryLen);
+  mAppBinary = memoryAllocDram(appBinaryLen);
 
   if (mAppBinary == nullptr) {
     LOG_OOM();
@@ -181,7 +182,7 @@ bool PlatformNanoappBase::openNanoapp() {
     }
   }
 
-  memoryFree(mAppBinary);
+  memoryFreeDram(mAppBinary);
   mAppBinary = nullptr;
 
   return success;

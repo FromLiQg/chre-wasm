@@ -333,7 +333,7 @@ bool createMappings(LoadedBinaryData *data) {
       LOGV("Nanoapp image Memory Span: %u", memorySpan);
 
       data->mapping.rawLocation =
-          memoryAllocAligned(kBinaryAlignment, memorySpan);
+          memoryAllocDramAligned(kBinaryAlignment, memorySpan);
       if (data->mapping.rawLocation == nullptr) {
         LOG_OOM();
       } else {
@@ -643,7 +643,7 @@ void *findSymbolByName(LoadedBinaryData *data, const char *cName) {
 
 void freeLoadedBinaryData(LoadedBinaryData *data) {
   if (data != nullptr) {
-    memoryFree(data->mapping.rawLocation);
+    memoryFreeDram(data->mapping.rawLocation);
     memoryFree(data->programHeadersPtr);
     memoryFree(data->sectionHeadersPtr);
     memoryFree(data->sectionNamesPtr);

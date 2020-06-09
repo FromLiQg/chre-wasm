@@ -22,11 +22,31 @@
 namespace chre {
 
 /**
- * Aligned memory allocation. The semantics are the same as malloc.
+ * Aligned memory allocation specifically using the DRAM heap. The semantics are
+ * the same as malloc.
  *
- * This should allocate memory from the same region as memoryAlloc.
+ * If DRAM or another large memory capacity region is not available, this will
+ * allocate from the same memory region as memoryAlloc.
  */
-void *memoryAllocAligned(size_t alignment, size_t size);
+void *memoryAllocDramAligned(size_t alignment, size_t size);
+
+/**
+ * Memory allocation specifically using the DRAM heap. The semantics are the
+ * same as malloc.
+ *
+ * If DRAM or another large memory capacity region is not available, this will
+ * allocate from the same memory region as memoryAlloc.
+ */
+void *memoryAllocDram(size_t size);
+
+/**
+ * Memory free from memory allocated using the DRAM heap. The semantics are the
+ * same as free.
+ *
+ * If DRAM or another large memory capacity region is not available, this will
+ * free from the same memory region as memoryFree.
+ */
+void memoryFreeDram(void *pointer);
 
 /**
  * Requests or releases access to DRAM or another large capacity region, if
