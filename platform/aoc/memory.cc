@@ -146,12 +146,24 @@ void *memoryAlloc(size_t size) {
   return ptr;
 }
 
+void *memoryAllocAligned(size_t alignment, size_t size) {
+  void *ptr = nullptr;
+  void *handle = GetSramHeap();
+
+  if (handle != nullptr) {
+    ptr = HeapAlignedAlloc(handle, alignment, size);
+    if (ptr == nullptr) {
+      printf("CHRE: Failed to allocate memory in SRAM heap\n");
+    }
+  }
+
+  return ptr;
+}
+
 void *memoryAllocDram(size_t size) {
   void *ptr = nullptr;
   void *handle = GetDramHeap();
-  if (handle == nullptr) {
-    return nullptr;
-  } else {
+  if (handle != nullptr) {
     ptr = HeapMalloc(handle, size);
     if (ptr == nullptr) {
       printf("CHRE: Failed to allocate memory in DRAM heap\n");
