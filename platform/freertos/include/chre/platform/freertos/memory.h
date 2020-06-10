@@ -14,27 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_PLATFORM_AOC_MEMORY_H_
-#define CHRE_PLATFORM_AOC_MEMORY_H_
+#ifndef CHRE_PLATFORM_FREERTOS_MEMORY_H_
+#define CHRE_PLATFORM_FREERTOS_MEMORY_H_
 
 #include <cstddef>
-
-#include "chre/platform/freertos/memory.h"
 
 namespace chre {
 
 /**
- * Memory allocation specifically using the DRAM heap. The semantics are the
- * same as malloc.
+ * Aligned memory allocation. The semantics are the same as malloc.
+ *
+ * This should allocate memory from the same region as memoryAlloc.
  */
-void *memoryAllocDram(size_t size);
-
-/**
- * Memory free from memory allocated using the DRAM heap. The semantics are the
- * same as free.
- */
-void memoryFreeDram(void *pointer);
+void *memoryAllocAligned(size_t alignment, size_t size);
 
 }  // namespace chre
 
-#endif  // CHRE_PLATFORM_AOC_MEMORY_H_
+#endif  // CHRE_PLATFORM_FREERTOS_MEMORY_H_

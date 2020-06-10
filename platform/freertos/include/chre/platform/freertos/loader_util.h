@@ -20,6 +20,20 @@
 // The below macros allow switching the ELF symbol type between 32/64-bit
 // depending on what the chipset supports.
 #ifndef ELFW
+#ifndef __WORDSIZE
+// Until we can get a hold of wordsize.h, we need to define it here.
+// Only 32-bit architectures currently supported.
+#ifndef __aarch64__
+#define __WORDSIZE 32
+#else
+#error "Only 32-bit architectures currently supported"
+#endif
+#endif
+// https://refspecs.linuxbase.org/elf/gabi4+/ch4.reloc.html
+#define ELF32_R_SYM(info) ((info) >> 8)
+#define ELF32_R_TYPE(info) ((unsigned char)(info))
+#define ELF32_R_INFO(sym, type) (((sym) << 8) + (unsigned char)(type))
+#define __ELF_NATIVE_CLASS __WORDSIZE
 #define ELFW(type) _ELFW(__ELF_NATIVE_CLASS, type)
 #define _ELFW(bits, type) __ELFW(bits, type)
 #define __ELFW(bits, type) ELF##bits##_##type
@@ -32,8 +46,8 @@ struct ExportedData {
   const char *dataName;
 };
 
-// The below is copied from elf.h / link.h to avoid pulling those deps into the
-// build.
+// The below is copied from bionic/libc/kernel/uapi/linux/elf.h
+// to avoid pulling those deps into the build.
 #if defined(__LP64__)
 #define ElfW(type) Elf64_##type
 #else
@@ -130,14 +144,6 @@ typedef __u16 Elf32_Half;
 typedef __u32 Elf32_Off;
 typedef __s32 Elf32_Sword;
 typedef __u32 Elf32_Word;
-typedef __u64 Elf64_Addr;
-typedef __u16 Elf64_Half;
-typedef __s16 Elf64_SHalf;
-typedef __u64 Elf64_Off;
-typedef __s32 Elf64_Sword;
-typedef __u32 Elf64_Word;
-typedef __u64 Elf64_Xword;
-typedef __s64 Elf64_Sxword;
 
 #define EI_NIDENT 16
 typedef struct elf32_hdr {
@@ -156,22 +162,6 @@ typedef struct elf32_hdr {
   Elf32_Half e_shnum;
   Elf32_Half e_shstrndx;
 } Elf32_Ehdr;
-typedef struct elf64_hdr {
-  unsigned char e_ident[EI_NIDENT];
-  Elf64_Half e_type;
-  Elf64_Half e_machine;
-  Elf64_Word e_version;
-  Elf64_Addr e_entry;
-  Elf64_Off e_phoff;
-  Elf64_Off e_shoff;
-  Elf64_Word e_flags;
-  Elf64_Half e_ehsize;
-  Elf64_Half e_phentsize;
-  Elf64_Half e_phnum;
-  Elf64_Half e_shentsize;
-  Elf64_Half e_shnum;
-  Elf64_Half e_shstrndx;
-} Elf64_Ehdr;
 
 typedef struct dynamic {
   Elf32_Sword d_tag;
@@ -180,13 +170,6 @@ typedef struct dynamic {
     Elf32_Addr d_ptr;
   } d_un;
 } Elf32_Dyn;
-typedef struct {
-  Elf64_Sxword d_tag;
-  union {
-    Elf64_Xword d_val;
-    Elf64_Addr d_ptr;
-  } d_un;
-} Elf64_Dyn;
 
 typedef struct elf32_phdr {
   Elf32_Word p_type;
@@ -198,16 +181,6 @@ typedef struct elf32_phdr {
   Elf32_Word p_flags;
   Elf32_Word p_align;
 } Elf32_Phdr;
-typedef struct elf64_phdr {
-  Elf64_Word p_type;
-  Elf64_Word p_flags;
-  Elf64_Off p_offset;
-  Elf64_Addr p_vaddr;
-  Elf64_Addr p_paddr;
-  Elf64_Xword p_filesz;
-  Elf64_Xword p_memsz;
-  Elf64_Xword p_align;
-} Elf64_Phdr;
 
 typedef struct elf32_shdr {
   Elf32_Word sh_name;
@@ -221,29 +194,17 @@ typedef struct elf32_shdr {
   Elf32_Word sh_addralign;
   Elf32_Word sh_entsize;
 } Elf32_Shdr;
-typedef struct elf64_shdr {
-  Elf64_Word sh_name;
-  Elf64_Word sh_type;
-  Elf64_Xword sh_flags;
-  Elf64_Addr sh_addr;
-  Elf64_Off sh_offset;
-  Elf64_Xword sh_size;
-  Elf64_Word sh_link;
-  Elf64_Word sh_info;
-  Elf64_Xword sh_addralign;
-  Elf64_Xword sh_entsize;
-} Elf64_Shdr;
 
 typedef struct elf32_rela {
   Elf32_Addr r_offset;
   Elf32_Word r_info;
   Elf32_Sword r_addend;
 } Elf32_Rela;
-typedef struct elf64_rela {
-  Elf64_Addr r_offset;
-  Elf64_Xword r_info;
-  Elf64_Sxword r_addend;
-} Elf64_Rela;
+
+typedef struct elf32_rel {
+  Elf32_Addr r_offset;
+  Elf32_Word r_info;
+} Elf32_Rel;
 
 typedef struct elf32_sym {
   Elf32_Word st_name;
@@ -253,13 +214,23 @@ typedef struct elf32_sym {
   unsigned char st_other;
   Elf32_Half st_shndx;
 } Elf32_Sym;
-typedef struct elf64_sym {
-  Elf64_Word st_name;
-  unsigned char st_info;
-  unsigned char st_other;
-  Elf64_Half st_shndx;
-  Elf64_Addr st_value;
-  Elf64_Xword st_size;
-} Elf64_Sym;
+
+// The following defines are copied from bionic's elf_arm.h header
+// at bionic/libc/kernel/uapi/linux/elf.h
+// Only the relocation types currently supported are copied.
+#define R_ARM_NONE 0
+#define R_ARM_COPY 20
+#define R_ARM_GLOB_DAT 21
+#define R_ARM_JUMP_SLOT 22
+#define R_ARM_RELATIVE 23
+
+// The following (legal values for segment flags) are copied from
+// bionic's elf.h
+/* http://www.sco.com/developers/gabi/latest/ch5.pheader.html */
+#define PF_X 0x1
+#define PF_W 0x2
+#define PF_R 0x4
+#define PF_MASKOS 0x0ff00000
+#define PF_MASKPROC 0xf0000000
 
 #endif  // CHRE_PLATFORM_FREERTOS_LOADER_UTIL_H_

@@ -27,6 +27,8 @@ void *dlsym(void *handle, const char *symbol);
 
 int dlclose(void *handle);
 
+const char *dlerror();
+
 }  // namespace chre
 
 #endif  // CHRE_PLATFORM_FREERTOS_NANOAPP_LOADER_H_
