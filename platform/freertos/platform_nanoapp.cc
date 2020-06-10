@@ -29,7 +29,7 @@ namespace chre {
 
 PlatformNanoapp::~PlatformNanoapp() {
   if (mAppBinary != nullptr) {
-    memoryFree(mAppBinary);
+    memoryFreeDram(mAppBinary);
   }
 }
 
@@ -182,8 +182,10 @@ bool PlatformNanoappBase::openNanoapp() {
     }
   }
 
-  memoryFreeDram(mAppBinary);
-  mAppBinary = nullptr;
+  if (mAppBinary != nullptr) {
+    memoryFreeDram(mAppBinary);
+    mAppBinary = nullptr;
+  }
 
   return success;
 }
