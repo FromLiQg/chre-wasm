@@ -299,8 +299,8 @@ bool copyAndVerifyHeaders(LoadedBinaryData *data) {
   return success;
 }
 
-uintptr_t roundDownToAlign(uintptr_t virtualAddr, const size_t alignment) {
-  return virtualAddr & -alignment;
+uintptr_t roundDownToAlign(uintptr_t virtualAddr) {
+  return virtualAddr & -kBinaryAlignment;
 }
 
 void mapBss(LoadedBinaryData *data, const ProgramHeader *hdr) {
@@ -363,8 +363,7 @@ bool createMappings(LoadedBinaryData *data) {
         LOGV("Starting location of mappings %p", data->mapping.rawLocation);
 
         // Calculate the load bias using the first load segment.
-        uintptr_t adjustedFirstLoadSegAddr =
-            roundDownToAlign(first->p_vaddr, kBinaryAlignment);
+        uintptr_t adjustedFirstLoadSegAddr = roundDownToAlign(first->p_vaddr);
         data->loadBias = data->mapping.location - adjustedFirstLoadSegAddr;
         LOGV("Load bias is %" PRIu32, data->loadBias);
 
@@ -378,8 +377,8 @@ bool createMappings(LoadedBinaryData *data) {
     for (const ProgramHeader *ph = first; ph <= last; ++ph) {
       if (ph->p_type == PT_LOAD) {
         ElfAddr segStart = ph->p_vaddr + data->loadBias;
-        ElfAddr startPage = roundDownToAlign(segStart, kBinaryAlignment);
-        ElfAddr phOffsetPage = roundDownToAlign(ph->p_offset, kBinaryAlignment);
+        ElfAddr startPage = roundDownToAlign(segStart);
+        ElfAddr phOffsetPage = roundDownToAlign(ph->p_offset);
         ElfAddr binaryStartPage = data->binary.location + phOffsetPage;
         size_t segmentLen = ph->p_filesz;
 
