@@ -98,14 +98,26 @@ struct ExportedData {
   const char *dataName;
 };
 
+// The new operator is used by singleton.h which causes the delete operator to
+// be undefined in nanoapp binaries even though it's unused. Define this in case
+// a nanoapp actually tries to use the operator.
+void deleteOverride(void *ptr) {
+  FATAL_ERROR("Nanoapp tried to free %p through delete operator", ptr);
+}
+
 // TODO(karthikmb/stange): While this array was hand-coded for simple
 // "hello-world" prototyping, the list of exported symbols must be
 // generated to minimize runtime errors and build breaks.
 ExportedData gExportedData[] = {
-    {(void *)chreLog, "chreLog"},
     {(void *)chreGetVersion, "chreGetVersion"},
     {(void *)chreGetApiVersion, "chreGetApiVersion"},
     {(void *)chreGetTime, "chreGetTime"},
+    {(void *)chreLog, "chreLog"},
+    {(void *)chreSendMessageToHostEndpoint, "chreSendMessageToHostEndpoint"},
+    {(void *)chreSensorConfigure, "chreSensorConfigure"},
+    {(void *)chreSensorFindDefault, "chreSensorFindDefault"},
+    {(void *)memset, "memset"},
+    {(void *)deleteOverride, "_ZdlPv"},
 };
 
 const char *getSectionHeaderName(LoadedBinaryData *data, size_t sh_name) {
@@ -287,12 +299,23 @@ bool copyAndVerifyHeaders(LoadedBinaryData *data) {
   return success;
 }
 
-uintptr_t roundUpToAlign(uintptr_t virtualAddr, const size_t alignment) {
+uintptr_t roundDownToAlign(uintptr_t virtualAddr, const size_t alignment) {
   return virtualAddr & -alignment;
 }
 
-uintptr_t roundDownToAlign(uintptr_t virtualAddr, const size_t alignment) {
-  return (virtualAddr + alignment - 1) & -alignment;
+void mapBss(LoadedBinaryData *data, const ProgramHeader *hdr) {
+  // if the memory size of this segment exceeds the file size zero fill the
+  // difference.
+  LOGV("Program Hdr mem sz: %zu file size: %zu", hdr->p_memsz, hdr->p_filesz);
+  if (hdr->p_memsz > hdr->p_filesz) {
+    ElfAddr endOfFile = hdr->p_vaddr + hdr->p_filesz + data->loadBias;
+    ElfAddr endOfMem = hdr->p_vaddr + hdr->p_memsz + data->loadBias;
+    if (endOfMem > endOfFile) {
+      auto deltaMem = endOfMem - endOfFile;
+      LOGV("Zeroing out %zu from page %p", deltaMem, endOfFile);
+      memset((void *)endOfFile, 0, deltaMem);
+    }
+  }
 }
 
 bool createMappings(LoadedBinaryData *data) {
@@ -338,46 +361,32 @@ bool createMappings(LoadedBinaryData *data) {
         LOG_OOM();
       } else {
         LOGV("Starting location of mappings %p", data->mapping.rawLocation);
-        // map the first segment while accounting for alignment
+
+        // Calculate the load bias using the first load segment.
         uintptr_t adjustedFirstLoadSegAddr =
             roundDownToAlign(first->p_vaddr, kBinaryAlignment);
-        uintptr_t adjustedFirstLoadSegOffset =
-            roundDownToAlign(first->p_offset, kBinaryAlignment);
-
-        memcpy(data->mapping.rawLocation,
-               (void *)(data->binary.location + adjustedFirstLoadSegOffset),
-               memorySpan);
-        // mapping might not be aligned, store a load bias
         data->loadBias = data->mapping.location - adjustedFirstLoadSegAddr;
         LOGV("Load bias is %" PRIu32, data->loadBias);
 
-        if (first->p_offset > data->elfHeader.e_phoff ||
-            first->p_filesz <
-                data->elfHeader.e_phoff +
-                    (data->elfHeader.e_phnum * sizeof(ProgramHeader))) {
-          LOGE("First load segment of ELF does not contain phdrs!");
-        } else {
-          success = true;
-        }
+        success = true;
       }
     }
   }
 
   if (success) {
     // Map the remaining segments
-    for (const ProgramHeader *ph = first + 1; ph <= last; ++ph) {
+    for (const ProgramHeader *ph = first; ph <= last; ++ph) {
       if (ph->p_type == PT_LOAD) {
         ElfAddr segStart = ph->p_vaddr + data->loadBias;
-        ElfAddr segEnd = segStart + ph->p_memsz;
         ElfAddr startPage = roundDownToAlign(segStart, kBinaryAlignment);
-        ElfAddr endPage = roundUpToAlign(segEnd, kBinaryAlignment);
         ElfAddr phOffsetPage = roundDownToAlign(ph->p_offset, kBinaryAlignment);
         ElfAddr binaryStartPage = data->binary.location + phOffsetPage;
-        ElfAddr segmentLen = endPage - startPage;
+        size_t segmentLen = ph->p_filesz;
 
         LOGV("Mapping start page %p from %p with length %zu", startPage,
              (void *)binaryStartPage, segmentLen);
         memcpy((void *)startPage, (void *)binaryStartPage, segmentLen);
+        mapBss(data, ph);
       } else {
         LOGE("Non-load segment found between load segments");
         success = false;
@@ -386,7 +395,6 @@ bool createMappings(LoadedBinaryData *data) {
     }
   }
 
-  // TODO (karthikmb/stange) - bss isn't mapped yet
   return success;
 }
 

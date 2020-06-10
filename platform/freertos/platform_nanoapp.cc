@@ -55,15 +55,15 @@ void PlatformNanoapp::end() {
 }
 
 uint64_t PlatformNanoapp::getAppId() const {
-  return (mAppInfo == nullptr) ? 0 : mAppInfo->appId;
+  return (mAppInfo != nullptr) ? mAppInfo->appId : mExpectedAppId;
 }
 
 uint32_t PlatformNanoapp::getAppVersion() const {
-  return (mAppInfo == nullptr) ? 0 : mAppInfo->appVersion;
+  return (mAppInfo != nullptr) ? mAppInfo->appVersion : mExpectedAppVersion;
 }
 
 uint32_t PlatformNanoapp::getTargetApiVersion() const {
-  return CHRE_API_VERSION;
+  return (mAppInfo != nullptr) ? mAppInfo->targetApiVersion : 0;
 }
 
 bool PlatformNanoapp::isSystemNanoapp() const {
