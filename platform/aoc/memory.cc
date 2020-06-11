@@ -21,6 +21,7 @@
 
 #include "basic.h"
 #include "heap.h"
+#include "sysmem.h"
 
 #include <cstdlib>
 
@@ -146,14 +147,14 @@ void *memoryAlloc(size_t size) {
   return ptr;
 }
 
-void *memoryAllocAligned(size_t alignment, size_t size) {
+void *memoryAllocDramAligned(size_t alignment, size_t size) {
   void *ptr = nullptr;
-  void *handle = GetSramHeap();
+  void *handle = GetDramHeap();
 
   if (handle != nullptr) {
     ptr = HeapAlignedAlloc(handle, alignment, size);
     if (ptr == nullptr) {
-      printf("CHRE: Failed to allocate memory in SRAM heap\n");
+      printf("CHRE: Failed to allocate memory in DRAM heap\n");
     }
   }
 
@@ -192,6 +193,21 @@ void memoryFreeDram(void *pointer) {
   } else {
     HeapFree(GetDramHeap(), pointer);
   }
+}
+
+bool requestDramAccess(bool enabled) {
+  int rc;
+  if (enabled) {
+    rc = SysMem::Instance()->MemoryRequest(SysMem::MIF, true);
+  } else {
+    rc = SysMem::Instance()->MemoryRelease(SysMem::MIF);
+  }
+
+  if (rc != 0) {
+    LOGE("Unable to change DRAM access to %d with error code %d", enabled, rc);
+  }
+
+  return rc == 0;
 }
 
 void *palSystemApiMemoryAlloc(size_t size) {
