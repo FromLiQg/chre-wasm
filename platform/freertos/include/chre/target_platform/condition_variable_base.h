@@ -47,6 +47,13 @@ namespace chre {
  *   is an extra iteration of the while-empty-queue loop.
  */
 class ConditionVariableBase {
+ public:
+  /**
+   * While in an interrupt context, unblock one thread that is waiting on this
+   * condition variable.
+   */
+  void notify_one_from_isr();
+
  protected:
   // Since, per CHRE specification, only one thread is ever
   // going to be blocked on this condition variable, all we

@@ -21,6 +21,7 @@
 
 #include "chre/platform/assert.h"
 #include "chre/platform/log.h"
+#include "chre/platform/shared/authentication.h"
 #include "chre/platform/shared/memory.h"
 #include "chre/platform/shared/nanoapp_dso_util.h"
 #include "chre/platform/shared/nanoapp_loader.h"
@@ -248,8 +249,19 @@ bool PlatformNanoappBase::openNanoapp() {
   if (mIsStatic) {
     success = true;
   } else if (mAppBinary != nullptr) {
+    //! The true start of the binary will be after the authentication header.
+    //! Use the returned value from authenticateBinary to ensure dlopenbuf has
+    //! the starting address to a valid ELF.
+    void *binaryStart = mAppBinary;
+
+    // TODO(158770259): Enforce this and make the log message and error once all
+    // nanoapp binaries are signed.
+    if (!authenticateBinary(mAppBinary, &binaryStart)) {
+      LOGV("Unable to authenticate 0x%" PRIx32 " not stopping loading for now",
+           mExpectedAppId);
+    }
     if (mDsoHandle == nullptr) {
-      mDsoHandle = dlopenbuf(mAppBinary, mExpectedTcmCapable);
+      mDsoHandle = dlopenbuf(binaryStart, mExpectedTcmCapable);
       success = verifyNanoappInfo();
     } else {
       LOGE("Trying to reopen an existing buffer");

@@ -72,6 +72,12 @@ inline bool ConditionVariable::wait_for(Mutex &mutex, Nanoseconds timeout) {
   return !mTimedOut;
 }
 
+inline void ConditionVariableBase::notify_one_from_isr() {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  xSemaphoreGiveFromISR(mCvSemaphoreHandle, &xHigherPriorityTaskWoken);
+  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
 }  // namespace chre
 
 #endif  // CHRE_PLATFORM_FREERTOS_CONDITION_VARIABLE_IMPL_H_
