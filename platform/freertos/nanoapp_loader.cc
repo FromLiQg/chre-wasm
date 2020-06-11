@@ -112,10 +112,13 @@ ExportedData gExportedData[] = {
     {(void *)chreGetVersion, "chreGetVersion"},
     {(void *)chreGetApiVersion, "chreGetApiVersion"},
     {(void *)chreGetTime, "chreGetTime"},
+    {(void *)chreHeapAlloc, "chreHeapAlloc"},
+    {(void *)chreHeapFree, "chreHeapFree"},
     {(void *)chreLog, "chreLog"},
     {(void *)chreSendMessageToHostEndpoint, "chreSendMessageToHostEndpoint"},
     {(void *)chreSensorConfigure, "chreSensorConfigure"},
     {(void *)chreSensorFindDefault, "chreSensorFindDefault"},
+    {(void *)memcpy, "memcpy"},
     {(void *)memset, "memset"},
     {(void *)deleteOverride, "_ZdlPv"},
 };

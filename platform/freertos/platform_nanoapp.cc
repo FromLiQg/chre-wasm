@@ -15,6 +15,7 @@
  */
 
 #include "chre/platform/platform_nanoapp.h"
+#include "chre/platform/freertos/dram_util.h"
 #include "chre/platform/freertos/memory.h"
 #include "chre/platform/freertos/nanoapp_loader.h"
 #include "chre/platform/shared/nanoapp_dso_util.h"
@@ -34,6 +35,8 @@ PlatformNanoapp::~PlatformNanoapp() {
 }
 
 bool PlatformNanoapp::start() {
+  DramGuard guard;
+
   bool success = false;
   if (!openNanoapp()) {
     LOGE("Failed to open nanoapp");
@@ -47,10 +50,14 @@ bool PlatformNanoapp::start() {
 
 void PlatformNanoapp::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
                                   const void *eventData) {
+  DramGuard guard;
+
   mAppInfo->entryPoints.handleEvent(senderInstanceId, eventType, eventData);
 }
 
 void PlatformNanoapp::end() {
+  DramGuard guard;
+
   mAppInfo->entryPoints.end();
 }
 
