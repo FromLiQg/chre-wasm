@@ -15,6 +15,8 @@
  */
 
 #include "chre/platform/platform_nanoapp.h"
+#include "chre/platform/freertos/dram_util.h"
+#include "chre/platform/freertos/memory.h"
 #include "chre/platform/freertos/nanoapp_loader.h"
 #include "chre/platform/shared/nanoapp_dso_util.h"
 
@@ -28,11 +30,13 @@ namespace chre {
 
 PlatformNanoapp::~PlatformNanoapp() {
   if (mAppBinary != nullptr) {
-    memoryFree(mAppBinary);
+    memoryFreeDram(mAppBinary);
   }
 }
 
 bool PlatformNanoapp::start() {
+  DramGuard guard;
+
   bool success = false;
   if (!openNanoapp()) {
     LOGE("Failed to open nanoapp");
@@ -46,23 +50,27 @@ bool PlatformNanoapp::start() {
 
 void PlatformNanoapp::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
                                   const void *eventData) {
+  DramGuard guard;
+
   mAppInfo->entryPoints.handleEvent(senderInstanceId, eventType, eventData);
 }
 
 void PlatformNanoapp::end() {
+  DramGuard guard;
+
   mAppInfo->entryPoints.end();
 }
 
 uint64_t PlatformNanoapp::getAppId() const {
-  return (mAppInfo == nullptr) ? 0 : mAppInfo->appId;
+  return (mAppInfo != nullptr) ? mAppInfo->appId : mExpectedAppId;
 }
 
 uint32_t PlatformNanoapp::getAppVersion() const {
-  return (mAppInfo == nullptr) ? 0 : mAppInfo->appVersion;
+  return (mAppInfo != nullptr) ? mAppInfo->appVersion : mExpectedAppVersion;
 }
 
 uint32_t PlatformNanoapp::getTargetApiVersion() const {
-  return CHRE_API_VERSION;
+  return (mAppInfo != nullptr) ? mAppInfo->targetApiVersion : 0;
 }
 
 bool PlatformNanoapp::isSystemNanoapp() const {
@@ -92,7 +100,7 @@ bool PlatformNanoappBase::reserveBuffer(uint64_t appId, uint32_t appVersion,
   CHRE_ASSERT(!isLoaded());
 
   bool success = false;
-  mAppBinary = memoryAlloc(appBinaryLen);
+  mAppBinary = memoryAllocDram(appBinaryLen);
 
   if (mAppBinary == nullptr) {
     LOG_OOM();
@@ -181,8 +189,10 @@ bool PlatformNanoappBase::openNanoapp() {
     }
   }
 
-  memoryFree(mAppBinary);
-  mAppBinary = nullptr;
+  if (mAppBinary != nullptr) {
+    memoryFreeDram(mAppBinary);
+    mAppBinary = nullptr;
+  }
 
   return success;
 }
