@@ -149,6 +149,7 @@ SLPI_SEE_QMI_SRCS += $(SLPI_PREFIX)/chre/chre/src/system/chre/platform/slpi/sns_
 # FreeRTOS-specific Source Files ###############################################
 
 FREERTOS_SRCS += platform/freertos/context.cc
+FREERTOS_SRCS += platform/freertos/dlfcn.cc
 FREERTOS_SRCS += platform/freertos/init.cc
 FREERTOS_SRCS += platform/freertos/memory_manager.cc
 FREERTOS_SRCS += platform/freertos/nanoapp_loader.cc

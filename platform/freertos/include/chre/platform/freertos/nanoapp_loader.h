@@ -17,17 +17,108 @@
 #ifndef CHRE_PLATFORM_FREERTOS_NANOAPP_LOADER_H_
 #define CHRE_PLATFORM_FREERTOS_NANOAPP_LOADER_H_
 
+#include <cinttypes>
 #include <cstdlib>
+
+#include "chre/platform/freertos/loader_util.h"
 
 namespace chre {
 
-void *dlopenbuf(void *binary, size_t binarySize);
+class NanoappLoader {
+ public:
+  NanoappLoader() = delete;
 
-void *dlsym(void *handle, const char *symbol);
+  explicit NanoappLoader(void *elfInput) {
+    mBinary.rawLocation = elfInput;
+  }
 
-int dlclose(void *handle);
+  /**
+   * Factory method to create a NanoappLoader Instance after loading
+   * the buffer containing the ELF binary.
+   *
+   * @return Class instance on successful load and verification,
+   * nullptr otherwise.
+   */
+  static void *create(void *elfInput);
 
-const char *dlerror();
+  bool init();
+  void deinit();
+
+  /**
+   * Method for pointer lookup by symbol name. Only function pointers
+   * are currently supported.
+   *
+   * @return function pointer on successful lookup, nullptr otherwise
+   */
+  void *findSymbolByName(const char *name);
+
+ private:
+  // TODO(stange): Store this elsewhere since the location will be invalid after
+  // loading is complete.
+  union Data {
+    uintptr_t location;
+    void *rawLocation;
+  };
+
+  using DynamicHeader = ElfW(Dyn);
+  using ElfAddr = ElfW(Addr);
+  using ElfHeader = ElfW(Ehdr);
+  using ElfRel = ElfW(Rel);  // Relocation table entry,
+                             // in section of type SHT_REL
+  using ElfRela = ElfW(Rela);
+  using ElfSym = ElfW(Sym);
+  using ElfWord = ElfW(Word);
+  using ProgramHeader = ElfW(Phdr);
+  using SectionHeader = ElfW(Shdr);
+
+  static constexpr const char *kSymTableName = ".symtab";
+  static constexpr const char *kStrTableName = ".strtab";
+  static constexpr const char *kInitArrayName = ".init_array";
+  // For now, assume all segments are 4K aligned.
+  // TODO(karthikmb/stange): See about reducing this.
+  static constexpr size_t kBinaryAlignment = 4096;
+
+  char *mDynamicStringTablePtr;
+  char *mSectionNamesPtr;
+  char *mStringTablePtr;
+  uint8_t *mDynamicSymbolTablePtr;
+  uint8_t *mSymbolTablePtr;
+  size_t mDynamicSymbolTableSize;
+  size_t mNumProgramHeaders;
+  size_t mNumSectionHeaders;
+  size_t mSymbolTableSize;
+
+  Data mBinary;
+  Data mMapping;
+  DynamicHeader *mDynamicHeaderPtr;
+  ElfAddr mInitArrayLoc;
+  ElfAddr mLoadBias;
+  ElfHeader mElfHeader;
+  ProgramHeader *mProgramHeadersPtr;
+  SectionHeader *mSectionHeadersPtr;
+  SectionHeader mStringTableHeader;
+  SectionHeader mSymbolTableHeader;
+
+  bool createMappings();
+  bool copyAndVerifyHeaders();
+  bool fixRelocations();
+  bool initDynamicStringTable();
+  bool initDynamicSymbolTable();
+  bool resolveGot();
+  bool verifyElfHeader();
+  bool verifyProgramHeaders();
+  bool verifySectionHeaders();
+  const char *getDataName(size_t posInSymbolTable);
+  const char *getSectionHeaderName(size_t sh_name);
+  uintptr_t roundDownToAlign(uintptr_t virtualAddr);
+  void freeAllocatedData();
+  void mapBss(const ProgramHeader *header);
+  void *resolveData(size_t posInSymbolTable);
+  DynamicHeader *getDynamicHeader();
+  ProgramHeader *getFirstRoSegHeader();
+  SectionHeader *getSectionHeader(const char *headerName);
+  ElfWord getDynEntry(DynamicHeader *dyn, int field);
+};
 
 }  // namespace chre
 
