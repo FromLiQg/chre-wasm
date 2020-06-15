@@ -55,6 +55,10 @@ class PlatformSensorBase {
     return mSamplingId.value();
   }
 
+  const refcount::reffed_ptr<usf::UsfSensor> &getUsfSensor() const {
+    return mUsfSensor;
+  }
+
  protected:
   //! The USF sensor instance for this sensor.
   refcount::reffed_ptr<usf::UsfSensor> mUsfSensor;
