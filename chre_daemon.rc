@@ -17,7 +17,7 @@
 service vendor.chre /vendor/bin/chre
     class late_start
     user context_hub
-    group wakelock context_hub
+    group wakelock context_hub system
     capabilities BLOCK_SUSPEND
     socket chre seqpacket 0660 root context_hub
     shutdown critical
