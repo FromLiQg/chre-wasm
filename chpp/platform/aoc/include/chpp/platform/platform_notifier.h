@@ -27,8 +27,17 @@
 extern "C" {
 #endif
 
+/**
+ * Wrapper structure for a FreeRTOS semaphore, that includes
+ * a static semaphore structure instance to avoid heap allocations
+ */
+struct ChppSemaphore {
+  SemaphoreHandle_t handle;
+  StaticSemaphore_t staticSemaphore;
+};
+
 struct ChppNotifier {
-  SemaphoreHandle_t cvSemaphoreHandle;
+  ChppSemaphore cvSemaphore;
   struct ChppMutex mutex;  // Platform-specific mutex
   bool signaled;           // Whether a notification has occurred
   bool shouldExit;         // Whether the thread should exit
