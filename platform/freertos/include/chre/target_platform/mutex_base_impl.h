@@ -22,8 +22,7 @@
 namespace chre {
 
 inline Mutex::Mutex() {
-  mSemaphoreHandle = xSemaphoreCreateMutex();
-  CHRE_ASSERT(mSemaphoreHandle != NULL);
+  initStaticMutex();
 }
 
 inline Mutex::~Mutex() {

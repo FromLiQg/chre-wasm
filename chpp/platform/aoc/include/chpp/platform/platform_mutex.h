@@ -25,12 +25,17 @@
 extern "C" {
 #endif
 
+/**
+ * Encapsulates a mutex handle and its associated semaphore structure.
+ * The static semaphore is used to avoid heap allocations.
+ */
 struct ChppMutex {
   SemaphoreHandle_t semaphoreHandle;
+  StaticSemaphore_t staticSemaphore;
 };
 
 static inline void chppMutexInit(struct ChppMutex *mutex) {
-  mutex->semaphoreHandle = xSemaphoreCreateMutex();
+  mutex->semaphoreHandle = xSemaphoreCreateMutexStatic(&mutex->staticSemaphore);
 }
 
 static inline void chppMutexDeinit(struct ChppMutex *mutex) {

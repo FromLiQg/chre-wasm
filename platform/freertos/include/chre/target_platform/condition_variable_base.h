@@ -59,6 +59,13 @@ class ConditionVariableBase {
 
   SemaphoreHandle_t mCvSemaphoreHandle;
 
+  /**
+   * Waits on a semaphore for a specified amount of timer ticks,
+   * locking the mutex before returning. If the timer ticks argument is
+   * 0, blocks indefinitely.
+   *
+   * @return true if the semaphore was successfully taken
+   */
   bool waitWithTimeout(Mutex &mutex, const TickType_t &timeoutTicks) {
     mutex.unlock();
     BaseType_t rc = xSemaphoreTake(mCvSemaphoreHandle, timeoutTicks);
@@ -66,6 +73,20 @@ class ConditionVariableBase {
 
     return (rc == pdTRUE);
   }
+
+  /**
+   * Initialize a Static FreeRTOS semaphore. This function is called
+   * from the derived class constructor
+   */
+  void initStaticSemaphore() {
+    mCvSemaphoreHandle = xSemaphoreCreateBinaryStatic(&mCvStaticSemaphore);
+    if (mCvSemaphoreHandle == NULL) {
+      FATAL_ERROR("failed to create cv semaphore");
+    }
+  }
+
+ private:
+  StaticSemaphore_t mCvStaticSemaphore;
 };
 
 }  // namespace chre
