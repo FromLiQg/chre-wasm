@@ -74,6 +74,7 @@ class NanoappLoader {
   static constexpr const char *kSymTableName = ".symtab";
   static constexpr const char *kStrTableName = ".strtab";
   static constexpr const char *kInitArrayName = ".init_array";
+  static constexpr const char *kFiniArrayName = ".fini_array";
   // For now, assume all segments are 4K aligned.
   // TODO(karthikmb/stange): See about reducing this.
   static constexpr size_t kBinaryAlignment = 4096;
@@ -91,7 +92,6 @@ class NanoappLoader {
   Data mBinary;
   Data mMapping;
   DynamicHeader *mDynamicHeaderPtr;
-  ElfAddr mInitArrayLoc;
   ElfAddr mLoadBias;
   ElfHeader mElfHeader;
   ProgramHeader *mProgramHeadersPtr;
@@ -99,6 +99,8 @@ class NanoappLoader {
   SectionHeader mStringTableHeader;
   SectionHeader mSymbolTableHeader;
 
+  void callInitArray();
+  void callTerminatorArray();
   bool createMappings();
   bool copyAndVerifyHeaders();
   bool fixRelocations();
