@@ -15,6 +15,7 @@
  */
 
 #include "chre/platform/platform_nanoapp.h"
+#include "chre/platform/freertos/dlfcn.h"
 #include "chre/platform/freertos/dram_util.h"
 #include "chre/platform/freertos/memory.h"
 #include "chre/platform/freertos/nanoapp_loader.h"
@@ -137,12 +138,12 @@ bool PlatformNanoappBase::verifyNanoappInfo() {
   bool success = false;
 
   if (mDsoHandle == nullptr) {
-    LOGE("No nanoapp info to verify: %s", dlerror());
+    LOGE("No nanoapp info to verify");
   } else {
     mAppInfo = static_cast<const struct chreNslNanoappInfo *>(
         dlsym(mDsoHandle, CHRE_NSL_DSO_NANOAPP_INFO_SYMBOL_NAME));
     if (mAppInfo == nullptr) {
-      LOGE("Failed to find app info symbol: %s", dlerror());
+      LOGE("Failed to find app info symbol");
     } else {
       success = validateAppInfo(mExpectedAppId, mExpectedAppVersion, mAppInfo);
       if (!success) {
@@ -164,7 +165,7 @@ bool PlatformNanoappBase::openNanoapp() {
     success = true;
   } else if (mAppBinary != nullptr) {
     if (mDsoHandle == nullptr) {
-      mDsoHandle = dlopenbuf(mAppBinary, mAppBinaryLen);
+      mDsoHandle = dlopenbuf(mAppBinary);
       if (mDsoHandle != nullptr) {
         mAppInfo = static_cast<struct chreNslNanoappInfo *>(
             dlsym(mDsoHandle, CHRE_NSL_DSO_NANOAPP_INFO_SYMBOL_NAME));
