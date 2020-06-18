@@ -18,7 +18,7 @@
 
 #include <cinttypes>
 
-#include "chre/platform/platform_sensor_type_helpers.h"
+#include "chre/core/sensor_type_helpers.h"
 
 #include "usf/fbs/usf_msg_event_root_generated.h"
 #include "usf/fbs/usf_msg_sample_batch_root_generated.h"
@@ -416,7 +416,7 @@ void UsfHelper::processSensorSample(const usf::UsfMsgEvent *event) {
       // USF shares the same sensor type between calibrated and uncalibrated
       // sensors. Try the uncalibrated type to see if the sampling ID matches.
       uint8_t uncalType =
-          PlatformSensorTypeHelpers::toUncalibratedSensorType(sensorType);
+          SensorTypeHelpers::toUncalibratedSensorType(sensorType);
       if (uncalType != sensorType) {
         sensorType = uncalType;
         createSensorEvent(sampleMsg, uncalType, sensorSample);
@@ -446,7 +446,7 @@ void UsfHelper::processStatusUpdate(const usf::UsfSensorSamplingEvent *update) {
     // so populate a calibrated / uncalibrated sensor for known calibrated
     // sensor types
     uint8_t uncalibratedType =
-        PlatformSensorTypeHelpersBase::toUncalibratedSensorType(sensorType);
+        SensorTypeHelpers::toUncalibratedSensorType(sensorType);
     if (uncalibratedType != sensorType) {
       mCallback->onSamplingStatusUpdate(uncalibratedType, update);
     }

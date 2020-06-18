@@ -58,12 +58,6 @@ void PlatformSensorTypeHelpers::getVendorLastSample(
   // TODO: Stubbed out, implement this
 }
 
-uint8_t PlatformSensorTypeHelpersBase::toUncalibratedSensorType(
-    uint8_t sensorType) {
-  // TODO: Stubbed out, implement this
-  return sensorType;
-}
-
 bool PlatformSensorTypeHelpersBase::reportsBias(uint8_t sensorType) {
   // TODO: Stubbed out, implement this
   return false;

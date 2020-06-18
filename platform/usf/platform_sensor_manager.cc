@@ -253,7 +253,7 @@ void PlatformSensorManagerBase::addSensorsWithInfo(
     // so populate a calibrated / uncalibrated sensor for known calibrated
     // sensor types
     uint8_t uncalibratedType =
-        PlatformSensorTypeHelpersBase::toUncalibratedSensorType(sensorType);
+        SensorTypeHelpers::toUncalibratedSensorType(sensorType);
     if (uncalibratedType != sensorType) {
       addSensor(usfSensor, uncalibratedType, chreSensors);
     }
