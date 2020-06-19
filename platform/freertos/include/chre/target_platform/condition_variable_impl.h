@@ -22,10 +22,7 @@
 namespace chre {
 
 inline ConditionVariable::ConditionVariable() {
-  mCvSemaphoreHandle = xSemaphoreCreateBinary();
-  if (mCvSemaphoreHandle == NULL) {
-    FATAL_ERROR("failed to create cv semaphore");
-  }
+  initStaticSemaphore();
 }
 
 inline ConditionVariable::~ConditionVariable() {

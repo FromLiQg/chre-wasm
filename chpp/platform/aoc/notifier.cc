@@ -23,8 +23,9 @@
 void chppPlatformNotifierInit(struct ChppNotifier *notifier) {
   notifier->signaled = false;
   notifier->shouldExit = false;
-  notifier->cvSemaphoreHandle = xSemaphoreCreateBinary();
-  if (notifier->cvSemaphoreHandle == nullptr) {
+  notifier->cvSemaphore.handle =
+      xSemaphoreCreateBinaryStatic(&notifier->cvSemaphore.staticSemaphore);
+  if (notifier->cvSemaphore.handle == nullptr) {
     // TODO: Use CHPP_ASSERT
     LOGE("Failed to initialize CHPP notifier");
   } else {
@@ -33,20 +34,20 @@ void chppPlatformNotifierInit(struct ChppNotifier *notifier) {
 }
 
 void chppPlatformNotifierDeinit(struct ChppNotifier *notifier) {
-  if (notifier->cvSemaphoreHandle != nullptr) {
+  if (notifier->cvSemaphore.handle != nullptr) {
     chppMutexDeinit(&notifier->mutex);
-    vSemaphoreDelete(notifier->cvSemaphoreHandle);
+    vSemaphoreDelete(notifier->cvSemaphore.handle);
   }
 }
 
 bool chppPlatformNotifierWait(struct ChppNotifier *notifier) {
-  if (notifier->cvSemaphoreHandle != nullptr) {
+  if (notifier->cvSemaphore.handle != nullptr) {
     chppMutexLock(&notifier->mutex);
 
     while (!notifier->signaled && !notifier->shouldExit) {
       chppMutexUnlock(&notifier->mutex);
       const TickType_t timeout = portMAX_DELAY;  // block indefinitely
-      xSemaphoreTake(notifier->cvSemaphoreHandle, timeout);
+      xSemaphoreTake(notifier->cvSemaphore.handle, timeout);
       chppMutexLock(&notifier->mutex);
     }
     notifier->signaled = false;
@@ -60,22 +61,22 @@ bool chppPlatformNotifierWait(struct ChppNotifier *notifier) {
 }
 
 void chppPlatformNotifierEvent(struct ChppNotifier *notifier) {
-  if (notifier->cvSemaphoreHandle != nullptr) {
+  if (notifier->cvSemaphore.handle != nullptr) {
     chppMutexLock(&notifier->mutex);
 
     notifier->signaled = true;
-    xSemaphoreGive(notifier->cvSemaphoreHandle);
+    xSemaphoreGive(notifier->cvSemaphore.handle);
 
     chppMutexUnlock(&notifier->mutex);
   }
 }
 
 void chppPlatformNotifierExit(struct ChppNotifier *notifier) {
-  if (notifier->cvSemaphoreHandle != nullptr) {
+  if (notifier->cvSemaphore.handle != nullptr) {
     chppMutexLock(&notifier->mutex);
 
     notifier->shouldExit = true;
-    xSemaphoreGive(notifier->cvSemaphoreHandle);
+    xSemaphoreGive(notifier->cvSemaphore.handle);
 
     chppMutexUnlock(&notifier->mutex);
   }

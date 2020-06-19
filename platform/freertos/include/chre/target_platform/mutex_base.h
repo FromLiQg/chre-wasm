@@ -31,6 +31,20 @@ namespace chre {
 class MutexBase {
  protected:
   SemaphoreHandle_t mSemaphoreHandle;
+
+  /**
+   * Initialize the mutex handle using a static semaphore
+   * to avoid heap allocations
+   */
+  void initStaticMutex() {
+    mSemaphoreHandle = xSemaphoreCreateMutexStatic(&mStaticSemaphore);
+    if (mSemaphoreHandle == NULL) {
+      FATAL_ERROR("Failed to initialize mutex");
+    }
+  }
+
+ private:
+  StaticSemaphore_t mStaticSemaphore;
 };
 
 }  // namespace chre
