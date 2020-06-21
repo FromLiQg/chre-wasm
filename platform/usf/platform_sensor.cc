@@ -46,7 +46,7 @@ bool PlatformSensor::supportsPassiveMode() const {
 }
 
 const char *PlatformSensor::getSensorName() const {
-  return mUsfSensor->GetName();
+  return SensorTypeHelpers::getSensorTypeName(getSensorType());
 }
 
 PlatformSensor::PlatformSensor(PlatformSensor &&other) {
