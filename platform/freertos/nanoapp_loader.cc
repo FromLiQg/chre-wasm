@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#include <cmath>
 #include <cstring>
 
 #include "chre/platform/freertos/nanoapp_loader.h"
 
+#include "ash.h"
 #include "chre.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/freertos/memory.h"
@@ -46,8 +48,14 @@ void deleteOverride(void *ptr) {
 // "hello-world" prototyping, the list of exported symbols must be
 // generated to minimize runtime errors and build breaks.
 ExportedData gExportedData[] = {
+    {(void *)ashLoadCalibrationParams, "ashLoadCalibrationParams"},
+    {(void *)ashSaveCalibrationParams, "ashSaveCalibrationParams"},
+    {(void *)ashSetCalibration, "ashSetCalibration"},
     {(void *)chreGetVersion, "chreGetVersion"},
     {(void *)chreGetApiVersion, "chreGetApiVersion"},
+    {(void *)chreGetEstimatedHostTimeOffset, "chreGetEstimatedHostTimeOffset"},
+    {(void *)chreGetPlatformId, "chreGetPlatformId"},
+    {(void *)chreGetSensorSamplingStatus, "chreGetSensorSamplingStatus"},
     {(void *)chreGetTime, "chreGetTime"},
     {(void *)chreHeapAlloc, "chreHeapAlloc"},
     {(void *)chreHeapFree, "chreHeapFree"},
@@ -58,6 +66,7 @@ ExportedData gExportedData[] = {
     {(void *)memcpy, "memcpy"},
     {(void *)memset, "memset"},
     {(void *)deleteOverride, "_ZdlPv"},
+    {(void *)sqrtf, "sqrtf"},
 };
 
 }  // namespace
