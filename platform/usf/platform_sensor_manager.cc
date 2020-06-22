@@ -95,7 +95,13 @@ bool PlatformSensorManager::configureSensor(Sensor &sensor,
                                             const SensorRequest &request) {
   bool success = false;
 
-  if (request.getMode() == SensorMode::Off) {
+  if (request.getMode() == SensorMode::Off && !sensor.isSamplingIdValid()) {
+    // If no existing sampling ID exists and the sensor should be turned off,
+    // return true. This can happen when the core platform tries to remove a
+    // request for a one-shot sensor after it fires which automatically happens
+    // inside USF.
+    success = true;
+  } else if (request.getMode() == SensorMode::Off) {
     usf::UsfStopSamplingReq usfReq;
     usfReq.SetReqType(usf::UsfMsgReqType_STOP_SAMPLING);
     usfReq.SetServerHandle(sensor.getServerHandle());
@@ -215,6 +221,13 @@ void PlatformSensorManagerBase::onSensorDataEvent(
     uint8_t sensorType, UniquePtr<uint8_t> &&eventData) {
   uint32_t sensorHandle;
   if (getSensorRequestManager().getSensorHandle(sensorType, &sensorHandle)) {
+    Sensor *sensor = getSensorRequestManager().getSensor(sensorHandle);
+    // Invalidate the sampling ID for one shot sensors after they've fired since
+    // USF automatically removes the sampling ID from its list.
+    if (sensor->isOneShot()) {
+      sensor->setSamplingIdInvalid();
+    }
+
     getSensorRequestManager().handleSensorDataEvent(sensorHandle,
                                                     eventData.release());
   }
