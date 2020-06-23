@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#include <cmath>
 #include <cstring>
 
 #include "chre/platform/freertos/nanoapp_loader.h"
 
+#include "ash.h"
 #include "chre.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/freertos/memory.h"
@@ -42,12 +44,29 @@ void deleteOverride(void *ptr) {
   FATAL_ERROR("Nanoapp tried to free %p through delete operator", ptr);
 }
 
+// atexit is used to register functions that must be called when a binary is
+// removed from the system.
+// TODO(b/151847750): Support atexit to ensure nanoapps that call it are
+// properly destroyed before they are removed. Or, potentially see if atexit
+// can be replaced with a .fini_array section.
+int atexitOverride(void (*function)(void)) {
+  LOGE("atexit invoked with %p", function);
+  return -1;
+}
+
 // TODO(karthikmb/stange): While this array was hand-coded for simple
 // "hello-world" prototyping, the list of exported symbols must be
 // generated to minimize runtime errors and build breaks.
 ExportedData gExportedData[] = {
+    {(void *)ashLoadCalibrationParams, "ashLoadCalibrationParams"},
+    {(void *)ashSaveCalibrationParams, "ashSaveCalibrationParams"},
+    {(void *)ashSetCalibration, "ashSetCalibration"},
+    {(void *)atexitOverride, "atexit"},
     {(void *)chreGetVersion, "chreGetVersion"},
     {(void *)chreGetApiVersion, "chreGetApiVersion"},
+    {(void *)chreGetEstimatedHostTimeOffset, "chreGetEstimatedHostTimeOffset"},
+    {(void *)chreGetPlatformId, "chreGetPlatformId"},
+    {(void *)chreGetSensorSamplingStatus, "chreGetSensorSamplingStatus"},
     {(void *)chreGetTime, "chreGetTime"},
     {(void *)chreHeapAlloc, "chreHeapAlloc"},
     {(void *)chreHeapFree, "chreHeapFree"},
@@ -58,6 +77,7 @@ ExportedData gExportedData[] = {
     {(void *)memcpy, "memcpy"},
     {(void *)memset, "memset"},
     {(void *)deleteOverride, "_ZdlPv"},
+    {(void *)sqrtf, "sqrtf"},
 };
 
 }  // namespace
@@ -93,7 +113,7 @@ bool NanoappLoader::init() {
     } else if (!resolveGot()) {
       LOGE("Failed to resolve GOT");
     } else {
-      // TODO(karthikmb / stange): Initialize static variables
+      callInitArray();
       success = true;
     }
   }
@@ -106,6 +126,9 @@ bool NanoappLoader::init() {
 }
 
 void NanoappLoader::deinit() {
+  // TODO(karthikmb/stange): Ensure functions registered through atexit are
+  // called.
+  callTerminatorArray();
   freeAllocatedData();
 }
 
@@ -137,6 +160,29 @@ void NanoappLoader::mapBss(const ProgramHeader *hdr) {
       auto deltaMem = endOfMem - endOfFile;
       LOGV("Zeroing out %zu from page %p", deltaMem, endOfFile);
       memset((void *)endOfFile, 0, deltaMem);
+    }
+  }
+}
+
+void NanoappLoader::callInitArray() {
+  // TODO(b/151847750): ELF can have other sections like .init, .preinit, .fini
+  // etc. Be sure to look for those if they end up being something that should
+  // be supported for nanoapps.
+
+  for (size_t i = 0; i < mNumSectionHeaders; ++i) {
+    const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
+    if (strncmp(name, kInitArrayName, strlen(kInitArrayName)) == 0) {
+      LOGV("Invoking init function");
+      ElfAddr *init_array = reinterpret_cast<ElfAddr *>(
+          mLoadBias + mSectionHeadersPtr[i].sh_addr);
+      ElfAddr offset = 0;
+      while (offset < mSectionHeadersPtr[i].sh_size) {
+        uintptr_t init_function =
+            reinterpret_cast<uintptr_t>(*init_array + offset);
+        ((void (*)())init_function)();
+        offset += sizeof(void *);
+      }
+      break;
     }
   }
 }
@@ -218,8 +264,6 @@ bool NanoappLoader::verifySectionHeaders() {
     } else if (strncmp(name, kStrTableName, strlen(kStrTableName)) == 0) {
       memcpy(&mStringTableHeader, &mSectionHeadersPtr[i],
              sizeof(SectionHeader));
-    } else if (strncmp(name, kInitArrayName, strlen(kInitArrayName)) == 0) {
-      mInitArrayLoc = mSectionHeadersPtr[i].sh_addr;
     }
   }
 
@@ -468,18 +512,19 @@ const char *NanoappLoader::getDataName(size_t posInSymbolTable) {
 
 void *NanoappLoader::resolveData(size_t posInSymbolTable) {
   const char *dataName = getDataName(posInSymbolTable);
-  LOGV("Resolving %s", dataName);
 
   if (dataName != nullptr) {
+    LOGV("Resolving %s", dataName);
+
     for (size_t i = 0; i < ARRAY_SIZE(gExportedData); i++) {
       if (strncmp(dataName, gExportedData[i].dataName,
                   strlen(gExportedData[i].dataName)) == 0) {
         return gExportedData[i].data;
       }
     }
-  }
 
-  LOGV("%s not found!", dataName);
+    LOGE("%s not found!", dataName);
+  }
 
   return nullptr;
 }
@@ -560,7 +605,7 @@ bool NanoappLoader::fixRelocations() {
           size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
           void *resolved = resolveData(posInSymbolTable);
           if (resolved == nullptr) {
-            LOGE("Failed to resolve global symbol(%d) at offset 0x%x", i,
+            LOGV("Failed to resolve global symbol(%d) at offset 0x%x", i,
                  curr->r_offset);
             return false;
           }
@@ -610,7 +655,7 @@ bool NanoappLoader::resolveGot() {
         size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
         void *resolved = resolveData(posInSymbolTable);
         if (resolved == nullptr) {
-          LOGE("Failed to resolve symbol(%d) at offset 0x%x", i,
+          LOGV("Failed to resolve symbol(%d) at offset 0x%x", i,
                curr->r_offset);
           return false;
         }
@@ -625,6 +670,24 @@ bool NanoappLoader::resolveGot() {
     }
   }
   return true;
+}
+
+void NanoappLoader::callTerminatorArray() {
+  for (size_t i = 0; i < mNumSectionHeaders; ++i) {
+    const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
+    if (strncmp(name, kFiniArrayName, strlen(kFiniArrayName)) == 0) {
+      ElfAddr *fini_array = reinterpret_cast<ElfAddr *>(
+          mLoadBias + mSectionHeadersPtr[i].sh_addr);
+      ElfAddr offset = 0;
+      while (offset < mSectionHeadersPtr[i].sh_size) {
+        uintptr_t fini_function =
+            reinterpret_cast<uintptr_t>(*fini_array + offset);
+        ((void (*)())fini_function)();
+        offset += sizeof(void *);
+      }
+      break;
+    }
+  }
 }
 
 }  // namespace chre
