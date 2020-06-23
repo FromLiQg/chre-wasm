@@ -37,7 +37,7 @@ struct ChppSemaphore {
 };
 
 struct ChppNotifier {
-  ChppSemaphore cvSemaphore;
+  struct ChppSemaphore cvSemaphore;
   struct ChppMutex mutex;  // Platform-specific mutex
   bool signaled;           // Whether a notification has occurred
   bool shouldExit;         // Whether the thread should exit
