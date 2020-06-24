@@ -48,13 +48,13 @@ static inline void chppMutexLock(struct ChppMutex *mutex) {
   TickType_t blockForever = portMAX_DELAY;
   if (pdTRUE != xSemaphoreTake(mutex->semaphoreHandle, blockForever)) {
     // TODO: Use CHPP_ASSERT
-    LOGE("Failed to lock mutex");
+    CHPP_LOGE("Failed to lock mutex");
   }
 }
 
 static inline void chppMutexUnlock(struct ChppMutex *mutex) {
   if (pdTRUE != xSemaphoreGive(mutex->semaphoreHandle)) {
-    LOGE("Failed to properly unlock mutex!");
+    CHPP_LOGE("Failed to properly unlock mutex!");
   }
 }
 

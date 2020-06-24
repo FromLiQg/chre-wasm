@@ -27,7 +27,7 @@ void chppPlatformNotifierInit(struct ChppNotifier *notifier) {
       xSemaphoreCreateBinaryStatic(&notifier->cvSemaphore.staticSemaphore);
   if (notifier->cvSemaphore.handle == nullptr) {
     // TODO: Use CHPP_ASSERT
-    LOGE("Failed to initialize CHPP notifier");
+    CHPP_LOGE("Failed to initialize CHPP notifier");
   } else {
     chppMutexInit(&notifier->mutex);
   }
