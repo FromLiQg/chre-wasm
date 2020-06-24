@@ -31,6 +31,7 @@
 #include "usf/usf_flatbuffers.h"
 #include "usf/usf_sensor_defs.h"
 #include "usf/usf_sensor_mgr.h"
+#include "usf/usf_time.h"
 #include "usf/usf_work.h"
 
 using usf::UsfErr;
@@ -605,7 +606,10 @@ UniquePtr<struct chreSensorThreeAxisData> UsfHelper::convertUsfBiasUpdateToData(
   size_t index = getCalArrayIndex(update->GetSensor()->GetType());
   if (index < kNumUsfCalSensors) {
     UsfCalData &data = mCalData[index];
-    data.timestamp = chreGetTime();
+    UsfErr err = usf::UsfTimeMgr::GetAndroidTimeNs(&data.timestamp);
+    if (err != kErrNone) {
+      LOG_USF_ERR(err);
+    }
     data.hasBias = true;
     for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
       data.bias[i] = update->GetOffset()[i];
