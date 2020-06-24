@@ -69,6 +69,11 @@ class UsfHelperCallbackInterface {
   //! sensor has completed.
   virtual void onFlushComplete(usf::UsfErr err, uint32_t requestId,
                                void *cookie) = 0;
+
+  //! Invoked from the USF worker thread to provide a bias update.
+  virtual void onBiasUpdate(
+      uint8_t sensorType,
+      UniquePtr<struct chreSensorThreeAxisData> &&eventData) = 0;
 };
 
 //! Class that allows clients of UsfHelper that only want to listen for sensor
@@ -81,6 +86,10 @@ class SensorEventCallbackInterface : public UsfHelperCallbackInterface {
 
   void onFlushComplete(usf::UsfErr /*err*/, uint32_t /*requestId*/,
                        void * /*cookie*/) override {}
+
+  void onBiasUpdate(
+      uint8_t /*sensorType*/,
+      UniquePtr<struct chreSensorThreeAxisData> && /*eventData*/) override {}
 };
 
 //! Default timeout to wait for the USF transport client to return a response
@@ -155,6 +164,40 @@ class UsfHelper {
   bool registerForStatusUpdates(refcount::reffed_ptr<usf::UsfSensor> &sensor);
 
   /**
+   * Registers the helper for bias updates from USF for the given sensor.
+   * This method is not idempotent meaning a call to unregisterForBiasUpdates
+   * must be made for the same sensor prior to another call to this method.
+   *
+   * @param sensor A non-null reffed_ptr to the sensor to listen for bias
+   *     updates from.
+   * @return true if registration was successful.
+   */
+  bool registerForBiasUpdates(
+      const refcount::reffed_ptr<usf::UsfSensor> &sensor);
+
+  /**
+   * Unregisters the helper from bias updates from USF for the given sensor.
+   * If not registered, this method is a no-op.
+   *
+   * @param sensor A non-null reffed_ptr to the sensor to stop listening to bias
+   *     updates from.
+   */
+  void unregisterForBiasUpdates(
+      const refcount::reffed_ptr<usf::UsfSensor> &sensor);
+
+  /**
+   * Obtains the latest three axis bias received from the given sensor, if
+   * available.
+   *
+   * @param sensor The USF sensor to obtain the latest bias values from.
+   * @param bias A non-null pointer that will be filled with the latest bias
+   *     values if available.
+   * @return true if a bias value was available for the given sensor.
+   */
+  bool getThreeAxisBias(const refcount::reffed_ptr<usf::UsfSensor> &sensor,
+                        struct chreSensorThreeAxisData *bias) const;
+
+  /**
    * Flushes sensor data from the provided sensor asynchronously. Once all data
    * has been flushed, {@link #onFlushCompleteEvent} will be invoked on the
    * callback the helper was initialized with.
@@ -183,6 +226,13 @@ class UsfHelper {
    * @param update Update containing the latest state from USF.
    */
   void processStatusUpdate(const usf::UsfSensorSamplingEvent *update);
+
+  /**
+   * Process the bias update delivered through a listener registered with USF.
+   *
+   * @param update Update containing latest bias information for a sensor.
+   */
+  void processBiasUpdate(const usf::UsfSensorTransformConfigEvent *update);
 
  private:
   /**
@@ -227,6 +277,47 @@ class UsfHelper {
    */
   bool createSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
                          uint8_t sensorType, UniquePtr<uint8_t> &sensorSample);
+
+  /**
+   * Converts a USF bias update event into the chreSensorThreeAxisData format.
+   *
+   * @param update USF bias update that needs to be converted.
+   * @return If successful, contains a populated UniquePtr. Otherwise, the
+   *     UniquePtr will be set to nullptr.
+   */
+  UniquePtr<struct chreSensorThreeAxisData> convertUsfBiasUpdateToData(
+      const usf::UsfSensorTransformConfigEvent *update);
+
+  /**
+   * Get the index into the calibrated sensor data array for the given sensor
+   * type.
+   *
+   * @param usfSensorType The USF sensor type to obtain the index for.
+   * @return The index into the data array for the given sensor type. If the
+   *     sensor type isn't present in the array, kNumUsfCalSensors is returned.
+   */
+  static size_t getCalArrayIndex(const usf::UsfSensorType usfSensorType);
+
+  //! A struct to store a sensor's calibration data.
+  struct UsfCalData {
+    uint64_t timestamp;
+    float bias[3];
+    bool hasBias;
+  };
+
+  //! The list of calibrated USF sensors supported.
+  enum class UsfCalSensor : size_t {
+    AccelCal,
+    GyroCal,
+    MagCal,
+    NumCalSensors,
+  };
+
+  static constexpr size_t kNumUsfCalSensors =
+      static_cast<size_t>(UsfCalSensor::NumCalSensors);
+
+  //! Cal data of all the cal sensors.
+  UsfCalData mCalData[kNumUsfCalSensors] = {};
 
   //! Client used to send messages to USF
   refcount::reffed_ptr<usf::UsfTransportClient> mTransportClient;
