@@ -149,15 +149,36 @@ bool PlatformSensorManager::configureSensor(Sensor &sensor,
   return success;
 }
 
-bool PlatformSensorManager::configureBiasEvents(const Sensor & /* sensor */,
-                                                bool /* enable */,
+bool PlatformSensorManager::configureBiasEvents(const Sensor &sensor,
+                                                bool enable,
                                                 uint64_t /* latencyNs */) {
-  return true;
+  bool success = true;
+  if (enable) {
+    success = mHelper.registerForBiasUpdates(sensor.getUsfSensor());
+  } else {
+    // Unconditional success for unregistering
+    mHelper.unregisterForBiasUpdates(sensor.getUsfSensor());
+  }
+
+  return success;
 }
 
 bool PlatformSensorManager::getThreeAxisBias(
     const Sensor &sensor, struct chreSensorThreeAxisData *bias) const {
-  return false;
+  bool success = sensor.reportsBiasEvents();
+  if (success) {
+    if (!mHelper.getThreeAxisBias(sensor.getUsfSensor(), bias)) {
+      // Set to zero bias + unknown accuracy per CHRE API requirements.
+      memset(bias, 0, sizeof(chreSensorThreeAxisData));
+      bias->header.readingCount = 1;
+      bias->header.accuracy = CHRE_SENSOR_ACCURACY_UNKNOWN;
+    }
+
+    // Overwrite sensorHandle to match the request type.
+    getSensorRequestManager().getSensorHandle(sensor.getSensorType(),
+                                              &bias->header.sensorHandle);
+  }
+  return success;
 }
 
 bool PlatformSensorManager::flush(const Sensor &sensor,
@@ -244,6 +265,16 @@ void PlatformSensorManagerBase::onFlushComplete(usf::UsfErr err,
                                                 &sensorHandle)) {
     getSensorRequestManager().handleFlushCompleteEvent(
         sensorHandle, requestId, UsfHelper::usfErrorToChreError(err));
+  }
+}
+
+void PlatformSensorManagerBase::onBiasUpdate(
+    uint8_t sensorType, UniquePtr<struct chreSensorThreeAxisData> &&eventData) {
+  uint32_t sensorHandle;
+  if (getSensorRequestManager().getSensorHandle(sensorType, &sensorHandle)) {
+    eventData->header.sensorHandle = sensorHandle;
+    getSensorRequestManager().handleBiasEvent(sensorHandle,
+                                              eventData.release());
   }
 }
 

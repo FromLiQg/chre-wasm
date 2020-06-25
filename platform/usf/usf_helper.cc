@@ -19,6 +19,7 @@
 #include <cinttypes>
 
 #include "chre/core/sensor_type_helpers.h"
+#include "chre/util/macros.h"
 
 #include "usf/fbs/usf_msg_event_root_generated.h"
 #include "usf/fbs/usf_msg_sample_batch_root_generated.h"
@@ -30,6 +31,7 @@
 #include "usf/usf_flatbuffers.h"
 #include "usf/usf_sensor_defs.h"
 #include "usf/usf_sensor_mgr.h"
+#include "usf/usf_time.h"
 #include "usf/usf_work.h"
 
 using usf::UsfErr;
@@ -72,6 +74,16 @@ void statusUpdateHandler(void *context, usf::UsfEvent *event) {
   if (updateEvent != nullptr) {
     auto *mgr = static_cast<UsfHelper *>(context);
     mgr->processStatusUpdate(updateEvent);
+  }
+}
+
+void biasUpdateHandler(void *context, usf::UsfEvent *event) {
+  const auto *updateEvent =
+      static_cast<usf::UsfSensorTransformConfigEvent *>(event);
+
+  if (updateEvent != nullptr) {
+    auto *mgr = static_cast<UsfHelper *>(context);
+    mgr->processBiasUpdate(updateEvent);
   }
 }
 
@@ -358,9 +370,63 @@ bool UsfHelper::registerForStatusUpdates(
   } else {
     UsfErr err = sensor->GetSamplingEventType()->AddListener(
         mWorker.get(), statusUpdateHandler, this, &mUsfEventListeners.back());
-    success = err == kErrNone;
+    success = (err == kErrNone);
     if (!success) {
       LOG_USF_ERR(err);
+    }
+  }
+
+  return success;
+}
+
+bool UsfHelper::registerForBiasUpdates(
+    const refcount::reffed_ptr<usf::UsfSensor> &sensor) {
+  // TODO(b/147595659): Obtain the latest bias values when registering for bias
+  // updates to ensure chreSensorGetThreeAxisBias doesn't return stale values.
+  bool success = false;
+  if (!mUsfEventListeners.emplace_back()) {
+    LOG_OOM();
+  } else {
+    UsfErr err = sensor->GetTransformConfigEventType()->AddListener(
+        mWorker.get(), biasUpdateHandler, this, &mUsfEventListeners.back());
+    success = (err == kErrNone);
+    if (!success) {
+      LOG_USF_ERR(err);
+    }
+  }
+
+  return success;
+}
+
+void UsfHelper::unregisterForBiasUpdates(
+    const refcount::reffed_ptr<usf::UsfSensor> &sensor) {
+  for (size_t i = 0; i < mUsfEventListeners.size(); i++) {
+    usf::UsfEventListener *listener = mUsfEventListeners[i];
+    if (listener->event_type.get() == sensor->GetTransformConfigEventType()) {
+      listener->event_type->RemoveListener(listener);
+      mUsfEventListeners.erase(i);
+      break;
+    }
+  }
+}
+
+bool UsfHelper::getThreeAxisBias(
+    const refcount::reffed_ptr<usf::UsfSensor> &sensor,
+    struct chreSensorThreeAxisData *bias) const {
+  bool success = false;
+  size_t index = getCalArrayIndex(sensor->GetType());
+  if (bias != nullptr && index < kNumUsfCalSensors) {
+    const UsfCalData &data = mCalData[index];
+    if (data.hasBias) {
+      bias->header.baseTimestamp = data.timestamp;
+      bias->header.readingCount = 1;
+      // TODO(150308661): Provide accuracy value
+      bias->header.reserved = 0;
+      for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
+        bias->readings[0].bias[i] = data.bias[i];
+      }
+      bias->readings[0].timestampDelta = 0;
+      success = true;
     }
   }
 
@@ -459,6 +525,34 @@ void UsfHelper::processStatusUpdate(const usf::UsfSensorSamplingEvent *update) {
   }
 }
 
+void UsfHelper::processBiasUpdate(
+    const usf::UsfSensorTransformConfigEvent *update) {
+  uint8_t sensorType;
+  if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
+          update->GetSensor()->GetType(), &sensorType)) {
+    UniquePtr<struct chreSensorThreeAxisData> biasData =
+        convertUsfBiasUpdateToData(update);
+    if (!biasData.isNull()) {
+      // USF shares the same sensor type for calibrated and uncalibrated sensors
+      // so populate a calibrated / uncalibrated sensor for known calibrated
+      // sensor types
+      uint8_t uncalibratedType =
+          SensorTypeHelpers::toUncalibratedSensorType(sensorType);
+      if (uncalibratedType != sensorType) {
+        auto uncalBiasData =
+            MakeUniqueZeroFill<struct chreSensorThreeAxisData>();
+        if (uncalBiasData.isNull()) {
+          LOG_OOM();
+        } else {
+          *uncalBiasData = *biasData;
+          mCallback->onBiasUpdate(uncalibratedType, std::move(uncalBiasData));
+        }
+      }
+      mCallback->onBiasUpdate(sensorType, std::move(biasData));
+    }
+  }
+}
+
 bool UsfHelper::createSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
                                   uint8_t sensorType,
                                   UniquePtr<uint8_t> &sensorSample) {
@@ -504,6 +598,59 @@ bool UsfHelper::getRespMsg(usf::UsfReqSyncCallback &callback,
   }
 
   return err == kErrNone;
+}
+
+UniquePtr<struct chreSensorThreeAxisData> UsfHelper::convertUsfBiasUpdateToData(
+    const usf::UsfSensorTransformConfigEvent *update) {
+  UniquePtr<struct chreSensorThreeAxisData> biasData;
+  size_t index = getCalArrayIndex(update->GetSensor()->GetType());
+  if (index < kNumUsfCalSensors) {
+    UsfCalData &data = mCalData[index];
+    UsfErr err = usf::UsfTimeMgr::GetAndroidTimeNs(&data.timestamp);
+    if (err != kErrNone) {
+      LOG_USF_ERR(err);
+    }
+    data.hasBias = true;
+    for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
+      data.bias[i] = update->GetOffset()[i];
+    }
+
+    biasData = MakeUniqueZeroFill<struct chreSensorThreeAxisData>();
+    if (biasData.isNull()) {
+      LOG_OOM();
+    } else {
+      biasData->header.baseTimestamp = data.timestamp;
+      biasData->header.readingCount = 1;
+      // TODO(150308661): Provide accuracy value
+      biasData->header.reserved = 0;
+      for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
+        biasData->readings[0].bias[i] = data.bias[i];
+      }
+      biasData->readings[0].timestampDelta = 0;
+    }
+  }
+
+  return biasData;
+}
+
+size_t UsfHelper::getCalArrayIndex(const usf::UsfSensorType usfSensorType) {
+  UsfCalSensor index;
+  switch (usfSensorType) {
+    case usf::UsfSensorType::kUsfSensorAccelerometer:
+      index = UsfCalSensor::AccelCal;
+      break;
+    case usf::UsfSensorType::kUsfSensorGyroscope:
+      index = UsfCalSensor::GyroCal;
+      break;
+    case usf::UsfSensorType::kUsfSensorMag:
+      index = UsfCalSensor::MagCal;
+      break;
+    default:
+      index = UsfCalSensor::NumCalSensors;
+      break;
+  }
+
+  return static_cast<size_t>(index);
 }
 
 }  // namespace chre

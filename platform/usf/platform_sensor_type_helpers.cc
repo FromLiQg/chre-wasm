@@ -59,8 +59,17 @@ void PlatformSensorTypeHelpers::getVendorLastSample(
 }
 
 bool PlatformSensorTypeHelpersBase::reportsBias(uint8_t sensorType) {
-  // TODO: Stubbed out, implement this
-  return false;
+  switch (sensorType) {
+    case CHRE_SENSOR_TYPE_ACCELEROMETER:
+    case CHRE_SENSOR_TYPE_GYROSCOPE:
+    case CHRE_SENSOR_TYPE_GEOMAGNETIC_FIELD:
+    case CHRE_SENSOR_TYPE_UNCALIBRATED_ACCELEROMETER:
+    case CHRE_SENSOR_TYPE_UNCALIBRATED_GYROSCOPE:
+    case CHRE_SENSOR_TYPE_UNCALIBRATED_GEOMAGNETIC_FIELD:
+      return true;
+    default:
+      return false;
+  }
 }
 
 SensorSampleType

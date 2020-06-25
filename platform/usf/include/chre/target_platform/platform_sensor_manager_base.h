@@ -35,6 +35,10 @@ class PlatformSensorManagerBase : public UsfHelperCallbackInterface {
   void onFlushComplete(usf::UsfErr err, uint32_t requestId,
                        void *cookie) override;
 
+  void onBiasUpdate(
+      uint8_t sensorType,
+      UniquePtr<struct chreSensorThreeAxisData> &&eventData) override;
+
   /**
    * Converts the given UsfSensor into one or more CHRE sensors and adds them
    * to the given dynamic vector.
