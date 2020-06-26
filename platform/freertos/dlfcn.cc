@@ -44,7 +44,7 @@ int dlclose(void *handle) {
   UniquePtr<NanoappLoader> loader = static_cast<NanoappLoader *>(handle);
 
   if (!loader.isNull()) {
-    loader->deinit();
+    loader->close();
     rv = 0;
   }
 
