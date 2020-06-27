@@ -24,8 +24,11 @@
  *  Prototypes
  ***********************************************/
 
-static bool chppDispatchWwanResponse(void *serviceContext, uint8_t *buf,
+static bool chppDispatchWwanResponse(void *clientContext, uint8_t *buf,
                                      size_t len);
+static bool chppWwanClientInit(void *clientContext, uint8_t handle,
+                               struct ChppVersion serviceVersion);
+static void chppWwanClientDeinit(void *clientContext);
 
 /************************************************
  *  Private Definitions
@@ -38,17 +41,22 @@ static const struct ChppClient wwanClientConfig = {
     .descriptor.uuid = {0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0x0e, 0x0f, 0x0d,
                         0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0x0e, 0x0f},  // TODO
 
-    .descriptor.versionMajor = 1,
-
-    .descriptor.versionMinor = 0,
-
-    .descriptor.versionPatch = 0,
+    // Version
+    .descriptor.version.major = 1,
+    .descriptor.version.minor = 0,
+    .descriptor.version.patch = 0,
 
     // Server response dispatch function pointer
     .responseDispatchFunctionPtr = &chppDispatchWwanResponse,
 
     // Server notification dispatch function pointer
     .notificationDispatchFunctionPtr = NULL,  // Not supported
+
+    // Server response dispatch function pointer
+    .initFunctionPtr = &chppWwanClientInit,
+
+    // Server notification dispatch function pointer
+    .deinitFunctionPtr = &chppWwanClientDeinit,
 
     // Min length is the entire header
     .minLength = sizeof(struct ChppAppHeader),
@@ -139,6 +147,39 @@ static bool chppDispatchWwanResponse(void *clientContext, uint8_t *buf,
   }
 
   return success;
+}
+
+/**
+ * Initializes the client and provides its handle number and the version of the
+ * matched service when/if it the client is matched with a service during
+ * discovery.
+ *
+ * @param clientContext Maintains status for each client instance.
+ * @param handle Handle number for this client.
+ * @param serviceVersion Version of the matched service
+ *
+ * @return True if client is successfully initialized
+ */
+static bool chppWwanClientInit(void *clientContext, uint8_t handle,
+                               struct ChppVersion serviceVersion) {
+  UNUSED_VAR(serviceVersion);
+
+  struct ChppWwanClientState *wwanClientContext =
+      (struct ChppWwanClientState *)clientContext;
+  wwanClientContext->client.handle = handle;
+
+  return true;
+}
+
+/**
+ * Deinitializes the client.
+ *
+ * @param clientContext Maintains status for each client instance.
+ */
+static void chppWwanClientDeinit(void *clientContext) {
+  // TODO
+
+  UNUSED_VAR(clientContext);
 }
 
 /**
@@ -299,10 +340,9 @@ void chppWwanClientReleaseCellInfoResult() {
  ***********************************************/
 
 void chppRegisterWwanClient(struct ChppAppState *appContext) {
-  // TODO
-
-  UNUSED_VAR(appContext);
-  UNUSED_VAR(wwanClientConfig);
+  gWwanClientContext.client.appContext = appContext;
+  chppRegisterClient(appContext, (void *)&gWwanClientContext,
+                     &wwanClientConfig);
 }
 
 void chppDeregisterWwanClient(struct ChppAppState *appContext) {
@@ -312,7 +352,13 @@ void chppDeregisterWwanClient(struct ChppAppState *appContext) {
 }
 
 #ifdef CHPP_CLIENT_ENABLED_WWAN
+
+#ifdef CHPP_CLIENT_ENABLED_CHRE_WWAN
 const struct chrePalWwanApi *chrePalWwanGetApi(uint32_t requestedApiVersion) {
+#else
+const struct chrePalWwanApi *chppPalWwanGetApi(uint32_t requestedApiVersion) {
+#endif
+
   static const struct chrePalWwanApi api = {
       .moduleVersion = CHRE_PAL_WWAN_API_V1_4,
       .open = chppWwanClientOpen,
@@ -324,7 +370,8 @@ const struct chrePalWwanApi *chrePalWwanGetApi(uint32_t requestedApiVersion) {
 
   CHPP_STATIC_ASSERT(
       CHRE_PAL_WWAN_API_CURRENT_VERSION == CHRE_PAL_WWAN_API_V1_4,
-      "A newer CHRE PAL API version is available, consider updating this file");
+      "A newer CHRE PAL API version is available, consider updating this "
+      "file");
 
   if (!CHRE_PAL_VERSIONS_ARE_COMPATIBLE(api.moduleVersion,
                                         requestedApiVersion)) {
@@ -333,4 +380,5 @@ const struct chrePalWwanApi *chrePalWwanGetApi(uint32_t requestedApiVersion) {
     return &api;
   }
 }
+
 #endif
