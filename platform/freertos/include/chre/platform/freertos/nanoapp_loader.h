@@ -50,6 +50,16 @@ class NanoappLoader {
   static void *create(void *elfInput);
 
   /**
+   * Attempts to locate the exported symbol specified by the given function
+   * name.
+   *
+   * @param name A null-terminated char array that is the name of the function
+   *     to be found.
+   * @return The address of the function. nullptr if not found.
+   */
+  static void *findExportedSymbol(const char *name);
+
+  /**
    * Closes the loader, freeing any state associated with the loaded ELF binary
    * and unmapping it from memory. Prior to unmapping from memory, any static
    * termination functions will be invoked.

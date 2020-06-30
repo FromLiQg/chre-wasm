@@ -29,11 +29,19 @@ void *dlsym(void *handle, const char *symbol) {
   LOGV("Attempting to find %s", symbol);
 
   void *resolvedSymbol = nullptr;
-  auto *loader = reinterpret_cast<chre::NanoappLoader *>(handle);
-  if (loader != nullptr) {
+  if (handle == RTLD_NEXT) {
+    resolvedSymbol = chre::NanoappLoader::findExportedSymbol(symbol);
+  } else if (handle != nullptr) {
+    auto *loader = reinterpret_cast<chre::NanoappLoader *>(handle);
     resolvedSymbol = loader->findSymbolByName(symbol);
+  }
+
+  if (resolvedSymbol == nullptr) {
+    LOGE("dlsym unable to resolve %s", symbol);
+  } else {
     LOGV("Found symbol at %p", resolvedSymbol);
   }
+
   return resolvedSymbol;
 }
 
