@@ -86,7 +86,7 @@ void *NanoappLoader::create(void *elfInput) {
   void *instance = nullptr;
   NanoappLoader *loader = memoryAlloc<NanoappLoader>(elfInput);
   if (loader != nullptr) {
-    if (loader->init()) {
+    if (loader->open()) {
       instance = loader;
     } else {
       memoryFree(loader);
@@ -97,9 +97,9 @@ void *NanoappLoader::create(void *elfInput) {
   return instance;
 }
 
-bool NanoappLoader::init() {
+bool NanoappLoader::open() {
   bool success = false;
-  if (mBinary.rawLocation != nullptr) {
+  if (mBinary.dataPtr != nullptr) {
     if (!copyAndVerifyHeaders()) {
       LOGE("Failed to verify headers");
     } else if (!createMappings()) {
@@ -125,7 +125,7 @@ bool NanoappLoader::init() {
   return success;
 }
 
-void NanoappLoader::deinit() {
+void NanoappLoader::close() {
   // TODO(karthikmb/stange): Ensure functions registered through atexit are
   // called.
   callTerminatorArray();
@@ -140,7 +140,7 @@ void *NanoappLoader::findSymbolByName(const char *name) {
     const char *symbolName = &mStringTablePtr[currSym->st_name];
 
     if (strncmp(symbolName, name, strlen(name)) == 0) {
-      symbol = ((void *)(mMapping.location + currSym->st_value));
+      symbol = ((void *)(mMapping.data + currSym->st_value));
       break;
     }
 
@@ -192,7 +192,7 @@ uintptr_t NanoappLoader::roundDownToAlign(uintptr_t virtualAddr) {
 }
 
 void NanoappLoader::freeAllocatedData() {
-  memoryFree(mMapping.rawLocation);
+  memoryFree(mMapping.dataPtr);
   memoryFree(mProgramHeadersPtr);
   memoryFree(mSectionHeadersPtr);
   memoryFree(mSectionNamesPtr);
@@ -233,12 +233,12 @@ bool NanoappLoader::verifyProgramHeaders() {
   return success;
 }
 
-const char *NanoappLoader::getSectionHeaderName(size_t sh_name) {
-  if (sh_name == 0) {
+const char *NanoappLoader::getSectionHeaderName(size_t headerOffset) {
+  if (headerOffset == 0) {
     return "";
   }
 
-  return &mSectionNamesPtr[sh_name];
+  return &mSectionNamesPtr[headerOffset];
 }
 
 NanoappLoader::SectionHeader *NanoappLoader::getSectionHeader(
@@ -273,7 +273,7 @@ bool NanoappLoader::verifySectionHeaders() {
 bool NanoappLoader::copyAndVerifyHeaders() {
   size_t offset = 0;
   bool success = false;
-  uint8_t *pDataBytes = static_cast<uint8_t *>(mBinary.rawLocation);
+  uint8_t *pDataBytes = static_cast<uint8_t *>(mBinary.dataPtr);
 
   // Verify the ELF Header
   memcpy(&mElfHeader, pDataBytes, sizeof(mElfHeader));
@@ -326,8 +326,8 @@ bool NanoappLoader::copyAndVerifyHeaders() {
       LOG_OOM();
       success = false;
     } else {
-      memcpy(mSectionNamesPtr,
-             (void *)(mBinary.location + stringSection.sh_offset), sectionSize);
+      memcpy(mSectionNamesPtr, (void *)(mBinary.data + stringSection.sh_offset),
+             sectionSize);
     }
   }
 
@@ -349,7 +349,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
         success = false;
       } else {
         memcpy(mSymbolTablePtr,
-               (void *)(mBinary.location + mSymbolTableHeader.sh_offset),
+               (void *)(mBinary.data + mSymbolTableHeader.sh_offset),
                mSymbolTableSize);
       }
     }
@@ -370,7 +370,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
         success = false;
       } else {
         memcpy(mStringTablePtr,
-               (void *)(mBinary.location + mStringTableHeader.sh_offset),
+               (void *)(mBinary.data + mStringTableHeader.sh_offset),
                stringTableSize);
       }
     }
@@ -413,16 +413,15 @@ bool NanoappLoader::createMappings() {
       size_t memorySpan = last->p_vaddr + last->p_memsz - first->p_vaddr;
       LOGV("Nanoapp image Memory Span: %u", memorySpan);
 
-      mMapping.rawLocation =
-          memoryAllocDramAligned(kBinaryAlignment, memorySpan);
-      if (mMapping.rawLocation == nullptr) {
+      mMapping.dataPtr = memoryAllocDramAligned(kBinaryAlignment, memorySpan);
+      if (mMapping.dataPtr == nullptr) {
         LOG_OOM();
       } else {
-        LOGV("Starting location of mappings %p", data->mMapping.rawLocation);
+        LOGV("Starting location of mappings %p", data->mMapping.dataPtr);
 
         // Calculate the load bias using the first load segment.
         uintptr_t adjustedFirstLoadSegAddr = roundDownToAlign(first->p_vaddr);
-        mLoadBias = mMapping.location - adjustedFirstLoadSegAddr;
+        mLoadBias = mMapping.data - adjustedFirstLoadSegAddr;
         LOGV("Load bias is %" PRIu32, mLoadBias);
 
         success = true;
@@ -437,7 +436,7 @@ bool NanoappLoader::createMappings() {
         ElfAddr segStart = ph->p_vaddr + mLoadBias;
         ElfAddr startPage = roundDownToAlign(segStart);
         ElfAddr phOffsetPage = roundDownToAlign(ph->p_offset);
-        ElfAddr binaryStartPage = mBinary.location + phOffsetPage;
+        ElfAddr binaryStartPage = mBinary.data + phOffsetPage;
         size_t segmentLen = ph->p_filesz;
 
         LOGV("Mapping start page %p from %p with length %zu", startPage,
@@ -467,7 +466,7 @@ bool NanoappLoader::initDynamicStringTable() {
       LOG_OOM();
     } else {
       memcpy(mDynamicStringTablePtr,
-             (void *)(mBinary.location + dynamicStringTablePtr->sh_offset),
+             (void *)(mBinary.data + dynamicStringTablePtr->sh_offset),
              stringTableSize);
       success = true;
     }
@@ -487,7 +486,7 @@ bool NanoappLoader::initDynamicSymbolTable() {
       LOG_OOM();
     } else {
       memcpy(mDynamicSymbolTablePtr,
-             (void *)(mBinary.location + dynamicSymbolTablePtr->sh_offset),
+             (void *)(mBinary.data + dynamicSymbolTablePtr->sh_offset),
              sectionSize);
       mDynamicSymbolTableSize = sectionSize;
       success = true;
@@ -578,7 +577,7 @@ bool NanoappLoader::fixRelocations() {
   } else if (getDynEntry(dyn, DT_RELA) != 0) {
     LOGE("Elf binaries with a DT_RELA dynamic entry are unsupported");
   } else {
-    ElfRel *reloc = (ElfRel *)(getDynEntry(dyn, DT_REL) + mBinary.location);
+    ElfRel *reloc = (ElfRel *)(getDynEntry(dyn, DT_REL) + mBinary.data);
     size_t relocSize = getDynEntry(dyn, DT_RELSZ);
     size_t nRelocs = relocSize / sizeof(ElfRel);
     LOGV("Relocation %zu entries in DT_REL table", nRelocs);
@@ -590,18 +589,16 @@ bool NanoappLoader::fixRelocations() {
       switch (relocType) {
         case R_ARM_RELATIVE:
           LOGV("Resolving ARM_RELATIVE at offset %" PRIu32, curr->r_offset);
-          addr =
-              reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.location);
+          addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
           // TODO: When we move to DRAM allocations, we need to check if the
           // above address is in a Read-Only section of memory, and give it
           // temporary write permission if that is the case.
-          *addr += mMapping.location;
+          *addr += mMapping.data;
           break;
 
         case R_ARM_GLOB_DAT: {
           LOGV("Resolving R_ARM_GLOB_DAT at offset %" PRIu32, curr->r_offset);
-          addr =
-              reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.location);
+          addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
           size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
           void *resolved = resolveData(posInSymbolTable);
           if (resolved == nullptr) {
@@ -639,7 +636,7 @@ bool NanoappLoader::fixRelocations() {
 bool NanoappLoader::resolveGot() {
   ElfAddr *addr;
   ElfRel *reloc =
-      (ElfRel *)(getDynEntry(mDynamicHeaderPtr, DT_JMPREL) + mMapping.location);
+      (ElfRel *)(getDynEntry(mDynamicHeaderPtr, DT_JMPREL) + mMapping.data);
   size_t relocSize = getDynEntry(mDynamicHeaderPtr, DT_PLTRELSZ);
   size_t nRelocs = relocSize / sizeof(ElfRel);
   LOGV("Resolving GOT with %zu relocations", nRelocs);
@@ -651,7 +648,7 @@ bool NanoappLoader::resolveGot() {
     switch (relocType) {
       case R_ARM_JUMP_SLOT: {
         LOGV("Resolving ARM_JUMP_SLOT at offset %" PRIu32, curr->r_offset);
-        addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.location);
+        addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
         size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
         void *resolved = resolveData(posInSymbolTable);
         if (resolved == nullptr) {
