@@ -32,6 +32,10 @@
 
 namespace chre {
 namespace {
+
+using ElfHeader = ElfW(Ehdr);
+using ProgramHeader = ElfW(Phdr);
+
 struct ExportedData {
   void *data;
   const char *dataName;
@@ -120,10 +124,6 @@ bool NanoappLoader::open() {
       LOGE("Failed to verify headers");
     } else if (!createMappings()) {
       LOGE("Failed to create mappings");
-    } else if (!initDynamicStringTable()) {
-      LOGE("Failed to initialize dynamic string table");
-    } else if (!initDynamicSymbolTable()) {
-      LOGE("Failed to initialize dynamic symbol table");
     } else if (!fixRelocations()) {
       LOGE("Failed to fix relocations");
     } else if (!resolveGot()) {
@@ -208,28 +208,26 @@ uintptr_t NanoappLoader::roundDownToAlign(uintptr_t virtualAddr) {
 
 void NanoappLoader::freeAllocatedData() {
   memoryFree(mMapping.dataPtr);
-  memoryFree(mProgramHeadersPtr);
   memoryFree(mSectionHeadersPtr);
   memoryFree(mSectionNamesPtr);
-  memoryFree(mDynamicStringTablePtr);
-  memoryFree(mDynamicSymbolTablePtr);
   memoryFree(mSymbolTablePtr);
   memoryFree(mStringTablePtr);
 }
 
 bool NanoappLoader::verifyElfHeader() {
   bool success = false;
-  if ((mElfHeader.e_ident[EI_MAG0] == ELFMAG0) &&
-      (mElfHeader.e_ident[EI_MAG1] == ELFMAG1) &&
-      (mElfHeader.e_ident[EI_MAG2] == ELFMAG2) &&
-      (mElfHeader.e_ident[EI_MAG3] == ELFMAG3) &&
-      (mElfHeader.e_ehsize == sizeof(mElfHeader)) &&
-      (mElfHeader.e_phentsize == sizeof(ProgramHeader)) &&
-      (mElfHeader.e_shentsize == sizeof(SectionHeader)) &&
-      (mElfHeader.e_shstrndx < mElfHeader.e_shnum) &&
-      (mElfHeader.e_version == EV_CURRENT) &&
-      (mElfHeader.e_machine == CHRE_LOADER_ARCH) &&
-      (mElfHeader.e_type == ET_DYN)) {
+  ElfHeader *elfHeader = getElfHeader();
+  if (elfHeader != nullptr && (elfHeader->e_ident[EI_MAG0] == ELFMAG0) &&
+      (elfHeader->e_ident[EI_MAG1] == ELFMAG1) &&
+      (elfHeader->e_ident[EI_MAG2] == ELFMAG2) &&
+      (elfHeader->e_ident[EI_MAG3] == ELFMAG3) &&
+      (elfHeader->e_ehsize == sizeof(ElfHeader)) &&
+      (elfHeader->e_phentsize == sizeof(ProgramHeader)) &&
+      (elfHeader->e_shentsize == sizeof(SectionHeader)) &&
+      (elfHeader->e_shstrndx < elfHeader->e_shnum) &&
+      (elfHeader->e_version == EV_CURRENT) &&
+      (elfHeader->e_machine == CHRE_LOADER_ARCH) &&
+      (elfHeader->e_type == ET_DYN)) {
     success = true;
   }
   return success;
@@ -239,8 +237,8 @@ bool NanoappLoader::verifyProgramHeaders() {
   // This is a minimal check for now -
   // there should be at least one load segment.
   bool success = false;
-  for (size_t i = 0; i < mNumProgramHeaders; ++i) {
-    if (mProgramHeadersPtr[i].p_type == PT_LOAD) {
+  for (size_t i = 0; i < getProgramHeaderArraySize(); ++i) {
+    if (getProgramHeaderArray()[i].p_type == PT_LOAD) {
       success = true;
       break;
     }
@@ -269,20 +267,84 @@ NanoappLoader::SectionHeader *NanoappLoader::getSectionHeader(
   return rv;
 }
 
+ElfHeader *NanoappLoader::getElfHeader() {
+  return reinterpret_cast<ElfHeader *>(mBinary.data);
+}
+
+ProgramHeader *NanoappLoader::getProgramHeaderArray() {
+  ElfHeader *elfHeader = getElfHeader();
+  ProgramHeader *programHeader = nullptr;
+  if (elfHeader != nullptr) {
+    programHeader =
+        reinterpret_cast<ProgramHeader *>(mBinary.data + elfHeader->e_phoff);
+  }
+
+  return programHeader;
+}
+
+size_t NanoappLoader::getProgramHeaderArraySize() {
+  ElfHeader *elfHeader = getElfHeader();
+  size_t arraySize = 0;
+  if (elfHeader != nullptr) {
+    arraySize = elfHeader->e_phnum;
+  }
+
+  return arraySize;
+}
+
+char *NanoappLoader::getDynamicStringTable() {
+  char *table = nullptr;
+
+  SectionHeader *dynamicStringTablePtr = getSectionHeader(".dynstr");
+  CHRE_ASSERT(dynamicStringTablePtr != nullptr);
+  if (dynamicStringTablePtr != nullptr && mBinary.dataPtr != nullptr) {
+    table = reinterpret_cast<char *>(mBinary.data +
+                                     dynamicStringTablePtr->sh_offset);
+  }
+
+  return table;
+}
+
+uint8_t *NanoappLoader::getDynamicSymbolTable() {
+  uint8_t *table = nullptr;
+
+  SectionHeader *dynamicSymbolTablePtr = getSectionHeader(".dynsym");
+  CHRE_ASSERT(dynamicSymbolTablePtr != nullptr);
+  if (dynamicSymbolTablePtr != nullptr && mBinary.dataPtr != nullptr) {
+    table = reinterpret_cast<uint8_t *>(mBinary.data +
+                                        dynamicSymbolTablePtr->sh_offset);
+  }
+
+  return table;
+}
+
+size_t NanoappLoader::getDynamicSymbolTableSize() {
+  size_t tableSize = 0;
+
+  SectionHeader *dynamicSymbolTablePtr = getSectionHeader(".dynsym");
+  CHRE_ASSERT(dynamicSymbolTablePtr != nullptr);
+  if (dynamicSymbolTablePtr != nullptr) {
+    tableSize = dynamicSymbolTablePtr->sh_size;
+  }
+
+  return tableSize;
+}
+
 bool NanoappLoader::verifySectionHeaders() {
+  bool foundSymbolTableHeader = false;
+  bool foundStringTableHeader = false;
+
   for (size_t i = 0; i < mNumSectionHeaders; ++i) {
     const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
 
     if (strncmp(name, kSymTableName, strlen(kSymTableName)) == 0) {
-      memcpy(&mSymbolTableHeader, &mSectionHeadersPtr[i],
-             sizeof(SectionHeader));
+      foundSymbolTableHeader = true;
     } else if (strncmp(name, kStrTableName, strlen(kStrTableName)) == 0) {
-      memcpy(&mStringTableHeader, &mSectionHeadersPtr[i],
-             sizeof(SectionHeader));
+      foundStringTableHeader = true;
     }
   }
 
-  return true;
+  return foundSymbolTableHeader && foundStringTableHeader;
 }
 
 bool NanoappLoader::copyAndVerifyHeaders() {
@@ -291,34 +353,22 @@ bool NanoappLoader::copyAndVerifyHeaders() {
   uint8_t *pDataBytes = static_cast<uint8_t *>(mBinary.dataPtr);
 
   // Verify the ELF Header
-  memcpy(&mElfHeader, pDataBytes, sizeof(mElfHeader));
+  ElfHeader *elfHeader = getElfHeader();
   success = verifyElfHeader();
 
   LOGV("Verified ELF header %d", success);
 
   // Verify Program Headers
   if (success) {
-    offset = mElfHeader.e_phoff;
-    size_t programHeadersSizeBytes = sizeof(ProgramHeader) * mElfHeader.e_phnum;
-    mProgramHeadersPtr =
-        static_cast<ProgramHeader *>(memoryAlloc(programHeadersSizeBytes));
-    if (mProgramHeadersPtr == nullptr) {
-      success = false;
-      LOG_OOM();
-    } else {
-      memcpy(mProgramHeadersPtr, (pDataBytes + offset),
-             programHeadersSizeBytes);
-      mNumProgramHeaders = mElfHeader.e_phnum;
-      success = verifyProgramHeaders();
-    }
+    success = verifyProgramHeaders();
   }
 
   LOGV("Verified Program headers %d", success);
 
   // Load Section Headers
   if (success) {
-    offset = mElfHeader.e_shoff;
-    size_t sectionHeaderSizeBytes = sizeof(SectionHeader) * mElfHeader.e_shnum;
+    offset = elfHeader->e_shoff;
+    size_t sectionHeaderSizeBytes = sizeof(SectionHeader) * elfHeader->e_shnum;
     mSectionHeadersPtr =
         static_cast<SectionHeader *>(memoryAlloc(sectionHeaderSizeBytes));
     if (mSectionHeadersPtr == nullptr) {
@@ -326,7 +376,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
       LOG_OOM();
     } else {
       memcpy(mSectionHeadersPtr, (pDataBytes + offset), sectionHeaderSizeBytes);
-      mNumSectionHeaders = mElfHeader.e_shnum;
+      mNumSectionHeaders = elfHeader->e_shnum;
     }
   }
 
@@ -334,7 +384,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
 
   // Load section header names
   if (success) {
-    SectionHeader &stringSection = mSectionHeadersPtr[mElfHeader.e_shstrndx];
+    SectionHeader &stringSection = mSectionHeadersPtr[elfHeader->e_shstrndx];
     size_t sectionSize = stringSection.sh_size;
     mSectionNamesPtr = static_cast<char *>(memoryAlloc(sectionSize));
     if (mSectionNamesPtr == nullptr) {
@@ -354,7 +404,8 @@ bool NanoappLoader::copyAndVerifyHeaders() {
 
   // Load symbol table
   if (success) {
-    mSymbolTableSize = mSymbolTableHeader.sh_size;
+    SectionHeader *symbolTableHeader = getSectionHeader(kSymTableName);
+    mSymbolTableSize = symbolTableHeader->sh_size;
     if (mSymbolTableSize == 0) {
       LOGE("No symbols to resolve");
       success = false;
@@ -366,7 +417,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
       } else {
         memcpy(mSymbolTablePtr,
                reinterpret_cast<void *>(mBinary.data +
-                                        mSymbolTableHeader.sh_offset),
+                                        symbolTableHeader->sh_offset),
                mSymbolTableSize);
       }
     }
@@ -376,7 +427,8 @@ bool NanoappLoader::copyAndVerifyHeaders() {
 
   // Load string table
   if (success) {
-    size_t stringTableSize = mStringTableHeader.sh_size;
+    SectionHeader *stringTableHeader = getSectionHeader(kStrTableName);
+    size_t stringTableSize = stringTableHeader->sh_size;
     if (mSymbolTableSize == 0) {
       LOGE("No string table corresponding to symbols");
       success = false;
@@ -388,7 +440,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
       } else {
         memcpy(mStringTablePtr,
                reinterpret_cast<void *>(mBinary.data +
-                                        mStringTableHeader.sh_offset),
+                                        stringTableHeader->sh_offset),
                stringTableSize);
       }
     }
@@ -403,8 +455,11 @@ bool NanoappLoader::createMappings() {
   // ELF needs pt_load segments to be in contiguous ascending order of
   // virtual addresses. So the first and last segs can be used to
   // calculate the entire address span of the image.
-  const ProgramHeader *first = &mProgramHeadersPtr[0];
-  const ProgramHeader *last = &mProgramHeadersPtr[mElfHeader.e_phnum - 1];
+  ElfHeader *elfHeader = getElfHeader();
+  ProgramHeader *programHeaderArray = getProgramHeaderArray();
+  size_t numProgramHeaders = getProgramHeaderArraySize();
+  const ProgramHeader *first = &programHeaderArray[0];
+  const ProgramHeader *last = &programHeaderArray[numProgramHeaders - 1];
 
   // Find first load segment
   while (first->p_type != PT_LOAD && first <= last) {
@@ -419,9 +474,9 @@ bool NanoappLoader::createMappings() {
     // first byte of a valid load segment can't be greater than the
     // program header offset
     bool valid =
-        (first->p_offset < mElfHeader.e_phoff) &&
+        (first->p_offset < elfHeader->e_phoff) &&
         (first->p_filesz >
-         (mElfHeader.e_phoff + (mNumProgramHeaders * sizeof(ProgramHeader))));
+         (elfHeader->e_phoff + (numProgramHeaders * sizeof(ProgramHeader))));
     if (!valid) {
       LOGE("Load segment program header validation failed");
     } else {
@@ -473,59 +528,16 @@ bool NanoappLoader::createMappings() {
   return success;
 }
 
-bool NanoappLoader::initDynamicStringTable() {
-  bool success = false;
-
-  SectionHeader *dynamicStringTablePtr = getSectionHeader(".dynstr");
-  CHRE_ASSERT(dynamicStringTablePtr != nullptr);
-  if (dynamicStringTablePtr != nullptr) {
-    size_t stringTableSize = dynamicStringTablePtr->sh_size;
-    mDynamicStringTablePtr = static_cast<char *>(memoryAlloc(stringTableSize));
-    if (mDynamicStringTablePtr == nullptr) {
-      LOG_OOM();
-    } else {
-      memcpy(mDynamicStringTablePtr,
-             reinterpret_cast<void *>(mBinary.data +
-                                      dynamicStringTablePtr->sh_offset),
-             stringTableSize);
-      success = true;
-    }
-  }
-
-  return success;
-}
-
-bool NanoappLoader::initDynamicSymbolTable() {
-  bool success = false;
-  SectionHeader *dynamicSymbolTablePtr = getSectionHeader(".dynsym");
-  CHRE_ASSERT(dynamicSymbolTablePtr != nullptr);
-  if (dynamicSymbolTablePtr != nullptr) {
-    size_t sectionSize = dynamicSymbolTablePtr->sh_size;
-    mDynamicSymbolTablePtr = static_cast<uint8_t *>(memoryAlloc(sectionSize));
-    if (mDynamicSymbolTablePtr == nullptr) {
-      LOG_OOM();
-    } else {
-      memcpy(mDynamicSymbolTablePtr,
-             reinterpret_cast<void *>(mBinary.data +
-                                      dynamicSymbolTablePtr->sh_offset),
-             sectionSize);
-      mDynamicSymbolTableSize = sectionSize;
-      success = true;
-    }
-  }
-
-  return success;
-}
-
 const char *NanoappLoader::getDataName(size_t posInSymbolTable) {
-  size_t sectionSize = mDynamicSymbolTableSize;
+  size_t sectionSize = getDynamicSymbolTableSize();
+  uint8_t *dynamicSymbolTable = getDynamicSymbolTable();
   size_t numElements = sectionSize / sizeof(ElfSym);
   CHRE_ASSERT(posInSymbolTable < numElements);
   char *dataName = nullptr;
   if (posInSymbolTable < numElements) {
     ElfSym *sym = reinterpret_cast<ElfSym *>(
-        &mDynamicSymbolTablePtr[posInSymbolTable * sizeof(ElfSym)]);
-    dataName = &mDynamicStringTablePtr[sym->st_name];
+        &dynamicSymbolTable[posInSymbolTable * sizeof(ElfSym)]);
+    dataName = &getDynamicStringTable()[sym->st_name];
   }
   return dataName;
 }
@@ -543,9 +555,11 @@ void *NanoappLoader::resolveData(size_t posInSymbolTable) {
 
 NanoappLoader::DynamicHeader *NanoappLoader::getDynamicHeader() {
   DynamicHeader *dyn = nullptr;
-  for (size_t i = 0; i < mNumProgramHeaders; ++i) {
-    if (mProgramHeadersPtr[i].p_type == PT_DYNAMIC) {
-      dyn = (DynamicHeader *)(mProgramHeadersPtr[i].p_vaddr + mLoadBias);
+  ProgramHeader *programHeaders = getProgramHeaderArray();
+  for (size_t i = 0; i < getProgramHeaderArraySize(); ++i) {
+    if (programHeaders[i].p_type == PT_DYNAMIC) {
+      dyn = reinterpret_cast<DynamicHeader *>(programHeaders[i].p_vaddr +
+                                              mLoadBias);
       break;
     }
   }
@@ -555,9 +569,10 @@ NanoappLoader::DynamicHeader *NanoappLoader::getDynamicHeader() {
 NanoappLoader::ProgramHeader *NanoappLoader::getFirstRoSegHeader() {
   // return the first read only segment found
   ProgramHeader *ro = nullptr;
-  for (size_t i = 0; i < mNumProgramHeaders; ++i) {
-    if (!(mProgramHeadersPtr[i].p_flags & PF_W)) {
-      ro = &mProgramHeadersPtr[i];
+  ProgramHeader *programHeaders = getProgramHeaderArray();
+  for (size_t i = 0; i < getProgramHeaderArraySize(); ++i) {
+    if (!(programHeaders[i].p_flags & PF_W)) {
+      ro = &programHeaders[i];
       break;
     }
   }
@@ -639,7 +654,6 @@ bool NanoappLoader::fixRelocations() {
     if (i != nRelocs) {
       LOGE("Unable to resolve all symbols in the binary");
     } else {
-      mDynamicHeaderPtr = dyn;
       success = true;
     }
   }
@@ -650,8 +664,8 @@ bool NanoappLoader::fixRelocations() {
 bool NanoappLoader::resolveGot() {
   ElfAddr *addr;
   ElfRel *reloc = reinterpret_cast<ElfRel *>(
-      getDynEntry(mDynamicHeaderPtr, DT_JMPREL) + mMapping.data);
-  size_t relocSize = getDynEntry(mDynamicHeaderPtr, DT_PLTRELSZ);
+      getDynEntry(getDynamicHeader(), DT_JMPREL) + mMapping.data);
+  size_t relocSize = getDynEntry(getDynamicHeader(), DT_PLTRELSZ);
   size_t nRelocs = relocSize / sizeof(ElfRel);
   LOGV("Resolving GOT with %zu relocations", nRelocs);
 
