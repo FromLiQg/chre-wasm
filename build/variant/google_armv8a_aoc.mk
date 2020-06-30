@@ -74,6 +74,9 @@ ARMV8A_LD = $(LD)
 
 ifneq ($(IS_NANOAPP_BUILD),)
 include $(CHRE_PREFIX)/build/nanoapp/google_aoc.mk
+ifeq ($(CHRE_TCM_ENABLED),true)
+TARGET_CFLAGS += -DCHRE_TCM_ENABLED
+endif
 endif
 
 include $(CHRE_PREFIX)/build/arch/armv8a.mk
