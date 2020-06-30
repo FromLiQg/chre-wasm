@@ -17,9 +17,14 @@
 #ifndef CHRE_PLATFORM_FREERTOS_DLFCN_H_
 #define CHRE_PLATFORM_FREERTOS_DLFCN_H_
 
+//! This file is intended to be used when a platform doesn't provide a dlfcn.h
+//! implementation so that dynamic loading support can be provided to nanoapps.
+
 #include <cstdlib>
 
-namespace chre {
+//! Indicates that the dlsym call is attempting to lookup the provided symbol
+//! in another library (CHRE).
+#define RTLD_NEXT ((void *)-1L)
 
 /**
  * This function parses, verifies, and loads a buffer containing an ELF
@@ -48,7 +53,5 @@ void *dlsym(void *handle, const char *symbol);
  * @return 0 on success
  */
 int dlclose(void *handle);
-
-}  // namespace chre
 
 #endif  // CHRE_PLATFORM_FREERTOS_DLFCN_H_
