@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_PLATFORM_FREERTOS_NANOAPP_LOADER_H_
-#define CHRE_PLATFORM_FREERTOS_NANOAPP_LOADER_H_
+#ifndef CHRE_PLATFORM_SHARED_NANOAPP_LOADER_H_
+#define CHRE_PLATFORM_SHARED_NANOAPP_LOADER_H_
 
 #include <cinttypes>
 #include <cstdlib>
@@ -307,4 +307,4 @@ class NanoappLoader {
 
 }  // namespace chre
 
-#endif  // CHRE_PLATFORM_FREERTOS_NANOAPP_LOADER_H_
+#endif  // CHRE_PLATFORM_SHARED_NANOAPP_LOADER_H_

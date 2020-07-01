@@ -42,7 +42,7 @@ TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/libc/include
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/external/libcxx/include
 
 # Used to expose libc headers to nanoapps that aren't supported on the given platform
-TARGET_CFLAGS += -I$(CHRE_PREFIX)/platform/freertos/include/chre/platform/freertos/libc
+TARGET_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
 
 # add platform specific flags
 ifeq ($(AOC_PLATFORM),linux)

@@ -17,8 +17,8 @@
 #include <dlfcn.h>
 
 #include "chre/platform/assert.h"
-#include "chre/platform/freertos/nanoapp_loader.h"
 #include "chre/platform/memory.h"
+#include "chre/platform/shared/nanoapp_loader.h"
 #include "chre/util/unique_ptr.h"
 
 void *dlopenbuf(void *elfBinary) {

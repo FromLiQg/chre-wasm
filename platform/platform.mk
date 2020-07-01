@@ -149,10 +149,8 @@ SLPI_SEE_QMI_SRCS += $(SLPI_PREFIX)/chre/chre/src/system/chre/platform/slpi/sns_
 # FreeRTOS-specific Source Files ###############################################
 
 FREERTOS_SRCS += platform/freertos/context.cc
-FREERTOS_SRCS += platform/freertos/dlfcn.cc
 FREERTOS_SRCS += platform/freertos/init.cc
 FREERTOS_SRCS += platform/freertos/memory_manager.cc
-FREERTOS_SRCS += platform/freertos/nanoapp_loader.cc
 FREERTOS_SRCS += platform/freertos/platform_debug_dump_manager.cc
 FREERTOS_SRCS += platform/freertos/platform_nanoapp.cc
 
@@ -186,9 +184,11 @@ AOC_SRCS += platform/shared/chre_api_sensor.cc
 AOC_SRCS += platform/shared/chre_api_version.cc
 AOC_SRCS += platform/shared/chre_api_wifi.cc
 AOC_SRCS += platform/shared/chre_api_wwan.cc
+AOC_SRCS += platform/shared/dlfcn.cc
 AOC_SRCS += platform/shared/host_protocol_chre.cc
 AOC_SRCS += platform/shared/host_protocol_common.cc
 AOC_SRCS += platform/shared/memory_manager.cc
+AOC_SRCS += platform/shared/nanoapp_loader.cc
 AOC_SRCS += platform/shared/nanoapp_load_manager.cc
 AOC_SRCS += platform/shared/pal_system_api.cc
 AOC_SRCS += platform/shared/pal_sensor_stub.cc

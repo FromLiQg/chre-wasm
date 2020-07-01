@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_PLATFORM_FREERTOS_DLFCN_H_
-#define CHRE_PLATFORM_FREERTOS_DLFCN_H_
+#ifndef CHRE_PLATFORM_SHARED_DLFCN_H_
+#define CHRE_PLATFORM_SHARED_DLFCN_H_
 
 //! This file is intended to be used when a platform doesn't provide a dlfcn.h
 //! implementation so that dynamic loading support can be provided to nanoapps.
@@ -24,7 +24,9 @@
 
 //! Indicates that the dlsym call is attempting to lookup the provided symbol
 //! in another library (CHRE).
+#ifndef RTLD_NEXT
 #define RTLD_NEXT ((void *)-1L)
+#endif  // RTLD_NEXT
 
 /**
  * This function parses, verifies, and loads a buffer containing an ELF
@@ -54,4 +56,4 @@ void *dlsym(void *handle, const char *symbol);
  */
 int dlclose(void *handle);
 
-#endif  // CHRE_PLATFORM_FREERTOS_DLFCN_H_
+#endif  // CHRE_PLATFORM_SHARED_DLFCN_H_
