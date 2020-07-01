@@ -31,7 +31,7 @@
 
 namespace {
 
-#ifdef CHRE_SLPI_UIMG_ENABLED
+#if defined(CHRE_SLPI_UIMG_ENABLED) || defined(CHRE_TCM_ENABLED)
 constexpr int kIsTcmNanoapp = 1;
 #else
 constexpr int kIsTcmNanoapp = 0;
