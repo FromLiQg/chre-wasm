@@ -54,30 +54,35 @@ int atexitOverride(void (*function)(void)) {
   return -1;
 }
 
+#define ADD_EXPORTED_SYMBOL(function_name, function_string) \
+  { reinterpret_cast<void *>(function_name), function_string }
+#define ADD_EXPORTED_C_SYMBOL(function_name) \
+  ADD_EXPORTED_SYMBOL(function_name, STRINGIFY(function_name))
+
 // TODO(karthikmb/stange): While this array was hand-coded for simple
 // "hello-world" prototyping, the list of exported symbols must be
 // generated to minimize runtime errors and build breaks.
 ExportedData gExportedData[] = {
-    {(void *)ashLoadCalibrationParams, "ashLoadCalibrationParams"},
-    {(void *)ashSaveCalibrationParams, "ashSaveCalibrationParams"},
-    {(void *)ashSetCalibration, "ashSetCalibration"},
-    {(void *)atexitOverride, "atexit"},
-    {(void *)chreGetVersion, "chreGetVersion"},
-    {(void *)chreGetApiVersion, "chreGetApiVersion"},
-    {(void *)chreGetEstimatedHostTimeOffset, "chreGetEstimatedHostTimeOffset"},
-    {(void *)chreGetPlatformId, "chreGetPlatformId"},
-    {(void *)chreGetSensorSamplingStatus, "chreGetSensorSamplingStatus"},
-    {(void *)chreGetTime, "chreGetTime"},
-    {(void *)chreHeapAlloc, "chreHeapAlloc"},
-    {(void *)chreHeapFree, "chreHeapFree"},
-    {(void *)chreLog, "chreLog"},
-    {(void *)chreSendMessageToHostEndpoint, "chreSendMessageToHostEndpoint"},
-    {(void *)chreSensorConfigure, "chreSensorConfigure"},
-    {(void *)chreSensorFindDefault, "chreSensorFindDefault"},
-    {(void *)memcpy, "memcpy"},
-    {(void *)memset, "memset"},
-    {(void *)deleteOverride, "_ZdlPv"},
-    {(void *)sqrtf, "sqrtf"},
+    ADD_EXPORTED_C_SYMBOL(ashLoadCalibrationParams),
+    ADD_EXPORTED_C_SYMBOL(ashSaveCalibrationParams),
+    ADD_EXPORTED_C_SYMBOL(ashSetCalibration),
+    ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
+    ADD_EXPORTED_C_SYMBOL(chreGetVersion),
+    ADD_EXPORTED_C_SYMBOL(chreGetApiVersion),
+    ADD_EXPORTED_C_SYMBOL(chreGetEstimatedHostTimeOffset),
+    ADD_EXPORTED_C_SYMBOL(chreGetPlatformId),
+    ADD_EXPORTED_C_SYMBOL(chreGetSensorSamplingStatus),
+    ADD_EXPORTED_C_SYMBOL(chreGetTime),
+    ADD_EXPORTED_C_SYMBOL(chreHeapAlloc),
+    ADD_EXPORTED_C_SYMBOL(chreHeapFree),
+    ADD_EXPORTED_C_SYMBOL(chreLog),
+    ADD_EXPORTED_C_SYMBOL(chreSendMessageToHostEndpoint),
+    ADD_EXPORTED_C_SYMBOL(chreSensorConfigure),
+    ADD_EXPORTED_C_SYMBOL(chreSensorFindDefault),
+    ADD_EXPORTED_C_SYMBOL(memcpy),
+    ADD_EXPORTED_C_SYMBOL(memset),
+    ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
+    ADD_EXPORTED_C_SYMBOL(sqrtf),
 };
 
 }  // namespace
@@ -140,7 +145,7 @@ void *NanoappLoader::findSymbolByName(const char *name) {
     const char *symbolName = &mStringTablePtr[currSym->st_name];
 
     if (strncmp(symbolName, name, strlen(name)) == 0) {
-      symbol = ((void *)(mMapping.data + currSym->st_value));
+      symbol = reinterpret_cast<void *>(mMapping.data + currSym->st_value);
       break;
     }
 
@@ -159,7 +164,7 @@ void NanoappLoader::mapBss(const ProgramHeader *hdr) {
     if (endOfMem > endOfFile) {
       auto deltaMem = endOfMem - endOfFile;
       LOGV("Zeroing out %zu from page %p", deltaMem, endOfFile);
-      memset((void *)endOfFile, 0, deltaMem);
+      memset(reinterpret_cast<void *>(endOfFile), 0, deltaMem);
     }
   }
 }
@@ -168,19 +173,18 @@ void NanoappLoader::callInitArray() {
   // TODO(b/151847750): ELF can have other sections like .init, .preinit, .fini
   // etc. Be sure to look for those if they end up being something that should
   // be supported for nanoapps.
-
   for (size_t i = 0; i < mNumSectionHeaders; ++i) {
     const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
     if (strncmp(name, kInitArrayName, strlen(kInitArrayName)) == 0) {
       LOGV("Invoking init function");
-      ElfAddr *init_array = reinterpret_cast<ElfAddr *>(
+      ElfAddr *initArray = reinterpret_cast<ElfAddr *>(
           mLoadBias + mSectionHeadersPtr[i].sh_addr);
       ElfAddr offset = 0;
       while (offset < mSectionHeadersPtr[i].sh_size) {
-        uintptr_t init_function =
-            reinterpret_cast<uintptr_t>(*init_array + offset);
-        ((void (*)())init_function)();
-        offset += sizeof(void *);
+        uintptr_t initFunction =
+            reinterpret_cast<uintptr_t>(*initArray + offset);
+        ((void (*)())initFunction)();
+        offset += sizeof(initFunction);
       }
       break;
     }
@@ -326,7 +330,8 @@ bool NanoappLoader::copyAndVerifyHeaders() {
       LOG_OOM();
       success = false;
     } else {
-      memcpy(mSectionNamesPtr, (void *)(mBinary.data + stringSection.sh_offset),
+      memcpy(mSectionNamesPtr,
+             reinterpret_cast<void *>(mBinary.data + stringSection.sh_offset),
              sectionSize);
     }
   }
@@ -349,7 +354,8 @@ bool NanoappLoader::copyAndVerifyHeaders() {
         success = false;
       } else {
         memcpy(mSymbolTablePtr,
-               (void *)(mBinary.data + mSymbolTableHeader.sh_offset),
+               reinterpret_cast<void *>(mBinary.data +
+                                        mSymbolTableHeader.sh_offset),
                mSymbolTableSize);
       }
     }
@@ -370,7 +376,8 @@ bool NanoappLoader::copyAndVerifyHeaders() {
         success = false;
       } else {
         memcpy(mStringTablePtr,
-               (void *)(mBinary.data + mStringTableHeader.sh_offset),
+               reinterpret_cast<void *>(mBinary.data +
+                                        mStringTableHeader.sh_offset),
                stringTableSize);
       }
     }
@@ -434,14 +441,15 @@ bool NanoappLoader::createMappings() {
     for (const ProgramHeader *ph = first; ph <= last; ++ph) {
       if (ph->p_type == PT_LOAD) {
         ElfAddr segStart = ph->p_vaddr + mLoadBias;
-        ElfAddr startPage = roundDownToAlign(segStart);
+        void *startPage = reinterpret_cast<void *>(roundDownToAlign(segStart));
         ElfAddr phOffsetPage = roundDownToAlign(ph->p_offset);
-        ElfAddr binaryStartPage = mBinary.data + phOffsetPage;
+        void *binaryStartPage =
+            reinterpret_cast<void *>(mBinary.data + phOffsetPage);
         size_t segmentLen = ph->p_filesz;
 
         LOGV("Mapping start page %p from %p with length %zu", startPage,
-             (void *)binaryStartPage, segmentLen);
-        memcpy((void *)startPage, (void *)binaryStartPage, segmentLen);
+             binaryStartPage, segmentLen);
+        memcpy(startPage, binaryStartPage, segmentLen);
         mapBss(ph);
       } else {
         LOGE("Non-load segment found between load segments");
@@ -466,7 +474,8 @@ bool NanoappLoader::initDynamicStringTable() {
       LOG_OOM();
     } else {
       memcpy(mDynamicStringTablePtr,
-             (void *)(mBinary.data + dynamicStringTablePtr->sh_offset),
+             reinterpret_cast<void *>(mBinary.data +
+                                      dynamicStringTablePtr->sh_offset),
              stringTableSize);
       success = true;
     }
@@ -486,7 +495,8 @@ bool NanoappLoader::initDynamicSymbolTable() {
       LOG_OOM();
     } else {
       memcpy(mDynamicSymbolTablePtr,
-             (void *)(mBinary.data + dynamicSymbolTablePtr->sh_offset),
+             reinterpret_cast<void *>(mBinary.data +
+                                      dynamicSymbolTablePtr->sh_offset),
              sectionSize);
       mDynamicSymbolTableSize = sectionSize;
       success = true;
@@ -577,7 +587,8 @@ bool NanoappLoader::fixRelocations() {
   } else if (getDynEntry(dyn, DT_RELA) != 0) {
     LOGE("Elf binaries with a DT_RELA dynamic entry are unsupported");
   } else {
-    ElfRel *reloc = (ElfRel *)(getDynEntry(dyn, DT_REL) + mBinary.data);
+    ElfRel *reloc =
+        reinterpret_cast<ElfRel *>(getDynEntry(dyn, DT_REL) + mBinary.data);
     size_t relocSize = getDynEntry(dyn, DT_RELSZ);
     size_t nRelocs = relocSize / sizeof(ElfRel);
     LOGV("Relocation %zu entries in DT_REL table", nRelocs);
@@ -635,8 +646,8 @@ bool NanoappLoader::fixRelocations() {
 
 bool NanoappLoader::resolveGot() {
   ElfAddr *addr;
-  ElfRel *reloc =
-      (ElfRel *)(getDynEntry(mDynamicHeaderPtr, DT_JMPREL) + mMapping.data);
+  ElfRel *reloc = reinterpret_cast<ElfRel *>(
+      getDynEntry(mDynamicHeaderPtr, DT_JMPREL) + mMapping.data);
   size_t relocSize = getDynEntry(mDynamicHeaderPtr, DT_PLTRELSZ);
   size_t nRelocs = relocSize / sizeof(ElfRel);
   LOGV("Resolving GOT with %zu relocations", nRelocs);
@@ -673,14 +684,14 @@ void NanoappLoader::callTerminatorArray() {
   for (size_t i = 0; i < mNumSectionHeaders; ++i) {
     const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
     if (strncmp(name, kFiniArrayName, strlen(kFiniArrayName)) == 0) {
-      ElfAddr *fini_array = reinterpret_cast<ElfAddr *>(
+      ElfAddr *finiArray = reinterpret_cast<ElfAddr *>(
           mLoadBias + mSectionHeadersPtr[i].sh_addr);
       ElfAddr offset = 0;
       while (offset < mSectionHeadersPtr[i].sh_size) {
-        uintptr_t fini_function =
-            reinterpret_cast<uintptr_t>(*fini_array + offset);
-        ((void (*)())fini_function)();
-        offset += sizeof(void *);
+        uintptr_t finiFunction =
+            reinterpret_cast<uintptr_t>(*finiArray + offset);
+        ((void (*)())finiFunction)();
+        offset += sizeof(finiFunction);
       }
       break;
     }
