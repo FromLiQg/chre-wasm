@@ -14,34 +14,41 @@
  * limitations under the License.
  */
 
-#include "chre/platform/freertos/dlfcn.h"
+#include <dlfcn.h>
 
 #include "chre/platform/assert.h"
 #include "chre/platform/freertos/nanoapp_loader.h"
 #include "chre/platform/memory.h"
 #include "chre/util/unique_ptr.h"
 
-namespace chre {
-
 void *dlopenbuf(void *elfBinary) {
-  return NanoappLoader::create(elfBinary);
+  return chre::NanoappLoader::create(elfBinary);
 }
 
 void *dlsym(void *handle, const char *symbol) {
   LOGV("Attempting to find %s", symbol);
 
   void *resolvedSymbol = nullptr;
-  auto *loader = reinterpret_cast<NanoappLoader *>(handle);
-  if (loader != nullptr) {
+  if (handle == RTLD_NEXT) {
+    resolvedSymbol = chre::NanoappLoader::findExportedSymbol(symbol);
+  } else if (handle != nullptr) {
+    auto *loader = reinterpret_cast<chre::NanoappLoader *>(handle);
     resolvedSymbol = loader->findSymbolByName(symbol);
+  }
+
+  if (resolvedSymbol == nullptr) {
+    LOGE("dlsym unable to resolve %s", symbol);
+  } else {
     LOGV("Found symbol at %p", resolvedSymbol);
   }
+
   return resolvedSymbol;
 }
 
 int dlclose(void *handle) {
   int rv = -1;
-  UniquePtr<NanoappLoader> loader = static_cast<NanoappLoader *>(handle);
+  chre::UniquePtr<chre::NanoappLoader> loader =
+      static_cast<chre::NanoappLoader *>(handle);
 
   if (!loader.isNull()) {
     loader->close();
@@ -54,5 +61,3 @@ int dlclose(void *handle) {
 const char *dlerror() {
   return "Shared library load failed";
 }
-
-}  // namespace chre

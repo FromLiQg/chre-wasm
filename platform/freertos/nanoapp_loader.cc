@@ -102,6 +102,17 @@ void *NanoappLoader::create(void *elfInput) {
   return instance;
 }
 
+void *NanoappLoader::findExportedSymbol(const char *name) {
+  for (size_t i = 0; i < ARRAY_SIZE(gExportedData); i++) {
+    if (strncmp(name, gExportedData[i].dataName,
+                strlen(gExportedData[i].dataName)) == 0) {
+      return gExportedData[i].data;
+    }
+  }
+
+  return nullptr;
+}
+
 bool NanoappLoader::open() {
   bool success = false;
   if (mBinary.dataPtr != nullptr) {
@@ -524,15 +535,7 @@ void *NanoappLoader::resolveData(size_t posInSymbolTable) {
 
   if (dataName != nullptr) {
     LOGV("Resolving %s", dataName);
-
-    for (size_t i = 0; i < ARRAY_SIZE(gExportedData); i++) {
-      if (strncmp(dataName, gExportedData[i].dataName,
-                  strlen(gExportedData[i].dataName)) == 0) {
-        return gExportedData[i].data;
-      }
-    }
-
-    LOGE("%s not found!", dataName);
+    return findExportedSymbol(dataName);
   }
 
   return nullptr;

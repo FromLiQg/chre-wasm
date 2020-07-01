@@ -16,11 +16,6 @@ COMMON_C_CFLAGS += $(CFLAGS)
 TARGET_SO_LDFLAGS += $(LDFLAGS)
 TARGET_SO_EARLY_LIBS += $(LDLIBS)
 
-TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/bionic_interface/include
-TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/basic/include
-TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/libc/include
-TARGET_CFLAGS += -I$(AOC_TOP_DIR)/external/libcxx/include
-
 # TODO: Fix ar_client so the following two can be removed.
 TARGET_CFLAGS += -Wno-strict-prototypes
 TARGET_CFLAGS += -Wno-missing-prototypes
