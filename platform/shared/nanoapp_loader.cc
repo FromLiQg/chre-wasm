@@ -17,7 +17,7 @@
 #include <cmath>
 #include <cstring>
 
-#include "chre/platform/freertos/nanoapp_loader.h"
+#include "chre/platform/shared/nanoapp_loader.h"
 
 #include "ash.h"
 #include "chre.h"
