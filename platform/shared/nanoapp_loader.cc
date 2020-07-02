@@ -17,7 +17,7 @@
 #include <cmath>
 #include <cstring>
 
-#include "chre/platform/freertos/nanoapp_loader.h"
+#include "chre/platform/shared/nanoapp_loader.h"
 
 #include "ash.h"
 #include "chre.h"
@@ -100,6 +100,17 @@ void *NanoappLoader::create(void *elfInput) {
     LOG_OOM();
   }
   return instance;
+}
+
+void *NanoappLoader::findExportedSymbol(const char *name) {
+  for (size_t i = 0; i < ARRAY_SIZE(gExportedData); i++) {
+    if (strncmp(name, gExportedData[i].dataName,
+                strlen(gExportedData[i].dataName)) == 0) {
+      return gExportedData[i].data;
+    }
+  }
+
+  return nullptr;
 }
 
 bool NanoappLoader::open() {
@@ -524,15 +535,7 @@ void *NanoappLoader::resolveData(size_t posInSymbolTable) {
 
   if (dataName != nullptr) {
     LOGV("Resolving %s", dataName);
-
-    for (size_t i = 0; i < ARRAY_SIZE(gExportedData); i++) {
-      if (strncmp(dataName, gExportedData[i].dataName,
-                  strlen(gExportedData[i].dataName)) == 0) {
-        return gExportedData[i].data;
-      }
-    }
-
-    LOGE("%s not found!", dataName);
+    return findExportedSymbol(dataName);
   }
 
   return nullptr;

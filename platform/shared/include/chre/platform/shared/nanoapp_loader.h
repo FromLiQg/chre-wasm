@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_PLATFORM_FREERTOS_NANOAPP_LOADER_H_
-#define CHRE_PLATFORM_FREERTOS_NANOAPP_LOADER_H_
+#ifndef CHRE_PLATFORM_SHARED_NANOAPP_LOADER_H_
+#define CHRE_PLATFORM_SHARED_NANOAPP_LOADER_H_
 
 #include <cinttypes>
 #include <cstdlib>
@@ -48,6 +48,16 @@ class NanoappLoader {
    * nullptr otherwise.
    */
   static void *create(void *elfInput);
+
+  /**
+   * Attempts to locate the exported symbol specified by the given function
+   * name.
+   *
+   * @param name A null-terminated char array that is the name of the function
+   *     to be found.
+   * @return The address of the function. nullptr if not found.
+   */
+  static void *findExportedSymbol(const char *name);
 
   /**
    * Closes the loader, freeing any state associated with the loaded ELF binary
@@ -297,4 +307,4 @@ class NanoappLoader {
 
 }  // namespace chre
 
-#endif  // CHRE_PLATFORM_FREERTOS_NANOAPP_LOADER_H_
+#endif  // CHRE_PLATFORM_SHARED_NANOAPP_LOADER_H_

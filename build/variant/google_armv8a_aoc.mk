@@ -36,6 +36,13 @@ include $(AOC_TOP_DIR)/AOC/targets/aoc.$(AOC_PLATFORM)/local.mk
 TARGET_CFLAGS = -DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000
 TARGET_CFLAGS += $(AOC_CFLAGS)
 TARGET_CFLAGS += $(FREERTOS_CFLAGS)
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/bionic_interface/include
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/basic/include
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/libc/include
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/external/libcxx/include
+
+# Used to expose libc headers to nanoapps that aren't supported on the given platform
+TARGET_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
 
 # add platform specific flags
 ifeq ($(AOC_PLATFORM),linux)
@@ -67,9 +74,9 @@ ARMV8A_LD = $(LD)
 
 ifneq ($(IS_NANOAPP_BUILD),)
 include $(CHRE_PREFIX)/build/nanoapp/google_aoc.mk
-
-# TODO: Remove once dynamic loading is implemented.
-TARGET_CFLAGS += -DCHRE_NANOAPP_DISABLE_BACKCOMPAT
+ifeq ($(CHRE_TCM_ENABLED),true)
+TARGET_CFLAGS += -DCHRE_TCM_ENABLED
+endif
 endif
 
 include $(CHRE_PREFIX)/build/arch/armv8a.mk
