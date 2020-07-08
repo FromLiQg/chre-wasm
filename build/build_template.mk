@@ -139,7 +139,7 @@ endif
 #   uint32_t magic;                // "NANO"
 #   uint64_t appId;                // App Id, contains vendor id
 #   uint32_t appVersion;           // Version of the app
-#   uint32_t flags;                // Signed, encrypted
+#   uint32_t flags;                // Signed, encrypted, TCM-capable
 #   uint64_t hwHubType;            // Which hub type is this compiled for
 #   uint8_t targetChreApiMajorVersion; // CHRE API version
 #   uint8_t targetChreApiMinorVersion;
@@ -161,7 +161,7 @@ $$($$(1)_HEADER): $$(OUT)/$$$(1) $$($$$(1)_DIRS)
 	printf "%.8x " `$(BE_TO_LE_SCRIPT) 0x4f4e414e` >> $$@
 	printf "%.16x\n" `$(BE_TO_LE_SCRIPT) $(NANOAPP_ID)` >> $$@
 	printf "00000010  %.8x " `$(BE_TO_LE_SCRIPT) $(NANOAPP_VERSION)` >> $$@
-	printf "%.8x " `$(BE_TO_LE_SCRIPT) 0x00000001` >> $$@
+	printf "%.8x " `$(BE_TO_LE_SCRIPT) $(TARGET_NANOAPP_FLAGS)` >> $$@
 	printf "%.16x\n" `$(BE_TO_LE_SCRIPT) $(13)` >> $$@
 	printf "00000020  %.2x " \
 	    `$(BE_TO_LE_SCRIPT) $(TARGET_CHRE_API_VERSION_MAJOR)` >> $$@
@@ -265,6 +265,16 @@ endif
 
 TARGET_CFLAGS_LOCAL = $(TARGET_CFLAGS)
 TARGET_CFLAGS_LOCAL += -DCHRE_PLATFORM_ID=$(TARGET_PLATFORM_ID)
+
+# Default the nanoapp header flag values to signed if not overidden.
+# The current format is:
+# Signed                 = 0x00000001
+# Encrypted              = 0x00000002
+# TCM-capable            = 0x00000004
+#
+# Highest order half word reserved for the platform
+# Platform-specific bits = 0x0XXXXXXX - 0xFXXXXXXX
+TARGET_NANOAPP_FLAGS ?= 0x00000001
 $(eval $(call BUILD_TEMPLATE, $(TARGET_NAME), \
                               $(COMMON_CFLAGS) $(TARGET_CFLAGS_LOCAL), \
                               $(TARGET_CC), \

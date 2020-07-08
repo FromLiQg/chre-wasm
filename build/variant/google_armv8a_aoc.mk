@@ -76,6 +76,8 @@ ifneq ($(IS_NANOAPP_BUILD),)
 include $(CHRE_PREFIX)/build/nanoapp/google_aoc.mk
 ifeq ($(CHRE_TCM_ENABLED),true)
 TARGET_CFLAGS += -DCHRE_TCM_ENABLED
+# Flags:  Signed | TCM
+TARGET_NANOAPP_FLAGS = 0x00000005
 endif
 endif
 
