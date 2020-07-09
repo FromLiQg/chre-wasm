@@ -103,20 +103,14 @@ class NanoappLoader {
   // TODO(karthikmb/stange): See about reducing this.
   static constexpr size_t kBinaryAlignment = 4096;
 
-  //! Pointer to the table of symbol names that need to be resolved.
-  char *mDynamicStringTablePtr;
   //! Pointer to the table of all the section names.
   char *mSectionNamesPtr;
   //! Pointer to the table of symbol names of defined symbols.
   char *mStringTablePtr;
-  //! Pointer to the table of symbol information for undefined symbols.
-  uint8_t *mDynamicSymbolTablePtr;
   //! Pointer to the table of symbol information for defined symbols.
   uint8_t *mSymbolTablePtr;
-  //! Size of the data pointed to by mDynamicSymbolTablePtr.
-  size_t mDynamicSymbolTableSize;
-  //! Number of ProgramHeaders pointed to by mProgramHeadersPtr.
-  size_t mNumProgramHeaders;
+  //! Pointer to the array of section header entries.
+  SectionHeader *mSectionHeadersPtr;
   //! Number of SectionHeaders pointed to by mSectionHeadersPtr.
   size_t mNumSectionHeaders;
   //! Size of the data pointed to by mSymbolTablePtr.
@@ -129,21 +123,9 @@ class NanoappLoader {
   NestedDataPtr<uintptr_t> mBinary;
   //! The starting location of the memory that has been mapped into the system.
   NestedDataPtr<uintptr_t> mMapping;
-  //! Pointer to the array of dynamic header entries.
-  DynamicHeader *mDynamicHeaderPtr;
   //! The difference between where the first load segment was mapped into
   //! virtual memory and what the virtual load offset was of that segment.
   ElfAddr mLoadBias;
-  //! Copy of the ELF header from the mapped binary.
-  ElfHeader mElfHeader;
-  //! Pointer to the array of program header entries.
-  ProgramHeader *mProgramHeadersPtr;
-  //! Pointer to the array of section header entries.
-  SectionHeader *mSectionHeadersPtr;
-  //! Header containing size and offset information of the string table.
-  SectionHeader mStringTableHeader;
-  //! Header containing size and offset information of the symbol table.
-  SectionHeader mSymbolTableHeader;
 
   /**
    * Invokes all initialization functions in .init_array segment.
@@ -178,20 +160,6 @@ class NanoappLoader {
    * @return true if all relocated symbols were resolved.
    */
   bool fixRelocations();
-
-  /**
-   * Creates a copy of the dynamic string table.
-   *
-   * @return true if the table was created.
-   */
-  bool initDynamicStringTable();
-
-  /**
-   * Creates a copy of the dynamic symbol table.
-   *
-   * @return true if the table was created.
-   */
-  bool initDynamicSymbolTable();
 
   /**
    * Resolves entries in the Global Offset Table (GOT) to facility the ELF's
@@ -293,6 +261,43 @@ class NanoappLoader {
    * @return The address of the section. nullptr if not found.
    */
   SectionHeader *getSectionHeader(const char *headerName);
+
+  /**
+   * @return The ELF header for the binary being loaded. nullptr if it doesn't
+   *    exist or no binary is being loaded.
+   */
+  ElfHeader *getElfHeader();
+
+  /**
+   * @return The array of program headers for the binary being loaded. nullptr
+   *    if it doesn't exist or no binary is being loaded.
+   */
+  ProgramHeader *getProgramHeaderArray();
+
+  /**
+   * @return The size of the array of program headers for the binary being
+   *    loaded. 0 if it doesn't exist or no binary is being loaded.
+   */
+  size_t getProgramHeaderArraySize();
+
+  /**
+   * @return An array of characters containing the symbol names for dynamic
+   *    symbols inside the binary being loaded. nullptr if it doesn't exist or
+   *    no binary is being loaded.
+   */
+  char *getDynamicStringTable();
+
+  /**
+   * @return An array of dynamic symbol information for the binary being loaded.
+   *     nullptr if it doesn't exist or no binary is being loaded.
+   */
+  uint8_t *getDynamicSymbolTable();
+
+  /**
+   * @return The size of the array of dynamic symbol information for the binary
+   *     being loaded. 0 if it doesn't exist or no binary is being loaded.
+   */
+  size_t getDynamicSymbolTableSize();
 
   /**
    * Returns the first entry in the dynamic header that has a tag that matches
