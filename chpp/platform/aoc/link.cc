@@ -21,5 +21,5 @@
 bool chppPlatformLinkSend(struct ChppPlatformLinkParameters *params,
                           uint8_t *buf, size_t len) {
   // TODO: Implement this
-  return params->sync;
+  return false;
 }
