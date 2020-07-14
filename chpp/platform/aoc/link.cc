@@ -23,3 +23,7 @@ bool chppPlatformLinkSend(struct ChppPlatformLinkParameters *params,
   // TODO: Implement this
   return false;
 }
+
+void chppPlatformLinkReset(struct ChppPlatformLinkParameters *params) {
+  // TODO: Implement this
+}
