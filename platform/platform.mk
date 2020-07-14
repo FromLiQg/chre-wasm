@@ -167,6 +167,14 @@ FREERTOS_CFLAGS += -Iplatform/shared/include
 
 # AoC-specific Source Files ####################################################
 
+AOC_SRCS += chpp/transport.c
+AOC_SRCS += chpp/app.c
+AOC_SRCS += chpp/services.c
+AOC_SRCS += chpp/clients.c
+AOC_SRCS += chpp/platform/pal_api.c
+AOC_SRCS += chpp/platform/aoc/link.cc
+AOC_SRCS += chpp/platform/aoc/memory.cc
+AOC_SRCS += chpp/platform/aoc/notifier.cc
 AOC_SRCS += platform/aoc/chre_api_re.cc
 AOC_SRCS += platform/aoc/fatal_error.cc
 AOC_SRCS += platform/aoc/host_link.cc
@@ -214,6 +222,9 @@ AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/core/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/core/fbs
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/pal/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/pal/efw/include
+
+AOC_CFLAGS += -Ichpp/include
+AOC_CFLAGS += -Ichpp/platform/aoc/include
 
 # We use FlatBuffers in the AOC platform layer
 AOC_CFLAGS += $(FLATBUFFERS_CFLAGS)
