@@ -26,9 +26,14 @@ extern "C" {
 
 #define CHPP_PLATFORM_TRANSPORT_TIMEOUT_MS 1000
 
+enum ChppLinkType {
+  CHPP_LINK_TYPE_WWAN = 0,
+  CHPP_LINK_TYPE_WIFI,
+  CHPP_LINK_TYPE_GNSS,
+};
+
 struct ChppPlatformLinkParameters {
-  size_t index;
-  bool sync;
+  enum ChppLinkType linkType;
 };
 
 #ifdef __cplusplus
