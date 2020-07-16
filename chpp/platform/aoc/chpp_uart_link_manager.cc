@@ -39,6 +39,28 @@ enum UART_MAP getUartMap(ChppLinkType linkType) {
   return UART_MAP::UART_MAP_TOT;
 }
 
+bool getWakeOutGpioPinNumber(ChppLinkType linkType, uint8_t *pinNumber) {
+  bool success = true;
+  switch (linkType) {
+    // Refer to pin_configuration.cc for mapping
+    case ChppLinkType::CHPP_LINK_TYPE_WIFI:
+      *pinNumber = 43;
+      break;
+    case ChppLinkType::CHPP_LINK_TYPE_GNSS:
+      *pinNumber = 86;
+      break;
+    case ChppLinkType::CHPP_LINK_TYPE_WWAN:
+      // TODO: Needs to be defined
+    default:
+      CHPP_LOGE("No valid wake_out pin number found for link type %d",
+                linkType);
+      success = false;
+      CHPP_ASSERT(false);
+  }
+
+  return success;
+}
+
 }  // anonymous namespace
 
 UartLinkManager::UartLinkManager(ChppPlatformLinkParameters *params) {
@@ -47,6 +69,18 @@ UartLinkManager::UartLinkManager(ChppPlatformLinkParameters *params) {
     CHPP_LOGE("UART was null for link type %d", params->linkType);
   }
   CHPP_ASSERT(mUart != nullptr);
+
+  uint8_t pinNumber;
+  if (getWakeOutGpioPinNumber(params->linkType, &pinNumber)) {
+    mWakeOutGpio = GPIOAoC(pinNumber);
+    mWakeOutGpio->SetDirection(GPIO::DIRECTION::OUTPUT);
+    mWakeOutGpio->Clear();
+  }
+
+  if (!isInitialized()) {
+    CHPP_LOGE("Failed to initialize UartLinkManager for link type %d",
+              params->linkType);
+  }
 }
 
 bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
@@ -61,15 +95,31 @@ bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
 }
 
 void UartLinkManager::startTransaction() {
-  // TODO: Add wake handshaking
+  mWakeOutGpio->Set(true /* set */);
+
+  // TODO: Wait for wake_in GPIO high
+
   if (hasTxPacket()) {
     int bytesTransmitted = mUart->Tx(mCurrentBuffer, mCurrentBufferLen);
+
+    // Deassert wake_out as soon as data is transmitted, per specifications.
+    mWakeOutGpio->Clear();
+
     if (static_cast<size_t>(bytesTransmitted) != mCurrentBufferLen) {
       CHPP_LOGE("Failed to transmit data");
     }
     // TODO: Inform CHPP transport layer of the transmission result
     clearTxPacket();
+  } else {
+    // TODO: Wait for pulse width requirement per specifications.
+    mWakeOutGpio->Clear();
   }
+
+  // TODO: Wait for wake_in GPIO low
+}
+
+bool UartLinkManager::isInitialized() const {
+  return mUart != nullptr && mWakeOutGpio.has_value();
 }
 
 bool UartLinkManager::hasTxPacket() const {
