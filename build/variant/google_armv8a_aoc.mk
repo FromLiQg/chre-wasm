@@ -36,10 +36,13 @@ include $(AOC_TOP_DIR)/AOC/targets/aoc.$(AOC_PLATFORM)/local.mk
 TARGET_CFLAGS = -DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000
 TARGET_CFLAGS += $(AOC_CFLAGS)
 TARGET_CFLAGS += $(FREERTOS_CFLAGS)
-TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/bionic_interface/include
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/basic/include
-TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/libc/include
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/external/libcxx/include
+
+# libc / libm headers must be included after libcxx headers in case libcxx
+# headers utilize #include_next
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/bionic_interface/include
+TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/libc/include
 
 # Used to expose libc headers to nanoapps that aren't supported on the given platform
 TARGET_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
