@@ -20,9 +20,9 @@
 #include "chpp/memory.h"
 #include "chpp/notifier.h"
 
+// TODO: Use a more primitive construct, e.g. xTaskNotify/xTaskNotifyWait
 void chppPlatformNotifierInit(struct ChppNotifier *notifier) {
-  notifier->signaled = false;
-  notifier->shouldExit = false;
+  notifier->signal = 0;
   notifier->cvSemaphore.handle =
       xSemaphoreCreateBinaryStatic(&notifier->cvSemaphore.staticSemaphore);
   if (notifier->cvSemaphore.handle == nullptr) {
@@ -40,42 +40,32 @@ void chppPlatformNotifierDeinit(struct ChppNotifier *notifier) {
   }
 }
 
-bool chppPlatformNotifierWait(struct ChppNotifier *notifier) {
+uint32_t chppPlatformNotifierWait(struct ChppNotifier *notifier) {
   if (notifier->cvSemaphore.handle != nullptr) {
     chppMutexLock(&notifier->mutex);
 
-    while (!notifier->signaled && !notifier->shouldExit) {
+    while (notifier->signal == 0) {
       chppMutexUnlock(&notifier->mutex);
       const TickType_t timeout = portMAX_DELAY;  // block indefinitely
       xSemaphoreTake(notifier->cvSemaphore.handle, timeout);
       chppMutexLock(&notifier->mutex);
     }
-    notifier->signaled = false;
+    uint32_t signal = notifier->signal;
+    notifier->signal = 0;
 
-    bool shouldExit = notifier->shouldExit;
     chppMutexUnlock(&notifier->mutex);
-    return !shouldExit;
+    return signal;
   } else {
-    return false;
+    return 0;
   }
 }
 
-void chppPlatformNotifierEvent(struct ChppNotifier *notifier) {
+void chppPlatformNotifierSignal(struct ChppNotifier *notifier,
+                                uint32_t signal) {
   if (notifier->cvSemaphore.handle != nullptr) {
     chppMutexLock(&notifier->mutex);
 
-    notifier->signaled = true;
-    xSemaphoreGive(notifier->cvSemaphore.handle);
-
-    chppMutexUnlock(&notifier->mutex);
-  }
-}
-
-void chppPlatformNotifierExit(struct ChppNotifier *notifier) {
-  if (notifier->cvSemaphore.handle != nullptr) {
-    chppMutexLock(&notifier->mutex);
-
-    notifier->shouldExit = true;
+    notifier->signal |= signal;
     xSemaphoreGive(notifier->cvSemaphore.handle);
 
     chppMutexUnlock(&notifier->mutex);
