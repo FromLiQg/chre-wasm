@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_PLATFORM_FREERTOS_DRAM_UTIL_H_
-#define CHRE_PLATFORM_FREERTOS_DRAM_UTIL_H_
+#ifndef CHRE_PLATFORM_SHARED_DRAM_UTIL_H_
+#define CHRE_PLATFORM_SHARED_DRAM_UTIL_H_
 
-#include "chre/platform/freertos/memory.h"
+#include "chre/platform/shared/memory.h"
 #include "chre/util/non_copyable.h"
 
 namespace chre {
@@ -52,4 +52,4 @@ class DramGuard : public NonCopyable {
 
 }  // namespace chre
 
-#endif  // CHRE_PLATFORM_FREERTOS_DRAM_UTIL_H_
+#endif  // CHRE_PLATFORM_SHARED_DRAM_UTIL_H_

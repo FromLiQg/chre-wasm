@@ -22,7 +22,7 @@
 #include "ash.h"
 #include "chre.h"
 #include "chre/platform/assert.h"
-#include "chre/platform/freertos/memory.h"
+#include "chre/platform/shared/memory.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/macros.h"
 
@@ -93,17 +93,22 @@ ExportedData gExportedData[] = {
 
 void *NanoappLoader::create(void *elfInput) {
   void *instance = nullptr;
-  NanoappLoader *loader = memoryAlloc<NanoappLoader>(elfInput);
+  NanoappLoader *loader = memoryAllocDram<NanoappLoader>(elfInput);
   if (loader != nullptr) {
     if (loader->open()) {
       instance = loader;
     } else {
-      memoryFree(loader);
+      memoryFreeDram(loader);
     }
   } else {
     LOG_OOM();
   }
   return instance;
+}
+
+void NanoappLoader::destroy(NanoappLoader *loader) {
+  loader->close();
+  memoryFreeDram(loader);
 }
 
 void *NanoappLoader::findExportedSymbol(const char *name) {
@@ -207,11 +212,11 @@ uintptr_t NanoappLoader::roundDownToAlign(uintptr_t virtualAddr) {
 }
 
 void NanoappLoader::freeAllocatedData() {
-  memoryFree(mMapping.dataPtr);
-  memoryFree(mSectionHeadersPtr);
-  memoryFree(mSectionNamesPtr);
-  memoryFree(mSymbolTablePtr);
-  memoryFree(mStringTablePtr);
+  memoryFreeDram(mMapping.dataPtr);
+  memoryFreeDram(mSectionHeadersPtr);
+  memoryFreeDram(mSectionNamesPtr);
+  memoryFreeDram(mSymbolTablePtr);
+  memoryFreeDram(mStringTablePtr);
 }
 
 bool NanoappLoader::verifyElfHeader() {
@@ -370,7 +375,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
     offset = elfHeader->e_shoff;
     size_t sectionHeaderSizeBytes = sizeof(SectionHeader) * elfHeader->e_shnum;
     mSectionHeadersPtr =
-        static_cast<SectionHeader *>(memoryAlloc(sectionHeaderSizeBytes));
+        static_cast<SectionHeader *>(memoryAllocDram(sectionHeaderSizeBytes));
     if (mSectionHeadersPtr == nullptr) {
       success = false;
       LOG_OOM();
@@ -386,7 +391,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
   if (success) {
     SectionHeader &stringSection = mSectionHeadersPtr[elfHeader->e_shstrndx];
     size_t sectionSize = stringSection.sh_size;
-    mSectionNamesPtr = static_cast<char *>(memoryAlloc(sectionSize));
+    mSectionNamesPtr = static_cast<char *>(memoryAllocDram(sectionSize));
     if (mSectionNamesPtr == nullptr) {
       LOG_OOM();
       success = false;
@@ -410,7 +415,8 @@ bool NanoappLoader::copyAndVerifyHeaders() {
       LOGE("No symbols to resolve");
       success = false;
     } else {
-      mSymbolTablePtr = static_cast<uint8_t *>(memoryAlloc(mSymbolTableSize));
+      mSymbolTablePtr =
+          static_cast<uint8_t *>(memoryAllocDram(mSymbolTableSize));
       if (mSymbolTablePtr == nullptr) {
         LOG_OOM();
         success = false;
@@ -433,7 +439,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
       LOGE("No string table corresponding to symbols");
       success = false;
     } else {
-      mStringTablePtr = static_cast<char *>(memoryAlloc(stringTableSize));
+      mStringTablePtr = static_cast<char *>(memoryAllocDram(stringTableSize));
       if (mStringTablePtr == nullptr) {
         LOG_OOM();
         success = false;

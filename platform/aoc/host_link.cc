@@ -19,7 +19,7 @@
 #include "chre/core/host_comms_manager.h"
 #include "chre/core/settings.h"
 #include "chre/platform/aoc/system_time.h"
-#include "chre/platform/freertos/dram_util.h"
+#include "chre/platform/shared/dram_util.h"
 #include "chre/platform/shared/host_protocol_chre.h"
 #include "chre/platform/shared/nanoapp_load_manager.h"
 #include "chre/util/fixed_size_blocking_queue.h"

@@ -47,11 +47,9 @@ void *dlsym(void *handle, const char *symbol) {
 
 int dlclose(void *handle) {
   int rv = -1;
-  chre::UniquePtr<chre::NanoappLoader> loader =
-      static_cast<chre::NanoappLoader *>(handle);
 
-  if (!loader.isNull()) {
-    loader->close();
+  if (handle != nullptr) {
+    chre::NanoappLoader::destroy(static_cast<chre::NanoappLoader *>(handle));
     rv = 0;
   }
 

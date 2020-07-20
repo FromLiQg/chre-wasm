@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_PLATFORM_FREERTOS_MEMORY_H_
-#define CHRE_PLATFORM_FREERTOS_MEMORY_H_
+#ifndef CHRE_PLATFORM_SHARED_MEMORY_H_
+#define CHRE_PLATFORM_SHARED_MEMORY_H_
 
 #include <cstddef>
+#include <type_traits>
 
 namespace chre {
 
@@ -55,6 +56,20 @@ void memoryFreeDram(void *pointer);
  */
 bool requestDramAccess(bool enabled);
 
+/**
+ * Allocates memory in DRAM for an object of size T and constructs the object in
+ * the newly allocated object by forwarding the provided parameters.
+ */
+template <typename T, typename... Args>
+inline T *memoryAllocDram(Args &&... args) {
+  auto *storage = static_cast<T *>(memoryAllocDram(sizeof(T)));
+  if (storage != nullptr) {
+    new (storage) T(std::forward<Args>(args)...);
+  }
+
+  return storage;
+}
+
 }  // namespace chre
 
-#endif  // CHRE_PLATFORM_FREERTOS_MEMORY_H_
+#endif  // CHRE_PLATFORM_SHARED_MEMORY_H_

@@ -15,8 +15,8 @@
  */
 
 #include "chre/platform/platform_nanoapp.h"
-#include "chre/platform/freertos/dram_util.h"
-#include "chre/platform/freertos/memory.h"
+#include "chre/platform/shared/dram_util.h"
+#include "chre/platform/shared/memory.h"
 #include "chre/platform/shared/nanoapp_dso_util.h"
 #include "chre/platform/shared/nanoapp_loader.h"
 

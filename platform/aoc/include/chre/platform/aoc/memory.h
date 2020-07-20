@@ -19,7 +19,7 @@
 
 #include <cstddef>
 
-#include "chre/platform/freertos/memory.h"
+#include "chre/platform/shared/memory.h"
 
 namespace chre {
 
