@@ -90,6 +90,11 @@ bool PlatformNanoappBase::isLoaded() const {
           (mDsoHandle != nullptr));
 }
 
+bool PlatformNanoappBase::isDramApp() const {
+  // TODO: Determine if an app is in DRAM or not once SRAM is supported.
+  return true;
+}
+
 void PlatformNanoappBase::loadStatic(const struct chreNslNanoappInfo *appInfo) {
   CHRE_ASSERT(!isLoaded());
   mIsStatic = true;
