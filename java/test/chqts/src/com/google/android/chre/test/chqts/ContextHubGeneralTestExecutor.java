@@ -32,7 +32,11 @@ import org.junit.Assert;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -53,9 +57,9 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class ContextHubGeneralTestExecutor extends ContextHubClientCallback {
     public static final String TAG = "ContextHubGeneralTestExecutor";
 
-    private final NanoAppBinary mNanoAppBinary;
+    private final List<GeneralTestNanoApp> mGeneralTestNanoAppList;
 
-    private final long mNanoAppId;
+    private final Set<Long> mNanoAppIdSet;
 
     private ContextHubClient mContextHubClient;
 
@@ -71,17 +75,62 @@ public abstract class ContextHubGeneralTestExecutor extends ContextHubClientCall
 
     private long mThreadId;
 
+    /**
+     * A container class to describe a general_test nanoapp.
+     */
+    public static class GeneralTestNanoApp {
+        private final NanoAppBinary mNanoAppBinary;
+        private final ContextHubTestConstants.TestNames mTestName;
+
+        // Set to false if the nanoapp should not be loaded at init. An example of why this may be
+        // needed are for nanoapps that are loaded in the middle of the test execution, but still
+        // needs to be included in this test executor (e.g. deliver messages from it).
+        private final boolean mLoadAtInit;
+
+        public GeneralTestNanoApp(NanoAppBinary nanoAppBinary,
+                ContextHubTestConstants.TestNames testName) {
+            mTestName = testName;
+            mNanoAppBinary = nanoAppBinary;
+            mLoadAtInit = true;
+        }
+
+        public GeneralTestNanoApp(NanoAppBinary nanoAppBinary,
+                ContextHubTestConstants.TestNames testName, boolean loadAtInit) {
+            mTestName = testName;
+            mNanoAppBinary = nanoAppBinary;
+            mLoadAtInit = loadAtInit;
+        }
+
+        public NanoAppBinary getNanoAppBinary() {
+            return mNanoAppBinary;
+        }
+
+        public ContextHubTestConstants.TestNames getTestName() {
+            return mTestName;
+        }
+
+        public boolean loadAtInit() {
+            return mLoadAtInit;
+        }
+    }
+
+    /**
+     * Note that this constructor accepts multiple general_test nanoapps to test.
+     */
     public ContextHubGeneralTestExecutor(ContextHubManager manager, ContextHubInfo info,
-            NanoAppBinary binary) {
+            GeneralTestNanoApp... tests) {
         mContextHubManager = manager;
         mContextHubInfo = info;
-        mNanoAppBinary = binary;
-        mNanoAppId = mNanoAppBinary.getNanoAppId();
+        mGeneralTestNanoAppList = new ArrayList<>(Arrays.asList(tests));
+        mNanoAppIdSet = new HashSet<>();
+        for (GeneralTestNanoApp test : mGeneralTestNanoAppList) {
+            mNanoAppIdSet.add(test.getNanoAppBinary().getNanoAppId());
+        }
     }
 
     @Override
     public void onMessageFromNanoApp(ContextHubClient client, NanoAppMessage message) {
-        if (message.getNanoAppId() == mNanoAppId) {
+        if (mNanoAppIdSet.contains(message.getNanoAppId())) {
             NanoAppMessage realMessage = hackMessageFromNanoApp(message);
 
             int messageType = realMessage.getMessageType();
@@ -113,7 +162,7 @@ public abstract class ContextHubGeneralTestExecutor extends ContextHubClientCall
                     break;
 
                 default:
-                    handleMessageFromNanoApp(messageEnum, data);
+                    handleMessageFromNanoApp(message.getNanoAppId(), messageEnum, data);
             }
         }
     }
@@ -128,7 +177,13 @@ public abstract class ContextHubGeneralTestExecutor extends ContextHubClientCall
         Assert.assertTrue(mContextHubClient != null);
 
         unloadAllNanoApps();
-        ChreTestUtil.loadNanoAppAssertSuccess(mContextHubManager, mContextHubInfo, mNanoAppBinary);
+
+        for (GeneralTestNanoApp test : mGeneralTestNanoAppList) {
+            if (test.loadAtInit()) {
+                ChreTestUtil.loadNanoAppAssertSuccess(mContextHubManager, mContextHubInfo,
+                        test.getNanoAppBinary());
+            }
+        }
 
         mErrorString.set(null);
 
@@ -138,10 +193,16 @@ public abstract class ContextHubGeneralTestExecutor extends ContextHubClientCall
     /**
      * Run the test.
      */
-    public void run(ContextHubTestConstants.TestNames testName, long timeoutSeconds) {
+    public void run(long timeoutSeconds) {
         mThreadId = Thread.currentThread().getId();
         mCountDownLatch = new CountDownLatch(1);
-        sendMessageToNanoAppOrFail(testName.asInt(), new byte[0] /* data */);
+
+        for (GeneralTestNanoApp test : mGeneralTestNanoAppList) {
+            if (test.loadAtInit()) {
+                sendMessageToNanoAppOrFail(test.getNanoAppBinary().getNanoAppId(),
+                        test.getTestName().asInt(), new byte[0] /* data */);
+            }
+        }
 
         boolean success = false;
         try {
@@ -168,7 +229,11 @@ public abstract class ContextHubGeneralTestExecutor extends ContextHubClientCall
 
         // TODO: If the nanoapp aborted (i.e. test failed), wait for CHRE reset or nanoapp abort
         // callback, and otherwise assert unload success.
-        mContextHubManager.unloadNanoApp(mContextHubInfo, mNanoAppId);
+        for (GeneralTestNanoApp test : mGeneralTestNanoAppList) {
+            mContextHubManager.unloadNanoApp(mContextHubInfo,
+                    test.getNanoAppBinary().getNanoAppId());
+        }
+
         mContextHubClient.close();
         mContextHubClient = null;
 
@@ -182,12 +247,13 @@ public abstract class ContextHubGeneralTestExecutor extends ContextHubClientCall
     /**
      * Sends a message to the test nanoapp.
      *
-     * @param type The message type.
-     * @param data The message payload.
+     * @param nanoAppId The 64-bit ID of the nanoapp to send the message to.
+     * @param type      The message type.
+     * @param data      The message payload.
      */
-    protected void sendMessageToNanoAppOrFail(int type, byte[] data) {
+    protected void sendMessageToNanoAppOrFail(long nanoAppId, int type, byte[] data) {
         NanoAppMessage message = NanoAppMessage.createMessageToNanoApp(
-                mNanoAppId, type, data);
+                nanoAppId, type, data);
 
         int result = mContextHubClient.sendMessageToNanoApp(hackMessageToNanoApp(message));
         if (result != ContextHubTransaction.RESULT_SUCCESS) {
@@ -227,6 +293,13 @@ public abstract class ContextHubGeneralTestExecutor extends ContextHubClientCall
         }
     }
 
+    /**
+     * Semantics are the same as Assert.assertFalse.
+     */
+    protected void assertFalse(String errorMessage, boolean condition) {
+        assertTrue(errorMessage, !condition);
+    }
+
     protected ContextHubManager getContextHubManager() {
         return mContextHubManager;
     }
@@ -235,18 +308,15 @@ public abstract class ContextHubGeneralTestExecutor extends ContextHubClientCall
         return mContextHubInfo;
     }
 
-    protected long getNanoAppId() {
-        return mNanoAppId;
-    }
-
     /**
      * Handles a message specific for a test.
      *
-     * @param type The message type.
-     * @param data The message body.
+     * @param nanoAppId The 64-bit ID of the nanoapp sending the message.
+     * @param type      The message type.
+     * @param data      The message body.
      */
     protected abstract void handleMessageFromNanoApp(
-            ContextHubTestConstants.MessageType type, byte[] data);
+            long nanoAppId, ContextHubTestConstants.MessageType type, byte[] data);
 
     private void unloadAllNanoApps() {
         List<NanoAppState> stateList =
