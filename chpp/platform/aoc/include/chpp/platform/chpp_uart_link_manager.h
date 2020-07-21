@@ -19,6 +19,8 @@
 
 #include "chpp/link.h"
 #include "chre/util/non_copyable.h"
+#include "chre/util/optional.h"
+#include "gpio_aoc.h"
 #include "uart.h"
 
 namespace chpp {
@@ -28,7 +30,23 @@ namespace chpp {
  * physical layer. Each physical link must instantiate its own instance of
  * the UartLinkManager.
  *
- * TODO: Add details of the wake handshaking protocol this class implements.
+ * This class implements the wake handshaking protocol as follows. Each endpoint
+ * is expected to have a wake_in and wake_out GPIO and a bidirectional UART
+ * link.
+ *
+ * 1) A transaction begins by a request to transmit a packet from either
+ * end of the link. If the local endpoint has data to transmit, it must notify
+ * the remote endpoint by asserting its wake_out GPIO. Consequently, a request
+ * from the remote endpoint is driven by an IRQ from the wake_in GPIO.
+ *
+ * 2) If a packet is pending, it can be transmitted once the remote end has
+ * asserted its wake_out GPIO. Otherwise, the wake_out GPIO pulse should be
+ * asserted for at least the duration to satisfy the pulse width requirements of
+ * the specification.
+ *
+ * 3) The wake_out GPIO can be deasserted once the transmission is complete (if
+ * any). No transaction can begin until the current one has completed, and both
+ * GPIOs have been deasserted.
  */
 class UartLinkManager : public chre::NonCopyable {
  public:
@@ -36,6 +54,14 @@ class UartLinkManager : public chre::NonCopyable {
    * @param params The link parameters supplied to the CHPP link layer.
    */
   UartLinkManager(ChppPlatformLinkParameters *params);
+
+  /**
+   * No other public member functions in this class may be called if this method
+   * returns false.
+   *
+   * @return true if the UartLinkManager successfully initialized.
+   */
+  bool isInitialized() const;
 
   /**
    * @param buf The non-null pointer to the buffer.
@@ -55,6 +81,8 @@ class UartLinkManager : public chre::NonCopyable {
 
  private:
   UART *mUart = nullptr;
+
+  chre::Optional<GPIOAoC> mWakeOutGpio;
 
   //! The pointer to the currently pending TX packet.
   uint8_t *mCurrentBuffer = nullptr;
