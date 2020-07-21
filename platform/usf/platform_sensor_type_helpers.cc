@@ -163,4 +163,21 @@ bool PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
   return success;
 }
 
+uint8_t PlatformSensorTypeHelpersBase::convertUsfToChreSampleAccuracy(
+    usf::UsfSampleAccuracy usfSampleAccuracy) {
+  switch (usfSampleAccuracy) {
+    case usf::kUsfSampleAccuracyUnreliable:
+      return CHRE_SENSOR_ACCURACY_UNRELIABLE;
+    case usf::kUsfSampleAccuracyLow:
+      return CHRE_SENSOR_ACCURACY_LOW;
+    case usf::kUsfSampleAccuracyMedium:
+      return CHRE_SENSOR_ACCURACY_MEDIUM;
+    case usf::kUsfSampleAccuracyHigh:
+      return CHRE_SENSOR_ACCURACY_HIGH;
+    case usf::kUsfSampleAccuracyUnknown:
+    default:
+      return CHRE_SENSOR_ACCURACY_UNKNOWN;
+  }
+}
+
 }  // namespace chre

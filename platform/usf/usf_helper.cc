@@ -622,7 +622,9 @@ UniquePtr<struct chreSensorThreeAxisData> UsfHelper::convertUsfBiasUpdateToData(
     } else {
       biasData->header.baseTimestamp = data.timestamp;
       biasData->header.readingCount = 1;
-      // TODO(150308661): Provide accuracy value
+      biasData->header.accuracy =
+          PlatformSensorTypeHelpersBase::convertUsfToChreSampleAccuracy(
+              update->GetAccuracy());
       biasData->header.reserved = 0;
       for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
         biasData->readings[0].bias[i] = data.bias[i];
