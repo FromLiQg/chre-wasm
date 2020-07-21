@@ -19,7 +19,6 @@
 
 #include "chpp/link.h"
 #include "chre/util/non_copyable.h"
-#include "chre/util/optional.h"
 #include "gpio_aoc.h"
 #include "uart.h"
 
@@ -51,17 +50,10 @@ namespace chpp {
 class UartLinkManager : public chre::NonCopyable {
  public:
   /**
-   * @param params The link parameters supplied to the CHPP link layer.
+   * @param uart The pointer to the UART instance.
+   * @param wakeOutPinNumber The pin number of the wake_out GPIO.
    */
-  UartLinkManager(ChppPlatformLinkParameters *params);
-
-  /**
-   * No other public member functions in this class may be called if this method
-   * returns false.
-   *
-   * @return true if the UartLinkManager successfully initialized.
-   */
-  bool isInitialized() const;
+  UartLinkManager(UART *uart, uint8_t wakeOutPinNumber);
 
   /**
    * @param buf The non-null pointer to the buffer.
@@ -82,7 +74,7 @@ class UartLinkManager : public chre::NonCopyable {
  private:
   UART *mUart = nullptr;
 
-  chre::Optional<GPIOAoC> mWakeOutGpio;
+  GPIOAoC mWakeOutGpio;
 
   //! The pointer to the currently pending TX packet.
   uint8_t *mCurrentBuffer = nullptr;

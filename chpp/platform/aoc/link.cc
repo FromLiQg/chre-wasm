@@ -18,9 +18,7 @@
 
 #include "chpp/macros.h"
 
-void chppPlatformLinkInit(struct ChppPlatformLinkParameters *params) {
-  // TODO: Implement this
-}
+void chppPlatformLinkInit(struct ChppPlatformLinkParameters *params) {}
 
 void chppPlatformLinkDeinit(struct ChppPlatformLinkParameters *params) {
   // TODO: Implement this
