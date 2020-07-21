@@ -18,6 +18,14 @@
 
 #include "chpp/macros.h"
 
+void chppPlatformLinkInit(struct ChppPlatformLinkParameters *params) {
+  // TODO: Implement this
+}
+
+void chppPlatformLinkDeinit(struct ChppPlatformLinkParameters *params) {
+  // TODO: Implement this
+}
+
 bool chppPlatformLinkSend(struct ChppPlatformLinkParameters *params,
                           uint8_t *buf, size_t len) {
   // TODO: Implement this
