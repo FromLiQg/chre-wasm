@@ -17,6 +17,9 @@
 #include "chpp/link.h"
 
 #include "chpp/macros.h"
+#include "chpp/platform/chpp_uart_link_manager.h"
+
+using chpp::UartLinkManager;
 
 void chppPlatformLinkInit(struct ChppPlatformLinkParameters *params) {}
 
@@ -26,8 +29,18 @@ void chppPlatformLinkDeinit(struct ChppPlatformLinkParameters *params) {
 
 enum ChppLinkErrorCode chppPlatformLinkSend(
     struct ChppPlatformLinkParameters *params, uint8_t *buf, size_t len) {
-  // TODO: Implement this
-  return CHPP_LINK_ERROR_NONE_SENT;
+  bool success = false;
+
+  UartLinkManager *manager =
+      static_cast<UartLinkManager *>(params->uartLinkManager);
+  if (manager->prepareTxPacket(buf, len)) {
+    // TODO: Consider some other cases where asynchronous reporting
+    // is necessary, e.g. delayed transaction when waiting for a
+    // timeout.
+    success = manager->startTransaction();
+  }
+
+  return success ? CHPP_LINK_ERROR_NONE_SENT : CHPP_LINK_ERROR_UNSPECIFIED;
 }
 
 void chppPlatformLinkDoWork(struct ChppPlatformLinkParameters *params,

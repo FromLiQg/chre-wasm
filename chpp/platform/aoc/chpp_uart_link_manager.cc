@@ -38,7 +38,8 @@ bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
   return success;
 }
 
-void UartLinkManager::startTransaction() {
+bool UartLinkManager::startTransaction() {
+  bool success = true;
   mWakeOutGpio.Set(true /* set */);
 
   // TODO: Wait for wake_in GPIO high
@@ -51,8 +52,9 @@ void UartLinkManager::startTransaction() {
 
     if (static_cast<size_t>(bytesTransmitted) != mCurrentBufferLen) {
       CHPP_LOGE("Failed to transmit data");
+      success = false;
     }
-    // TODO: Inform CHPP transport layer of the transmission result
+
     clearTxPacket();
   } else {
     // TODO: Wait for pulse width requirement per specifications.
@@ -60,6 +62,7 @@ void UartLinkManager::startTransaction() {
   }
 
   // TODO: Wait for wake_in GPIO low
+  return success;
 }
 
 bool UartLinkManager::hasTxPacket() const {

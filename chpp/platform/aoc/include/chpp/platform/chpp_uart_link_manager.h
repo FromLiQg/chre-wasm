@@ -68,8 +68,10 @@ class UartLinkManager : public chre::NonCopyable {
    * Starts a transaction to transmit any pending packets (if any, via a
    * previous call to prepareTxPacket()), and handles the wake handshaking
    * protocol.
+   *
+   * @return true if the transaction succeeded.
    */
-  void startTransaction();
+  bool startTransaction();
 
  private:
   UART *mUart = nullptr;
