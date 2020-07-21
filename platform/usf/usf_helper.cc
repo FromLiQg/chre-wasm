@@ -604,15 +604,16 @@ UniquePtr<struct chreSensorThreeAxisData> UsfHelper::convertUsfBiasUpdateToData(
     const usf::UsfSensorTransformConfigEvent *update) {
   UniquePtr<struct chreSensorThreeAxisData> biasData;
   size_t index = getCalArrayIndex(update->GetSensor()->GetType());
-  if (index < kNumUsfCalSensors) {
+  if (index < kNumUsfCalSensors &&
+      update->GetLevel() == usf::kUsfSensorTransformRunTimeCalibration) {
     UsfCalData &data = mCalData[index];
     UsfErr err = usf::UsfTimeMgr::GetAndroidTimeNs(&data.timestamp);
     if (err != kErrNone) {
       LOG_USF_ERR(err);
     }
-    data.hasBias = true;
+    data.hasBias = (update->GetOffset() != nullptr);
     for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
-      data.bias[i] = update->GetOffset()[i];
+      data.bias[i] = data.hasBias ? update->GetOffset()[i] : 0;
     }
 
     biasData = MakeUniqueZeroFill<struct chreSensorThreeAxisData>();
