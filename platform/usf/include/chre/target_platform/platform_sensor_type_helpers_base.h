@@ -59,6 +59,8 @@ class PlatformSensorTypeHelpersBase {
   static usf::UsfSensorReportingMode getUsfReportingMode(ReportingMode mode);
   static bool convertUsfToChreSensorType(usf::UsfSensorType usfSensorType,
                                          uint8_t *chreSensorType);
+  static uint8_t convertUsfToChreSampleAccuracy(
+      usf::UsfSampleAccuracy usfSampleAccuracy);
 };
 
 }  // namespace chre
