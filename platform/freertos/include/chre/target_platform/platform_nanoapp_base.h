@@ -40,6 +40,11 @@ class PlatformNanoappBase {
   bool isLoaded() const;
 
   /**
+   * @return true if this app is loaded into DRAM.
+   */
+  bool isDramApp() const;
+
+  /**
    * Sets app info that will be used later when the app is loaded into the
    * system.
    *

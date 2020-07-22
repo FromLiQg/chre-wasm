@@ -20,7 +20,7 @@
 #include <cinttypes>
 #include <cstdlib>
 
-#include "chre/platform/freertos/loader_util.h"
+#include "chre/platform/shared/loader_util.h"
 
 #include "chre/util/nested_data_ptr.h"
 
@@ -50,6 +50,13 @@ class NanoappLoader {
   static void *create(void *elfInput);
 
   /**
+   * Closes and destroys the NanoappLoader instance.
+   *
+   * @param loader A non-null pointer to the loader that must be destroyed.
+   */
+  static void destroy(NanoappLoader *loader);
+
+  /**
    * Attempts to locate the exported symbol specified by the given function
    * name.
    *
@@ -58,13 +65,6 @@ class NanoappLoader {
    * @return The address of the function. nullptr if not found.
    */
   static void *findExportedSymbol(const char *name);
-
-  /**
-   * Closes the loader, freeing any state associated with the loaded ELF binary
-   * and unmapping it from memory. Prior to unmapping from memory, any static
-   * termination functions will be invoked.
-   */
-  void close();
 
   /**
    * Method for pointer lookup by symbol name. Only function pointers
@@ -82,6 +82,13 @@ class NanoappLoader {
    * @return true if all required opening steps were completed.
    */
   bool open();
+
+  /**
+   * Closes the loader, freeing any state associated with the loaded ELF binary
+   * and unmapping it from memory. Prior to unmapping from memory, any static
+   * termination functions will be invoked.
+   */
+  void close();
 
   using DynamicHeader = ElfW(Dyn);
   using ElfAddr = ElfW(Addr);

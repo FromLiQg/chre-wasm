@@ -15,16 +15,25 @@
  */
 
 #include "chre/platform/memory_manager.h"
+#include "chre/platform/shared/memory.h"
 #include "chre/util/memory.h"
 
 namespace chre {
 
-void *MemoryManager::doAlloc(Nanoapp * /*app*/, uint32_t bytes) {
-  return chre::memoryAlloc(bytes);
+void *MemoryManager::doAlloc(Nanoapp *app, uint32_t bytes) {
+  if (app->isDramApp()) {
+    return chre::memoryAllocDram(bytes);
+  } else {
+    return chre::memoryAlloc(bytes);
+  }
 }
 
-void MemoryManager::doFree(Nanoapp * /*app*/, void *ptr) {
-  chre::memoryFree(ptr);
+void MemoryManager::doFree(Nanoapp *app, void *ptr) {
+  if (app->isDramApp()) {
+    chre::memoryFreeDram(ptr);
+  } else {
+    chre::memoryFree(ptr);
+  }
 }
 
 }  // namespace chre

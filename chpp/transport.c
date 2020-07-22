@@ -20,6 +20,10 @@
 #include "chpp/clients/discovery.h"
 #include "chpp/link.h"
 
+//! Signals to use in ChppNotifier in this program.
+#define CHPP_SIGNAL_EXIT UINT32_C(1 << 0)
+#define CHPP_SIGNAL_TRANSPORT_EVENT UINT32_C(1 << 1)
+
 /************************************************
  *  Prototypes
  ***********************************************/
@@ -515,7 +519,7 @@ static void chppEnqueueTxPacket(struct ChppTransportState *context,
             packetCode);
 
   // Notifies the main CHPP Transport Layer to run chppTransportDoWork().
-  chppNotifierEvent(&context->notifier);
+  chppNotifierSignal(&context->notifier, CHPP_SIGNAL_TRANSPORT_EVENT);
 }
 
 /**
@@ -768,6 +772,15 @@ static bool chppEnqueueTxDatagram(struct ChppTransportState *context,
 }
 
 /**
+ * Resets the transport state, maintaining the link layer parameters.
+ */
+static void chppResetTransportContext(struct ChppTransportState *context) {
+  struct ChppPlatformLinkParameters params = context->linkParams;
+  memset(context, 0, sizeof(struct ChppTransportState));
+  context->linkParams = params;
+}
+
+/**
  * Re-initializes the CHPP transport and app layer states, e.g. when receiving a
  * reset packet.
  *
@@ -808,9 +821,7 @@ static void chppReset(struct ChppTransportState *transportContext,
   }
 
   // Reset Transport Layer
-  struct ChppPlatformLinkParameters linkParams = transportContext->linkParams;
-  memset(transportContext, 0, sizeof(struct ChppTransportState));
-  transportContext->linkParams = linkParams;
+  chppResetTransportContext(transportContext);
 
   // Initialize app layer
   chppAppInit(appContext, transportContext);
@@ -827,15 +838,17 @@ void chppTransportInit(struct ChppTransportState *transportContext,
   CHPP_NOT_NULL(transportContext);
   CHPP_NOT_NULL(appContext);
 
-  memset(transportContext, 0, sizeof(struct ChppTransportState));
+  chppResetTransportContext(transportContext);
   chppMutexInit(&transportContext->mutex);
   chppNotifierInit(&transportContext->notifier);
   transportContext->appContext = appContext;
+  chppPlatformLinkInit(&transportContext->linkParams);
 }
 
 void chppTransportDeinit(struct ChppTransportState *transportContext) {
   CHPP_NOT_NULL(transportContext);
 
+  chppPlatformLinkDeinit(&transportContext->linkParams);
   chppNotifierDeinit(&transportContext->notifier);
   chppMutexDeinit(&transportContext->mutex);
 
@@ -966,13 +979,22 @@ void chppEnqueueTxErrorDatagram(struct ChppTransportState *context,
 
 void chppWorkThreadStart(struct ChppTransportState *context) {
   chppTransportSendReset(context, CHPP_TRANSPORT_ATTR_RESET);
-  do {
-    chppTransportDoWork(context);
-  } while (chppNotifierWait(&context->notifier));
+  chppTransportDoWork(context);
+
+  while (true) {
+    uint32_t signal = chppNotifierWait(&context->notifier);
+
+    if (signal & CHPP_SIGNAL_EXIT) {
+      break;
+    }
+    if (signal & CHPP_SIGNAL_TRANSPORT_EVENT) {
+      chppTransportDoWork(context);
+    }
+  }
 }
 
 void chppWorkThreadStop(struct ChppTransportState *context) {
-  chppNotifierExit(&context->notifier);
+  chppNotifierSignal(&context->notifier, CHPP_SIGNAL_EXIT);
 }
 
 void chppLinkSendDoneCb(struct ChppPlatformLinkParameters *params) {
@@ -981,7 +1003,7 @@ void chppLinkSendDoneCb(struct ChppPlatformLinkParameters *params) {
 
   context->txStatus.linkBusy = false;
   if (context->txStatus.hasPacketsToSend) {
-    chppNotifierEvent(&context->notifier);
+    chppNotifierSignal(&context->notifier, CHPP_SIGNAL_TRANSPORT_EVENT);
   }
 }
 

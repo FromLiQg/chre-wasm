@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_PLATFORM_FREERTOS_LOADER_UTIL_H_
-#define CHRE_PLATFORM_FREERTOS_LOADER_UTIL_H_
+#ifndef CHRE_PLATFORM_SHARED_LOADER_UTIL_H_
+#define CHRE_PLATFORM_SHARED_LOADER_UTIL_H_
 
 // The below macros allow switching the ELF symbol type between 32/64-bit
 // depending on what the chipset supports.
@@ -233,4 +233,4 @@ typedef struct elf32_sym {
 #define PF_MASKOS 0x0ff00000
 #define PF_MASKPROC 0xf0000000
 
-#endif  // CHRE_PLATFORM_FREERTOS_LOADER_UTIL_H_
+#endif  // CHRE_PLATFORM_SHARED_LOADER_UTIL_H_

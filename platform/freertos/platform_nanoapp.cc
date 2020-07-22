@@ -15,8 +15,8 @@
  */
 
 #include "chre/platform/platform_nanoapp.h"
-#include "chre/platform/freertos/dram_util.h"
-#include "chre/platform/freertos/memory.h"
+#include "chre/platform/shared/dram_util.h"
+#include "chre/platform/shared/memory.h"
 #include "chre/platform/shared/nanoapp_dso_util.h"
 #include "chre/platform/shared/nanoapp_loader.h"
 
@@ -88,6 +88,11 @@ bool PlatformNanoappBase::isLoaded() const {
           ((mAppBinary != nullptr) && (mAppBinaryLen != 0) &&
            (mBytesLoaded == mAppBinaryLen)) ||
           (mDsoHandle != nullptr));
+}
+
+bool PlatformNanoappBase::isDramApp() const {
+  // TODO: Determine if an app is in DRAM or not once SRAM is supported.
+  return true;
 }
 
 void PlatformNanoappBase::loadStatic(const struct chreNslNanoappInfo *appInfo) {
