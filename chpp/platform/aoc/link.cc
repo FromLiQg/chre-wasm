@@ -26,10 +26,10 @@ void chppPlatformLinkDeinit(struct ChppPlatformLinkParameters *params) {
   // TODO: Implement this
 }
 
-bool chppPlatformLinkSend(struct ChppPlatformLinkParameters *params,
-                          uint8_t *buf, size_t len) {
+enum ChppLinkErrorCode chppPlatformLinkSend(
+    struct ChppPlatformLinkParameters *params, uint8_t *buf, size_t len) {
   // TODO: Implement this
-  return false;
+  return CHPP_LINK_ERROR_NONE_SENT;
 }
 
 void chppPlatformLinkReset(struct ChppPlatformLinkParameters *params) {
