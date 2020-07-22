@@ -39,6 +39,8 @@ class PlatformSensorManagerBase : public UsfHelperCallbackInterface {
       uint8_t sensorType,
       UniquePtr<struct chreSensorThreeAxisData> &&eventData) override;
 
+  void onHostWakeSuspendEvent(bool awake) override;
+
   /**
    * Converts the given UsfSensor into one or more CHRE sensors and adds them
    * to the given dynamic vector.

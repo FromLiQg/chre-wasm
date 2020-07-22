@@ -18,13 +18,18 @@
 
 namespace chre {
 
+PowerControlManagerBase::PowerControlManagerBase() : mHostIsAwake(true) {}
+
+void PowerControlManagerBase::onHostWakeSuspendEvent(bool /* awake */) {
+  // TODO: stubbed out, Implement this.
+}
+
 void PowerControlManager::postEventLoopProcess(size_t /* numPendingEvents */) {
   // TODO: stubbed out, Implement this.
 }
 
 bool PowerControlManager::hostIsAwake() {
-  // TODO: stubbed out, Implement this.
-  return true;
+  return mHostIsAwake;
 }
 
 }  // namespace chre

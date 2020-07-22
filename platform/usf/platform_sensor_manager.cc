@@ -278,6 +278,13 @@ void PlatformSensorManagerBase::onBiasUpdate(
   }
 }
 
+void PlatformSensorManagerBase::onHostWakeSuspendEvent(bool awake) {
+  EventLoopManagerSingleton::get()
+      ->getEventLoop()
+      .getPowerControlManager()
+      .onHostWakeSuspendEvent(awake);
+}
+
 void PlatformSensorManagerBase::addSensorsWithInfo(
     refcount::reffed_ptr<usf::UsfSensor> &usfSensor,
     DynamicVector<Sensor> *chreSensors) {
