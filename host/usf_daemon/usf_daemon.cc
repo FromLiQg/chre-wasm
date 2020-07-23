@@ -21,6 +21,7 @@
 #include <fstream>
 #include <thread>
 
+#include "usf/usf_android_time.h"
 #include "usf/usf_client.h"
 
 // Aliased for consistency with the way these symbols are referenced in
@@ -334,9 +335,19 @@ bool UsfChreDaemon::sendFragmentedNanoappLoad(
 }
 
 int64_t UsfChreDaemon::getTimeOffset(bool *success) {
-  LOGI("TODO: getTimeOffset is stubbed out, needs to be implemented");
-  *success = true;
-  return 0;
+  int64_t offset = 0;
+  uint64_t androidTimeNs;
+  uint64_t sensorCoreTimeNs;
+  usf::UsfErr err =
+      usf::UsfGetAndroidAndSensorCoreTime(&androidTimeNs, &sensorCoreTimeNs);
+  if (err != usf::kErrNone) {
+    LOGE("Get Android and sensor core time failed.");
+  } else {
+    offset = static_cast<int64_t>(androidTimeNs) -
+             static_cast<int64_t>(sensorCoreTimeNs);
+  }
+  *success = (err == usf::kErrNone);
+  return offset;
 }
 
 ChreLogMessageParserBase UsfChreDaemon::getLogMessageParser() {
