@@ -24,6 +24,7 @@
 #include "usf/error.h"
 #include "usf/fbs/usf_msg_sample_root_generated.h"
 #include "usf/reffed_ptr.h"
+#include "usf/usf_power.h"
 #include "usf/usf_sensor.h"
 #include "usf/usf_sensor_req.h"
 #include "usf/usf_transport_client.h"
@@ -74,6 +75,9 @@ class UsfHelperCallbackInterface {
   virtual void onBiasUpdate(
       uint8_t sensorType,
       UniquePtr<struct chreSensorThreeAxisData> &&eventData) = 0;
+
+  //! Invoked from the USF worker thread to provide an host wake suspend update.
+  virtual void onHostWakeSuspendEvent(bool awake) = 0;
 };
 
 //! Class that allows clients of UsfHelper that only want to listen for sensor
@@ -90,6 +94,8 @@ class SensorEventCallbackInterface : public UsfHelperCallbackInterface {
   void onBiasUpdate(
       uint8_t /*sensorType*/,
       UniquePtr<struct chreSensorThreeAxisData> && /*eventData*/) override {}
+
+  void onHostWakeSuspendEvent(bool /*awake*/) override {}
 };
 
 //! Default timeout to wait for the USF transport client to return a response
@@ -176,6 +182,13 @@ class UsfHelper {
       const refcount::reffed_ptr<usf::UsfSensor> &sensor);
 
   /**
+   * Registers the helper for AP power state update from USF.
+   *
+   * @return true if successful.
+   */
+  bool registerForApPowerStateUpdates();
+
+  /**
    * Unregisters the helper from bias updates from USF for the given sensor.
    * If not registered, this method is a no-op.
    *
@@ -233,6 +246,14 @@ class UsfHelper {
    * @param update Update containing latest bias information for a sensor.
    */
   void processBiasUpdate(const usf::UsfSensorTransformConfigEvent *update);
+
+  /**
+   * Process the AP power state update delivered through a  listener registered
+   * with USF.
+   *
+   * @param update Update containing the current AP power state.
+   */
+  void processApPowerStateUpdate(const usf::UsfApPowerStateEvent *update);
 
  private:
   /**

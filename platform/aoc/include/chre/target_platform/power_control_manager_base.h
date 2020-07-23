@@ -17,10 +17,26 @@
 #ifndef CHRE_PLATFORM_AOC_POWER_CONTROL_MANAGER_BASE_H
 #define CHRE_PLATFORM_AOC_POWER_CONTROL_MANAGER_BASE_H
 
+#include "chre/platform/atomic.h"
+
 namespace chre {
 
-// TODO: stubbed out, Implement this.
-class PowerControlManagerBase {};
+class PowerControlManagerBase {
+ public:
+  PowerControlManagerBase();
+
+  /**
+   * Updates internal wake/suspend flag and pushes awake/sleep notification
+   * to nanoapps that are listening for it.
+   *
+   * @param awake true if host is awake, otherwise suspended.
+   */
+  void onHostWakeSuspendEvent(bool awake);
+
+ protected:
+  //! Set to true if the host is awake, false if suspended.
+  AtomicBool mHostIsAwake;
+};
 
 }  // namespace chre
 
