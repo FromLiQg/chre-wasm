@@ -64,8 +64,6 @@ void SystemTimerBase::timerCallbackDispatch(void *context) {
     FATAL_ERROR("Null System Timer");
   }
 
-  LOGD("CHRE-AoC Timer Dispatch Thread started");
-
   while (true) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     if ((pTimer != nullptr) && (pTimer->mCallback != nullptr)) {
@@ -107,13 +105,6 @@ bool SystemTimer::set(SystemTimerCallback *callback, void *data,
     mCallback = callback;
     mData = data;
 
-    // TODO(karthikmb): The capping on the maximum delay is temporary,
-    // remove after b/157537617 is implemented. See the note on
-    // kMaxSupportedDelayNs for some additional context.
-    if (delay > kMaxSupportedDelayNs) {
-      delay = kMaxSupportedDelayNs;
-    }
-
     Timer *timer = Timer::Instance();
     int rc =
         timer->EventAddAtOffset(timer->NsToTicks(delay.toRawNanoseconds()),
@@ -130,7 +121,6 @@ bool SystemTimer::set(SystemTimerCallback *callback, void *data,
 }
 
 bool SystemTimer::cancel() {
-  // TODO: test this
   int rc = -1;
   if (mTimerHandle != nullptr) {
     rc = Timer::Instance()->EventRemove(mTimerHandle);
