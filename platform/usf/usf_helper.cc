@@ -71,7 +71,7 @@ void statusUpdateHandler(void *context, usf::UsfEvent *event) {
   const usf::UsfSensorSamplingEvent *updateEvent =
       static_cast<usf::UsfSensorSamplingEvent *>(event);
 
-  if (updateEvent != nullptr) {
+  if (context != nullptr && updateEvent != nullptr) {
     auto *mgr = static_cast<UsfHelper *>(context);
     mgr->processStatusUpdate(updateEvent);
   }
@@ -81,16 +81,20 @@ void biasUpdateHandler(void *context, usf::UsfEvent *event) {
   const auto *updateEvent =
       static_cast<usf::UsfSensorTransformConfigEvent *>(event);
 
-  if (updateEvent != nullptr) {
+  if (context != nullptr && updateEvent != nullptr) {
     auto *mgr = static_cast<UsfHelper *>(context);
     mgr->processBiasUpdate(updateEvent);
   }
 }
 
-// Commented out because of unused compiler error
-// void apPowerStateUpdateHandler(void *context, usf::UsfEvent *event) {
-// TODO: Implement
-// }
+void apPowerStateUpdateHandler(void *context, usf::UsfEvent *event) {
+  const auto *updateEvent = static_cast<usf::UsfApPowerStateEvent *>(event);
+
+  if (context != nullptr && updateEvent != nullptr) {
+    auto *mgr = static_cast<UsfHelper *>(context);
+    mgr->processApPowerStateUpdate(updateEvent);
+  }
+}
 
 void asyncCallback(usf::UsfReq *req, const usf::UsfResp *resp, void *data) {
   auto callbackData = static_cast<AsyncCallbackData *>(data);
@@ -402,8 +406,19 @@ bool UsfHelper::registerForBiasUpdates(
 }
 
 bool UsfHelper::registerForApPowerStateUpdates() {
-  // TODO: Implement
-  return true;
+  bool success = false;
+  if (!mUsfEventListeners.emplace_back()) {
+    LOG_OOM();
+  } else {
+    UsfErr err = usf::UsfPowerMgr::GetApPowerEventType()->AddListener(
+        mWorker.get(), apPowerStateUpdateHandler, this,
+        &mUsfEventListeners.back());
+    success = (err == kErrNone);
+    if (!success) {
+      LOG_USF_ERR(err);
+    }
+  }
+  return success;
 }
 
 void UsfHelper::unregisterForBiasUpdates(
@@ -565,7 +580,12 @@ void UsfHelper::processBiasUpdate(
 
 void UsfHelper::processApPowerStateUpdate(
     const usf::UsfApPowerStateEvent *update) {
-  // TODO: Implement
+  usf::UsfApPowerState state = update->GetState();
+  if (state == usf::kUsfApPowerStateInvalid) {
+    LOGE("Invalid AP power state received.");
+  } else {
+    mCallback->onHostWakeSuspendEvent(state == usf::kUsfApPowerStateOn);
+  }
 }
 
 bool UsfHelper::createSensorEvent(
