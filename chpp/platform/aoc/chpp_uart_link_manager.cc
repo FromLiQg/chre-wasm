@@ -21,10 +21,27 @@
 
 namespace chpp {
 
-UartLinkManager::UartLinkManager(UART *uart, uint8_t wakeOutPinNumber)
-    : mUart(uart), mWakeOutGpio(wakeOutPinNumber) {
+namespace {
+
+void onUartRxInterrupt(void *context) {
+  UartLinkManager *manager = static_cast<UartLinkManager *>(context);
+  manager->getUart()->DisableRxInterrupt();
+  chppWorkThreadSignalFromLink(&manager->getTransportContext()->linkParams,
+                               CHPP_TRANSPORT_SIGNAL_LINK_RX_PROCESS);
+}
+
+}  // anonymous namespace
+
+UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
+                                 uint8_t wakeOutPinNumber)
+    : mTransportContext(context), mUart(uart), mWakeOutGpio(wakeOutPinNumber) {
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
+}
+
+void UartLinkManager::init() {
+  mUart->RegisterRxCallback(onUartRxInterrupt, this);
+  mUart->EnableRxInterrupt();
 }
 
 bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
@@ -63,6 +80,17 @@ bool UartLinkManager::startTransaction() {
 
   // TODO: Wait for wake_in GPIO low
   return success;
+}
+
+void UartLinkManager::processRxSamples() {
+  int ch;
+  while ((ch = mUart->GetChar()) != EOF && mRxBufIndex < kRxBufSize) {
+    mRxBuf[mRxBufIndex++] = static_cast<uint8_t>(ch);
+  }
+
+  chppRxDataCb(mTransportContext, mRxBuf, mRxBufIndex);
+  mRxBufIndex = 0;
+  mUart->EnableRxInterrupt();
 }
 
 bool UartLinkManager::hasTxPacket() const {

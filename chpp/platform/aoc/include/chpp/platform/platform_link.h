@@ -21,6 +21,9 @@
 extern "C" {
 #endif
 
+//! A signal to use when there is RX data to process at the UART.
+#define CHPP_TRANSPORT_SIGNAL_LINK_RX_PROCESS UINT32_C(1 << 16)
+
 #define CHPP_PLATFORM_LINK_TX_MTU_BYTES 1280
 #define CHPP_PLATFORM_LINK_RX_MTU_BYTES 1280
 
