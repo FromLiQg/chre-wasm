@@ -18,6 +18,7 @@
 
 #include <chre.h>
 #include <stdio.h>
+#include "efw_log.h"
 
 #ifndef __FILENAME__
 #ifdef __BASE_FILE__
@@ -33,12 +34,13 @@
 
 // TODO(b/149317051): The printf in the below macro is needed until CHRE can log
 // to the AP before the daemon has connected to AoC.
-#define CHRE_AOC_LOG(level, fmt, ...)                                       \
-  do {                                                                      \
-    CHRE_LOG_PREAMBLE                                                       \
-    chre::log(level, fmt, ##__VA_ARGS__);                                   \
-    printf("CHRE:%s:%d\t" fmt "\n", __FILENAME__, __LINE__, ##__VA_ARGS__); \
-    CHRE_LOG_EPILOGUE                                                       \
+#define CHRE_AOC_LOG(level, fmt, ...)                               \
+  do {                                                              \
+    CHRE_LOG_PREAMBLE                                               \
+    chre::log(level, fmt, ##__VA_ARGS__);                           \
+    DBG_MSG_RAW(255, "CHRE:%s:%d\t" fmt "", __FILENAME__, __LINE__, \
+                ##__VA_ARGS__);                                     \
+    CHRE_LOG_EPILOGUE                                               \
   } while (0)
 
 #define LOGE(fmt, ...) CHRE_AOC_LOG(CHRE_LOG_ERROR, fmt, ##__VA_ARGS__)

@@ -87,6 +87,11 @@ void biasUpdateHandler(void *context, usf::UsfEvent *event) {
   }
 }
 
+// Commented out because of unused compiler error
+// void apPowerStateUpdateHandler(void *context, usf::UsfEvent *event) {
+// TODO: Implement
+// }
+
 void asyncCallback(usf::UsfReq *req, const usf::UsfResp *resp, void *data) {
   auto callbackData = static_cast<AsyncCallbackData *>(data);
   callbackData->callback->onFlushComplete(resp->GetErr(), req->GetReqId(),
@@ -398,6 +403,11 @@ bool UsfHelper::registerForBiasUpdates(
   return success;
 }
 
+bool UsfHelper::registerForApPowerStateUpdates() {
+  // TODO: Implement
+  return true;
+}
+
 void UsfHelper::unregisterForBiasUpdates(
     const refcount::reffed_ptr<usf::UsfSensor> &sensor) {
   for (size_t i = 0; i < mUsfEventListeners.size(); i++) {
@@ -551,6 +561,11 @@ void UsfHelper::processBiasUpdate(
       mCallback->onBiasUpdate(sensorType, std::move(biasData));
     }
   }
+}
+
+void UsfHelper::processApPowerStateUpdate(
+    const usf::UsfApPowerStateEvent *update) {
+  // TODO: Implement
 }
 
 bool UsfHelper::createSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
