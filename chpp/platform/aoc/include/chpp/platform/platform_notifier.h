@@ -17,29 +17,16 @@
 #ifndef CHPP_PLATFORM_SYNC_H_
 #define CHPP_PLATFORM_SYNC_H_
 
-#include "chpp/mutex.h"
-
-#include "chpp/platform/log.h"
 #include "FreeRTOS.h"
-#include "semphr.h"
+#include "task.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/**
- * Wrapper structure for a FreeRTOS semaphore, that includes
- * a static semaphore structure instance to avoid heap allocations
- */
-struct ChppSemaphore {
-  SemaphoreHandle_t handle;
-  StaticSemaphore_t staticSemaphore;
-};
-
 struct ChppNotifier {
-  struct ChppSemaphore cvSemaphore;
-  struct ChppMutex mutex;  // Platform-specific mutex
-  uint32_t signal;
+  //! The task that will be notified.
+  TaskHandle_t task;
 };
 
 /**

@@ -20,54 +20,23 @@
 #include "chpp/memory.h"
 #include "chpp/notifier.h"
 
-// TODO: Use a more primitive construct, e.g. xTaskNotify/xTaskNotifyWait
 void chppPlatformNotifierInit(struct ChppNotifier *notifier) {
-  notifier->signal = 0;
-  notifier->cvSemaphore.handle =
-      xSemaphoreCreateBinaryStatic(&notifier->cvSemaphore.staticSemaphore);
-  if (notifier->cvSemaphore.handle == nullptr) {
-    // TODO: Use CHPP_ASSERT
-    CHPP_LOGE("Failed to initialize CHPP notifier");
-  } else {
-    chppMutexInit(&notifier->mutex);
-  }
+  notifier->task = xTaskGetCurrentTaskHandle();
+  xTaskNotifyStateClear(notifier->task);
 }
 
-void chppPlatformNotifierDeinit(struct ChppNotifier *notifier) {
-  if (notifier->cvSemaphore.handle != nullptr) {
-    chppMutexDeinit(&notifier->mutex);
-    vSemaphoreDelete(notifier->cvSemaphore.handle);
-  }
-}
+void chppPlatformNotifierDeinit(struct ChppNotifier *notifier) {}
 
 uint32_t chppPlatformNotifierWait(struct ChppNotifier *notifier) {
-  if (notifier->cvSemaphore.handle != nullptr) {
-    chppMutexLock(&notifier->mutex);
-
-    while (notifier->signal == 0) {
-      chppMutexUnlock(&notifier->mutex);
-      const TickType_t timeout = portMAX_DELAY;  // block indefinitely
-      xSemaphoreTake(notifier->cvSemaphore.handle, timeout);
-      chppMutexLock(&notifier->mutex);
-    }
-    uint32_t signal = notifier->signal;
-    notifier->signal = 0;
-
-    chppMutexUnlock(&notifier->mutex);
-    return signal;
-  } else {
-    return 0;
-  }
+  uint32_t signal;
+  xTaskNotifyWait(0 /* ulBitsToClearOnEntry */,
+                  UINT32_MAX /* ulBitsToClearOnExit */, &signal,
+                  portMAX_DELAY /* xTicksToWait */);
+  return signal;
 }
 
 void chppPlatformNotifierSignal(struct ChppNotifier *notifier,
                                 uint32_t signal) {
-  if (notifier->cvSemaphore.handle != nullptr) {
-    chppMutexLock(&notifier->mutex);
-
-    notifier->signal |= signal;
-    xSemaphoreGive(notifier->cvSemaphore.handle);
-
-    chppMutexUnlock(&notifier->mutex);
-  }
+  // TODO: Handle interrupt context
+  xTaskNotify(notifier->task, signal, eSetBits);
 }
