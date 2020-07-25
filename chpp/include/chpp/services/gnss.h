@@ -14,12 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHPP_LOOPBACK_H_
-#define CHPP_LOOPBACK_H_
-
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
+#ifndef CHPP_GNSS_SERVICE_H_
+#define CHPP_GNSS_SERVICE_H_
 
 #include "chpp/app.h"
 
@@ -35,19 +31,22 @@ extern "C" {
  *  Public functions
  ***********************************************/
 
-/*
- * Processes an client request Rx datagram from the transport layer that is
- * determined to be for the CHPP Loopback Service.
+/**
+ * Called by the App layer to register the GNSS (GPS) common service.
  *
- * @param context Maintains status for each app layer instance.
- * @param buf Input data. Cannot be null.
- * @param len Length of input data in bytes.
+ * @param appContext Maintains status for each app layer instance.
  */
-bool chppDispatchLoopbackClientRequest(struct ChppAppState *context,
-                                       uint8_t *buf, size_t len);
+void chppRegisterGnssService(struct ChppAppState *appContext);
+
+/**
+ * Called by the App layer to deregister the GNSS (GPS) common service.
+ *
+ * @param appContext Maintains status for each app layer instance.
+ */
+void chppDeregisterGnssService(struct ChppAppState *appContext);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // CHPP_LOOPBACK_H_
+#endif  // CHPP_GNSS_SERVICE_H_

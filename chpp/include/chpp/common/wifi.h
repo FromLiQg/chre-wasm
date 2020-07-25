@@ -17,9 +17,11 @@
 #ifndef CHPP_WIFI_COMMON_H_
 #define CHPP_WIFI_COMMON_H_
 
-#include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
+
+#include "chpp/app.h"
+#include "chpp/macros.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,6 +30,8 @@ extern "C" {
 /************************************************
  *  Public Definitions
  ***********************************************/
+
+#define CHPP_PAL_WIFI_API_VERSION CHRE_PAL_WIFI_API_V1_2
 
 /**
  * Data structure used by the Get Capabilities Response.

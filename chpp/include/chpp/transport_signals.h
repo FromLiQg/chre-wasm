@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,31 +14,28 @@
  * limitations under the License.
  */
 
-#ifndef CHPP_PAL_API_H_
-#define CHPP_PAL_API_H_
+#ifndef CHPP_TRANSPORT_SIGNALS_H_
+#define CHPP_TRANSPORT_SIGNALS_H_
 
-#include "chpp/app.h"
+#include <stdint.h>
+
+#include "macros.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/**
- * Called by the App layer to initialize the PAL system APIs.
- *
- * @param context Maintains status for each app layer instance.
- */
-void chppPalSystemApiInit(struct ChppAppState *context);
+//! Signals to use in ChppNotifier in the CHPP transport work thread
+//! (ran in chppWorkThreadStart()).
+#define CHPP_TRANSPORT_SIGNAL_EXIT UINT32_C(1 << 0)
+#define CHPP_TRANSPORT_SIGNAL_EVENT UINT32_C(1 << 1)
 
-/**
- * Called by the App layer to deinitialize the PAL system APIs.
- *
- * @param context Maintains status for each app layer instance.
- */
-void chppPalSystemApiDeinit(struct ChppAppState *context);
+//! These bits are reserved for platform use (e.g. in the platform-specific
+//! link layer implementation).
+#define CHPP_TRANSPORT_SIGNAL_PLATFORM_MASK UINT32_C(0xFFFF0000)
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // CHPP_LOG_H_
+#endif  // CHPP_TRANSPORT_SIGNALS_H_
