@@ -15,6 +15,10 @@
  */
 
 #include "chpp/link.h"
+
+#include <stddef.h>
+#include <stdint.h>
+
 #include "chpp/macros.h"
 
 void chppPlatformLinkInit(struct ChppPlatformLinkParameters *params) {
@@ -32,6 +36,12 @@ enum ChppLinkErrorCode chppPlatformLinkSend(
   UNUSED_VAR(buf);
   UNUSED_VAR(len);
   return CHPP_LINK_ERROR_NONE_SENT;
+}
+
+void chppPlatformLinkDoWork(struct ChppPlatformLinkParameters *params,
+                            uint32_t signal) {
+  UNUSED_VAR(params);
+  UNUSED_VAR(signal);
 }
 
 void chppPlatformLinkReset(struct ChppPlatformLinkParameters *params) {

@@ -20,14 +20,11 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "chpp/link.h"
 #include "chpp/macros.h"
-#include "chpp/memory.h"
 #include "chpp/mutex.h"
 #include "chpp/notifier.h"
-#include "chpp/platform/log.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -341,7 +338,11 @@ struct ChppTransportState {
   struct ChppNotifier notifier;    // Notifier for main thread
   enum ChppResetState resetState;  // Maintains state of a reset
 
+  //! This MUST be the last field in the ChppTransportState structure, otherwise
+  //! chppResetTransportContext() will not work properly.
   struct ChppPlatformLinkParameters linkParams;  // For corresponding link layer
+
+  // !!! DO NOT ADD ANY NEW FIELDS HERE - ADD THEM BEFORE linkParams !!!
 };
 
 /************************************************
@@ -452,6 +453,17 @@ void chppEnqueueTxErrorDatagram(struct ChppTransportState *context,
  * @param context Maintains status for each transport layer instance.
  */
 void chppWorkThreadStart(struct ChppTransportState *context);
+
+/**
+ * Signals the main thread for CHPP's Transport Layer to perform some work. This
+ * method should only be called from the link layer.
+ *
+ * @param params Platform-specific struct with link details / parameters.
+ * @param signal The signal that describes the work to be performed. Only bits
+ * specified by CHPP_TRANSPORT_SIGNAL_PLATFORM_MASK can be set.
+ */
+void chppWorkThreadSignalFromLink(struct ChppPlatformLinkParameters *params,
+                                  uint32_t signal);
 
 /**
  * Stops the main thread for CHPP's Transport Layer that has been started by
