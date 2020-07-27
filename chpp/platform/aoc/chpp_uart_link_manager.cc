@@ -16,8 +16,11 @@
 
 #include "chpp/platform/chpp_uart_link_manager.h"
 
+#include "aoc.h"
 #include "chpp/macros.h"
 #include "chpp/platform/log.h"
+#include "efw/include/interrupt_controller.h"
+#include "efw/include/processor.h"
 #include "ipc-regions.h"
 
 namespace chpp {
@@ -31,13 +34,23 @@ void onUartRxInterrupt(void *context) {
                                CHPP_TRANSPORT_SIGNAL_LINK_RX_PROCESS);
 }
 
+void onWakeInNotifierInterrupt(void *context, uint32_t /* interrupt */) {
+  UartLinkManager *manager = static_cast<UartLinkManager *>(context);
+  manager->getWakeInGpi()->SetTriggerFunction(GPIAoC::GPI_DISABLE);
+  manager->getWakeInGpi()->ClearInterrupt();
+  chppWorkThreadSignalFromLink(&manager->getTransportContext()->linkParams,
+                               CHPP_TRANSPORT_SIGNAL_LINK_WAKE_IN_IRQ);
+}
+
 }  // anonymous namespace
 
 UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
-                                 uint8_t wakeOutPinNumber)
+                                 uint8_t wakeOutPinNumber,
+                                 uint8_t wakeInGpiNumber)
     : mTransportContext(context),
       mUart(uart),
-      mWakeOutGpio(wakeOutPinNumber, IP_LOCK_GPIO) {
+      mWakeOutGpio(wakeOutPinNumber, IP_LOCK_GPIO),
+      mWakeInGpi(wakeInGpiNumber) {
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
 }
@@ -45,6 +58,13 @@ UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
 void UartLinkManager::init() {
   mUart->RegisterRxCallback(onUartRxInterrupt, this);
   mUart->EnableRxInterrupt();
+
+  mWakeInGpi.SetInterruptHandler(onWakeInNotifierInterrupt, this);
+  // Use level triggered interrupts to handle possible race conditions.
+  mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
+  InterruptController::Instance()->InterruptEnable(
+      IRQ_GPI0 + mWakeInGpi.GetGpiNumber(), Processor::Instance()->CoreID(),
+      true /* enable */);
 }
 
 bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
@@ -82,6 +102,10 @@ bool UartLinkManager::startTransaction() {
   }
 
   // TODO: Wait for wake_in GPIO low
+
+  // Re-enable the one-shot interrupt
+  mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
+
   return success;
 }
 

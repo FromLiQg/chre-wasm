@@ -24,6 +24,9 @@ extern "C" {
 //! A signal to use when there is RX data to process at the UART.
 #define CHPP_TRANSPORT_SIGNAL_LINK_RX_PROCESS UINT32_C(1 << 16)
 
+//! A signal to use when there is an interrupt from the wake_in GPIO.
+#define CHPP_TRANSPORT_SIGNAL_LINK_WAKE_IN_IRQ UINT32_C(1 << 17)
+
 #define CHPP_PLATFORM_LINK_TX_MTU_BYTES 1280
 #define CHPP_PLATFORM_LINK_RX_MTU_BYTES 1280
 
