@@ -19,6 +19,7 @@
 #include "chpp/macros.h"
 #include "chpp/memory.h"
 #include "chpp/notifier.h"
+#include "efw/include/interrupt_controller.h"
 
 void chppPlatformNotifierInit(struct ChppNotifier *notifier) {
   notifier->task = xTaskGetCurrentTaskHandle();
@@ -37,6 +38,12 @@ uint32_t chppPlatformNotifierWait(struct ChppNotifier *notifier) {
 
 void chppPlatformNotifierSignal(struct ChppNotifier *notifier,
                                 uint32_t signal) {
-  // TODO: Handle interrupt context
-  xTaskNotify(notifier->task, signal, eSetBits);
+  if (InterruptController::Instance()->IsInterruptContext()) {
+    BaseType_t xHigherPriorityTaskWoken = 0;
+    xTaskNotifyFromISR(notifier->task, signal, eSetBits,
+                       &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  } else {
+    xTaskNotify(notifier->task, signal, eSetBits);
+  }
 }
