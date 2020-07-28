@@ -36,12 +36,6 @@ uint32_t chppPlatformNotifierWait(struct ChppNotifier *notifier) {
   return signal;
 }
 
-uint32_t chppPlatformNotifierTimedWait(struct ChppNotifier *notifier,
-                                       uint64_t /* timeoutNs */) {
-  // TODO: Implement this
-  return chppPlatformNotifierWait(notifier);
-}
-
 void chppPlatformNotifierSignal(struct ChppNotifier *notifier,
                                 uint32_t signal) {
   if (InterruptController::Instance()->IsInterruptContext()) {
