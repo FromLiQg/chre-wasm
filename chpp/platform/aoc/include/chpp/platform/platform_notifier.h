@@ -40,9 +40,11 @@ void chppPlatformNotifierInit(struct ChppNotifier *notifier);
 void chppPlatformNotifierDeinit(struct ChppNotifier *notifier);
 
 /**
- * Platform implementation of chppNotifierWait()
+ * Platform implementation of chppNotifier[Timed]Wait()
  */
 uint32_t chppPlatformNotifierWait(struct ChppNotifier *notifier);
+uint32_t chppPlatformNotifierTimedWait(struct ChppNotifier *notifier,
+                                       uint64_t timeoutNs);
 
 /**
  * Platform implementation of chppNotifierSignal()
@@ -59,6 +61,11 @@ static inline void chppNotifierDeinit(struct ChppNotifier *notifier) {
 
 static inline uint32_t chppNotifierWait(struct ChppNotifier *notifier) {
   return chppPlatformNotifierWait(notifier);
+}
+
+static inline uint32_t chppNotifierTimedWait(struct ChppNotifier *notifier,
+                                             uint64_t timeoutNs) {
+  return chppPlatformNotifierTimedWait(notifier, timeoutNs);
 }
 
 static inline void chppNotifierSignal(struct ChppNotifier *notifier,
