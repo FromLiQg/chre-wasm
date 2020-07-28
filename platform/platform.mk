@@ -172,6 +172,7 @@ AOC_SRCS += chpp/app.c
 AOC_SRCS += chpp/services.c
 AOC_SRCS += chpp/clients.c
 AOC_SRCS += chpp/platform/pal_api.c
+AOC_SRCS += chpp/platform/aoc/condition_variable.cc
 AOC_SRCS += chpp/platform/aoc/link.cc
 AOC_SRCS += chpp/platform/aoc/chpp_uart_link_manager.cc
 AOC_SRCS += chpp/platform/aoc/memory.cc
