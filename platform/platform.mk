@@ -212,6 +212,7 @@ AOC_SRCS += platform/usf/usf_helper.cc
 # AoC-specific Compiler Flags ##################################################
 AOC_CFLAGS += -Iplatform/aoc/include
 AOC_CFLAGS += -Iplatform/usf/include
+AOC_CFLAGS += -I$(AOC_AUTOGEN_DIR)/regions
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/core/arm/generic/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/gpio/aoc/include
@@ -222,6 +223,7 @@ AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/efw/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/heap/common/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/os/common/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/platform/common/include
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/product/$(AOC_PRODUCT_FAMILY)/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/core/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/core/fbs
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/pal/include

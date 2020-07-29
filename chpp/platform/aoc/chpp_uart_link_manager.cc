@@ -18,6 +18,7 @@
 
 #include "chpp/macros.h"
 #include "chpp/platform/log.h"
+#include "ipc-regions.h"
 
 namespace chpp {
 
@@ -34,7 +35,9 @@ void onUartRxInterrupt(void *context) {
 
 UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
                                  uint8_t wakeOutPinNumber)
-    : mTransportContext(context), mUart(uart), mWakeOutGpio(wakeOutPinNumber) {
+    : mTransportContext(context),
+      mUart(uart),
+      mWakeOutGpio(wakeOutPinNumber, IP_LOCK_GPIO) {
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
 }
