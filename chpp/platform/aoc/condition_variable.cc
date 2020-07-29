@@ -17,6 +17,7 @@
 #include "chpp/platform/platform_condition_variable.h"
 
 #include "chre/platform/fatal_error.h"
+#include "efw/include/interrupt_controller.h"
 
 void chppPlatformConditionVariableInit(
     struct ChppConditionVariable *condition_variable) {
@@ -46,6 +47,12 @@ bool chppPlatformConditionVariableWait(
 
 void chppPlatformConditionVariableSignal(
     struct ChppConditionVariable *condition_variable) {
-  // TODO: Add interrupt handling
-  xSemaphoreGive(condition_variable->semaphoreHandle);
+  if (InterruptController::Instance()->IsInterruptContext()) {
+    BaseType_t xHigherPriorityTaskWoken = 0;
+    xSemaphoreGiveFromISR(condition_variable->semaphoreHandle,
+                          &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  } else {
+    xSemaphoreGive(condition_variable->semaphoreHandle);
+  }
 }
