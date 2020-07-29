@@ -18,41 +18,54 @@
 
 #include "chre/platform/fatal_error.h"
 #include "efw/include/interrupt_controller.h"
+#include "efw/include/timer.h"
 
-void chppPlatformConditionVariableInit(
-    struct ChppConditionVariable *condition_variable) {
-  condition_variable->semaphoreHandle =
-      xSemaphoreCreateBinaryStatic(&condition_variable->staticSemaphore);
-  if (condition_variable->semaphoreHandle == NULL) {
-    FATAL_ERROR("Failed to create cv semaphore");
-  }
-}
+namespace {
 
-void chppPlatformConditionVariableDeinit(
-    struct ChppConditionVariable *condition_variable) {
-  if (condition_variable->semaphoreHandle != NULL) {
-    vSemaphoreDelete(condition_variable->semaphoreHandle);
-  }
-}
-
-bool chppPlatformConditionVariableWait(
-    struct ChppConditionVariable *condition_variable, struct ChppMutex *mutex) {
+bool waitWithTimeout(struct ChppConditionVariable *cv, struct ChppMutex *mutex,
+                     const TickType_t &timeoutTicks) {
   chppMutexUnlock(mutex);
-  BaseType_t rc = xSemaphoreTake(condition_variable->semaphoreHandle,
-                                 portMAX_DELAY);  // block indefinitely
+  BaseType_t rc = xSemaphoreTake(cv->semaphoreHandle, timeoutTicks);
   chppMutexLock(mutex);
 
   return (rc == pdTRUE);
 }
 
-void chppPlatformConditionVariableSignal(
-    struct ChppConditionVariable *condition_variable) {
+}  // anonymous namespace
+
+void chppPlatformConditionVariableInit(struct ChppConditionVariable *cv) {
+  cv->semaphoreHandle = xSemaphoreCreateBinaryStatic(&cv->staticSemaphore);
+  if (cv->semaphoreHandle == NULL) {
+    FATAL_ERROR("Failed to create cv semaphore");
+  }
+}
+
+void chppPlatformConditionVariableDeinit(struct ChppConditionVariable *cv) {
+  if (cv->semaphoreHandle != NULL) {
+    vSemaphoreDelete(cv->semaphoreHandle);
+  }
+}
+
+bool chppPlatformConditionVariableWait(struct ChppConditionVariable *cv,
+                                       struct ChppMutex *mutex) {
+  return waitWithTimeout(cv, mutex, portMAX_DELAY);  // block indefinitely
+}
+
+bool chppPlatformConditionVariableTimedWait(struct ChppConditionVariable *cv,
+                                            struct ChppMutex *mutex,
+                                            uint64_t timeoutNs) {
+  // TODO: Address once b/159135482 is resolved
+  const TickType_t timeoutTicks =
+      static_cast<TickType_t>(Timer::Instance()->NsToTicks(timeoutNs));
+  return waitWithTimeout(cv, mutex, timeoutTicks);
+}
+
+void chppPlatformConditionVariableSignal(struct ChppConditionVariable *cv) {
   if (InterruptController::Instance()->IsInterruptContext()) {
     BaseType_t xHigherPriorityTaskWoken = 0;
-    xSemaphoreGiveFromISR(condition_variable->semaphoreHandle,
-                          &xHigherPriorityTaskWoken);
+    xSemaphoreGiveFromISR(cv->semaphoreHandle, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   } else {
-    xSemaphoreGive(condition_variable->semaphoreHandle);
+    xSemaphoreGive(cv->semaphoreHandle);
   }
 }
