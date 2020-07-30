@@ -53,6 +53,10 @@ void chppPlatformLinkDoWork(struct ChppPlatformLinkParameters *params,
   UartLinkManager *manager =
       static_cast<UartLinkManager *>(params->uartLinkManager);
 
+  if (signal & CHPP_TRANSPORT_SIGNAL_LINK_WAKE_IN_IRQ) {
+    // This indicates that the remote end wants to start a transaction.
+    manager->startTransaction();
+  }
   if (signal & CHPP_TRANSPORT_SIGNAL_LINK_RX_PROCESS) {
     manager->processRxSamples();
   }
