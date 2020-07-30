@@ -19,14 +19,17 @@
 
 #include <stdbool.h>
 
+#include "FreeRTOS.h"
 #include "chpp/mutex.h"
+#include "semphr.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct ChppConditionVariable {
-  uint8_t bufferVariable;  // temporary element to compile
+  SemaphoreHandle_t semaphoreHandle;
+  StaticSemaphore_t staticSemaphore;
 };
 
 /**

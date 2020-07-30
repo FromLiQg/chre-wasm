@@ -18,10 +18,15 @@
 
 #include "chpp/macros.h"
 #include "chpp/platform/chpp_uart_link_manager.h"
+#include "chpp/transport.h"
 
 using chpp::UartLinkManager;
 
-void chppPlatformLinkInit(struct ChppPlatformLinkParameters *params) {}
+void chppPlatformLinkInit(struct ChppPlatformLinkParameters *params) {
+  UartLinkManager *manager =
+      static_cast<UartLinkManager *>(params->uartLinkManager);
+  manager->init();
+}
 
 void chppPlatformLinkDeinit(struct ChppPlatformLinkParameters *params) {
   // TODO: Implement this
@@ -45,7 +50,12 @@ enum ChppLinkErrorCode chppPlatformLinkSend(
 
 void chppPlatformLinkDoWork(struct ChppPlatformLinkParameters *params,
                             uint32_t signal) {
-  // TODO: Implement this
+  UartLinkManager *manager =
+      static_cast<UartLinkManager *>(params->uartLinkManager);
+
+  if (signal & CHPP_TRANSPORT_SIGNAL_LINK_RX_PROCESS) {
+    manager->processRxSamples();
+  }
 }
 
 void chppPlatformLinkReset(struct ChppPlatformLinkParameters *params) {

@@ -16,23 +16,43 @@
 
 #include "chpp/platform/platform_condition_variable.h"
 
+#include "chre/platform/fatal_error.h"
+#include "efw/include/interrupt_controller.h"
+
 void chppPlatformConditionVariableInit(
     struct ChppConditionVariable *condition_variable) {
-  // TODO: Implement this
+  condition_variable->semaphoreHandle =
+      xSemaphoreCreateBinaryStatic(&condition_variable->staticSemaphore);
+  if (condition_variable->semaphoreHandle == NULL) {
+    FATAL_ERROR("Failed to create cv semaphore");
+  }
 }
 
 void chppPlatformConditionVariableDeinit(
     struct ChppConditionVariable *condition_variable) {
-  // TODO: Implement this
+  if (condition_variable->semaphoreHandle != NULL) {
+    vSemaphoreDelete(condition_variable->semaphoreHandle);
+  }
 }
 
 bool chppPlatformConditionVariableWait(
     struct ChppConditionVariable *condition_variable, struct ChppMutex *mutex) {
-  // TODO: Implement this
-  return false;
+  chppMutexUnlock(mutex);
+  BaseType_t rc = xSemaphoreTake(condition_variable->semaphoreHandle,
+                                 portMAX_DELAY);  // block indefinitely
+  chppMutexLock(mutex);
+
+  return (rc == pdTRUE);
 }
 
 void chppPlatformConditionVariableSignal(
     struct ChppConditionVariable *condition_variable) {
-  // TODO: Implement this
+  if (InterruptController::Instance()->IsInterruptContext()) {
+    BaseType_t xHigherPriorityTaskWoken = 0;
+    xSemaphoreGiveFromISR(condition_variable->semaphoreHandle,
+                          &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  } else {
+    xSemaphoreGive(condition_variable->semaphoreHandle);
+  }
 }

@@ -18,6 +18,7 @@
 #define CHPP_PLATFORM_UART_LINK_MANAGER_H_
 
 #include "chpp/link.h"
+#include "chpp/transport.h"
 #include "chre/util/non_copyable.h"
 #include "gpio_aoc.h"
 #include "uart.h"
@@ -50,10 +51,18 @@ namespace chpp {
 class UartLinkManager : public chre::NonCopyable {
  public:
   /**
+   * @param context The context pointer of the CHPP transport.
    * @param uart The pointer to the UART instance.
    * @param wakeOutPinNumber The pin number of the wake_out GPIO.
    */
-  UartLinkManager(UART *uart, uint8_t wakeOutPinNumber);
+  UartLinkManager(struct ChppTransportState *context, UART *uart,
+                  uint8_t wakeOutPinNumber);
+
+  /**
+   * This method must be called before invoking the rest of the public methods
+   * in this class.
+   */
+  void init();
 
   /**
    * @param buf The non-null pointer to the buffer.
@@ -73,7 +82,23 @@ class UartLinkManager : public chre::NonCopyable {
    */
   bool startTransaction();
 
+  /**
+   * Pulls RX data from the UART peripheral, and sends them to the CHPP
+   * transport layer.
+   */
+  void processRxSamples();
+
+  struct ChppTransportState *getTransportContext() const {
+    return mTransportContext;
+  }
+
+  UART *getUart() const {
+    return mUart;
+  }
+
  private:
+  struct ChppTransportState *mTransportContext = nullptr;
+
   UART *mUart = nullptr;
 
   GPIOAoC mWakeOutGpio;
@@ -81,6 +106,11 @@ class UartLinkManager : public chre::NonCopyable {
   //! The pointer to the currently pending TX packet.
   uint8_t *mCurrentBuffer = nullptr;
   size_t mCurrentBufferLen = 0;
+
+  //! UART FIFO length is 256 bytes.
+  static constexpr size_t kRxBufSize = 256;
+  uint8_t mRxBuf[kRxBufSize];
+  size_t mRxBufIndex = 0;
 
   /**
    * @return if a TX packet is pending transmission.
