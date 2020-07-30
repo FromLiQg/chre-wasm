@@ -119,6 +119,7 @@ void *NanoappLoader::findExportedSymbol(const char *name) {
     }
   }
 
+  LOGE("Unable to find %s", name);
   return nullptr;
 }
 
