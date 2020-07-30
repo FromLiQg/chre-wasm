@@ -67,6 +67,18 @@ void UartLinkManager::init() {
       true /* enable */);
 }
 
+void UartLinkManager::deinit() {
+  clearTxPacket();
+  mWakeOutGpio.Clear();
+
+  mUart->DisableRxInterrupt();
+
+  InterruptController::Instance()->InterruptEnable(
+      IRQ_GPI0 + mWakeInGpi.GetGpiNumber(), Processor::Instance()->CoreID(),
+      false /* enable */);
+  mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_DISABLE);
+}
+
 bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
   bool success = !hasTxPacket();
   if (!success) {

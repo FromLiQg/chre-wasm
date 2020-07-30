@@ -67,6 +67,12 @@ class UartLinkManager : public chre::NonCopyable {
   void init();
 
   /**
+   * Resets the state and disables the UartLinkManager. init() must be called
+   * after invoking this method to use this class again.
+   */
+  void deinit();
+
+  /**
    * @param buf The non-null pointer to the buffer.
    * @param len The length of the above buffer.
    *
