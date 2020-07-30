@@ -25,6 +25,7 @@
 #include "chpp/macros.h"
 #include "chpp/mutex.h"
 #include "chpp/notifier.h"
+#include "chpp/transport_signals.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -106,6 +107,7 @@ extern "C" {
  * nibble of int8_t packetCode).
  */
 #define CHPP_TRANSPORT_ERROR_MASK LEAST_SIGNIFICANT_NIBBLE
+#define CHPP_TRANSPORT_GET_ERROR(value) ((value)&CHPP_TRANSPORT_ERROR_MASK)
 enum ChppTransportErrorCode {
   //! No error reported (either ACK or implicit NACK)
   CHPP_TRANSPORT_ERROR_NONE = 0,
@@ -126,11 +128,12 @@ enum ChppTransportErrorCode {
 };
 
 /**
- * Packet attributes in ChppTransportHeader (Most significant nibble of int8_t
- * packetCode).
+ * Packet attributes in ChppTransportHeader (Most significant nibble (MSN) of
+ * int8_t packetCode).
  */
 #define CHPP_TRANSPORT_ATTR_VALUE(value) (((value)&0x0f) << 4)
 #define CHPP_TRANSPORT_ATTR_MASK MOST_SIGNIFICANT_NIBBLE
+#define CHPP_TRANSPORT_GET_ATTR(value) ((value)&CHPP_TRANSPORT_ATTR_MASK)
 enum ChppTransportPacketAttributes {
   //! None
   CHPP_TRANSPORT_ATTR_NONE = CHPP_TRANSPORT_ATTR_VALUE(0),
@@ -459,12 +462,23 @@ void chppWorkThreadStart(struct ChppTransportState *context);
  * Signals the main thread for CHPP's Transport Layer to perform some work. This
  * method should only be called from the link layer.
  *
+ * Note that this method must be safe to call from an interrupt context, as the
+ * platform link layer implementation may send a signal from one (e.g. handling
+ * an interrupt from the physical layer or inputs from the remote endpoint).
+ *
  * @param params Platform-specific struct with link details / parameters.
  * @param signal The signal that describes the work to be performed. Only bits
  * specified by CHPP_TRANSPORT_SIGNAL_PLATFORM_MASK can be set.
  */
-void chppWorkThreadSignalFromLink(struct ChppPlatformLinkParameters *params,
-                                  uint32_t signal);
+static inline void chppWorkThreadSignalFromLink(
+    struct ChppPlatformLinkParameters *params, uint32_t signal) {
+  struct ChppTransportState *context =
+      container_of(params, struct ChppTransportState, linkParams);
+
+  CHPP_ASSERT((signal & ~(CHPP_TRANSPORT_SIGNAL_PLATFORM_MASK)) == 0);
+  chppNotifierSignal(&context->notifier,
+                     signal & CHPP_TRANSPORT_SIGNAL_PLATFORM_MASK);
+}
 
 /**
  * Stops the main thread for CHPP's Transport Layer that has been started by
