@@ -35,45 +35,50 @@ struct ChppConditionVariable {
 /**
  * Platform implementation of chppConditionVariableInit().
  */
-void chppPlatformConditionVariableInit(
-    struct ChppConditionVariable *condition_variable);
+void chppPlatformConditionVariableInit(struct ChppConditionVariable *cv);
 
 /**
  * Platform implementation of chppConditionVariableDeinit().
  */
-void chppPlatformConditionVariableDeinit(
-    struct ChppConditionVariable *condition_variable);
+void chppPlatformConditionVariableDeinit(struct ChppConditionVariable *cv);
 
 /**
- * Platform implementation of chppConditionVariableWait().
+ * Platform implementation of chppConditionVariable[Timed]Wait().
  */
-bool chppPlatformConditionVariableWait(
-    struct ChppConditionVariable *condition_variable, struct ChppMutex *mutex);
+bool chppPlatformConditionVariableWait(struct ChppConditionVariable *cv,
+                                       struct ChppMutex *mutex);
+bool chppPlatformConditionVariableTimedWait(struct ChppConditionVariable *cv,
+                                            struct ChppMutex *mutex,
+                                            uint64_t timeoutNs);
 
 /**
  * Platform implementation of chppConditionVariableSignal().
  */
-void chppPlatformConditionVariableSignal(
-    struct ChppConditionVariable *condition_variable);
+void chppPlatformConditionVariableSignal(struct ChppConditionVariable *cv);
 
-static inline void chppConditionVariableInit(
-    struct ChppConditionVariable *condition_variable) {
-  chppPlatformConditionVariableInit(condition_variable);
+static inline void chppConditionVariableInit(struct ChppConditionVariable *cv) {
+  chppPlatformConditionVariableInit(cv);
 }
 
 static inline void chppConditionVariableDeinit(
-    struct ChppConditionVariable *condition_variable) {
-  chppPlatformConditionVariableDeinit(condition_variable);
+    struct ChppConditionVariable *cv) {
+  chppPlatformConditionVariableDeinit(cv);
 }
 
-static inline bool chppConditionVariableWait(
-    struct ChppConditionVariable *condition_variable, struct ChppMutex *mutex) {
-  return chppPlatformConditionVariableWait(condition_variable, mutex);
+static inline bool chppConditionVariableWait(struct ChppConditionVariable *cv,
+                                             struct ChppMutex *mutex) {
+  return chppPlatformConditionVariableWait(cv, mutex);
+}
+
+static inline bool chppConditionVariableTimedWait(
+    struct ChppConditionVariable *cv, struct ChppMutex *mutex,
+    uint64_t timeoutNs) {
+  return chppPlatformConditionVariableTimedWait(cv, mutex, timeoutNs);
 }
 
 static inline void chppConditionVariableSignal(
-    struct ChppConditionVariable *condition_variable) {
-  chppPlatformConditionVariableSignal(condition_variable);
+    struct ChppConditionVariable *cv) {
+  chppPlatformConditionVariableSignal(cv);
 }
 
 #ifdef __cplusplus
