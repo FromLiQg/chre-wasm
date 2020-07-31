@@ -332,6 +332,7 @@ class UsfHelper {
     uint64_t timestamp;
     float bias[3];
     bool hasBias;
+    uint8_t accuracy;
   };
 
   //! The list of calibrated USF sensors supported.
