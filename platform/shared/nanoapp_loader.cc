@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <dlfcn.h>
 #include <cmath>
 #include <cstring>
 
@@ -66,12 +67,13 @@ int atexitOverride(void (*function)(void)) {
 // TODO(karthikmb/stange): While this array was hand-coded for simple
 // "hello-world" prototyping, the list of exported symbols must be
 // generated to minimize runtime errors and build breaks.
-ExportedData gExportedData[] = {
+const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(ashLoadCalibrationParams),
     ADD_EXPORTED_C_SYMBOL(ashSaveCalibrationParams),
     ADD_EXPORTED_C_SYMBOL(ashSetCalibration),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
-    ADD_EXPORTED_C_SYMBOL(chreGetVersion),
+    ADD_EXPORTED_C_SYMBOL(chreConfigureDebugDumpEvent),
+    ADD_EXPORTED_C_SYMBOL(chreConfigureHostSleepStateEvents),
     ADD_EXPORTED_C_SYMBOL(chreGetApiVersion),
     ADD_EXPORTED_C_SYMBOL(chreGetEstimatedHostTimeOffset),
     ADD_EXPORTED_C_SYMBOL(chreGetPlatformId),
@@ -83,9 +85,12 @@ ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreSendMessageToHostEndpoint),
     ADD_EXPORTED_C_SYMBOL(chreSensorConfigure),
     ADD_EXPORTED_C_SYMBOL(chreSensorFindDefault),
+    ADD_EXPORTED_C_SYMBOL(chreTimerCancel),
+    ADD_EXPORTED_C_SYMBOL(chreTimerSet),
+    ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
+    ADD_EXPORTED_SYMBOL(dlsym, "_Z5dlsymPvPKc"),
     ADD_EXPORTED_C_SYMBOL(memcpy),
     ADD_EXPORTED_C_SYMBOL(memset),
-    ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
     ADD_EXPORTED_C_SYMBOL(sqrtf),
 };
 
@@ -119,6 +124,7 @@ void *NanoappLoader::findExportedSymbol(const char *name) {
     }
   }
 
+  LOGE("Unable to find %s", name);
   return nullptr;
 }
 

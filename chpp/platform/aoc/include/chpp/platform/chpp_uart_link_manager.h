@@ -20,6 +20,7 @@
 #include "chpp/link.h"
 #include "chpp/transport.h"
 #include "chre/util/non_copyable.h"
+#include "gpi_aoc.h"
 #include "gpio_aoc.h"
 #include "uart.h"
 
@@ -54,9 +55,10 @@ class UartLinkManager : public chre::NonCopyable {
    * @param context The context pointer of the CHPP transport.
    * @param uart The pointer to the UART instance.
    * @param wakeOutPinNumber The pin number of the wake_out GPIO.
+   * @param wakeInGpiNumber The GPI number of the wake_in GPIO.
    */
   UartLinkManager(struct ChppTransportState *context, UART *uart,
-                  uint8_t wakeOutPinNumber);
+                  uint8_t wakeOutPinNumber, uint8_t wakeInGpiNumber);
 
   /**
    * This method must be called before invoking the rest of the public methods
@@ -96,12 +98,18 @@ class UartLinkManager : public chre::NonCopyable {
     return mUart;
   }
 
+  GPIAoC *getWakeInGpi() {
+    return &mWakeInGpi;
+  }
+
  private:
   struct ChppTransportState *mTransportContext = nullptr;
 
   UART *mUart = nullptr;
 
   GPIOAoC mWakeOutGpio;
+
+  GPIAoC mWakeInGpi;
 
   //! The pointer to the currently pending TX packet.
   uint8_t *mCurrentBuffer = nullptr;
