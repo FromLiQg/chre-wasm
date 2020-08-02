@@ -17,11 +17,14 @@
 #ifndef CHPP_PLATFORM_UART_LINK_MANAGER_H_
 #define CHPP_PLATFORM_UART_LINK_MANAGER_H_
 
+#include "FreeRTOS.h"
 #include "chpp/link.h"
 #include "chpp/transport.h"
+#include "chre/platform/atomic.h"
 #include "chre/util/non_copyable.h"
 #include "gpi_aoc.h"
 #include "gpio_aoc.h"
+#include "semphr.h"
 #include "uart.h"
 
 namespace chpp {
@@ -60,11 +63,19 @@ class UartLinkManager : public chre::NonCopyable {
   UartLinkManager(struct ChppTransportState *context, UART *uart,
                   uint8_t wakeOutPinNumber, uint8_t wakeInGpiNumber);
 
+  ~UartLinkManager();
+
   /**
    * This method must be called before invoking the rest of the public methods
    * in this class.
    */
   void init();
+
+  /**
+   * Resets the state and disables the UartLinkManager. init() must be called
+   * after invoking this method to use this class again.
+   */
+  void deinit();
 
   /**
    * @param buf The non-null pointer to the buffer.
@@ -102,6 +113,14 @@ class UartLinkManager : public chre::NonCopyable {
     return &mWakeInGpi;
   }
 
+  SemaphoreHandle_t getSemaphoreHandle() const {
+    return mSemaphoreHandle;
+  }
+
+  void setTransactionPending() {
+    mTransactionPending = true;
+  }
+
  private:
   struct ChppTransportState *mTransportContext = nullptr;
 
@@ -119,6 +138,17 @@ class UartLinkManager : public chre::NonCopyable {
   static constexpr size_t kRxBufSize = 256;
   uint8_t mRxBuf[kRxBufSize];
   size_t mRxBufIndex = 0;
+
+  /**
+   * Semaphore to use while waiting for GPI interrupts.
+   * NOTE: We use the semaphore directly instead of a condition
+   * variable, because there is no need to protect a predicate variable
+   * through a mutex.
+   */
+  SemaphoreHandle_t mSemaphoreHandle;
+  StaticSemaphore_t mStaticSemaphore;
+
+  chre::AtomicBool mTransactionPending{false};
 
   /**
    * @return if a TX packet is pending transmission.

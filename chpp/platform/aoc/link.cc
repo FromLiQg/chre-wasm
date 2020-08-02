@@ -29,7 +29,9 @@ void chppPlatformLinkInit(struct ChppPlatformLinkParameters *params) {
 }
 
 void chppPlatformLinkDeinit(struct ChppPlatformLinkParameters *params) {
-  // TODO: Implement this
+  UartLinkManager *manager =
+      static_cast<UartLinkManager *>(params->uartLinkManager);
+  manager->deinit();
 }
 
 enum ChppLinkErrorCode chppPlatformLinkSend(
