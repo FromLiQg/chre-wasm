@@ -107,12 +107,20 @@ void *GetHeap(ChreHeap heap) {
 
 bool IsInHeap(ChreHeap heap, const void *pointer) {
   void *handle = GetHeap(heap);
+  bool isDramHeap = (heap == ChreHeap::DRAM);
+  if (isDramHeap) {
+    CHRE_ASSERT(requestDramAccess(true /*enabled*/));
+  }
   bool found = false;
   if (handle != nullptr) {
     const struct HEAP_STATS *stats = HeapStats(handle);
     const uintptr_t heapBase = reinterpret_cast<uintptr_t>(stats->base);
     const uintptr_t castPointer = reinterpret_cast<uintptr_t>(pointer);
     found = castPointer >= heapBase && castPointer < (heapBase + stats->len);
+  }
+
+  if (isDramHeap) {
+    requestDramAccess(false /*enabled*/);
   }
 
   return found;
@@ -138,9 +146,11 @@ void *memoryAlloc(size_t size) {
   if (handle != nullptr) {
     ptr = HeapMalloc(handle, size);
     if (ptr == nullptr) {
-      printf("CHRE: Failed to allocate memory in SRAM heap...trying DRAM\n");
-      // TODO: Crash if using DRAM memory too long
-      ptr = memoryAllocDram(size);
+      printf("CHRE: Failed to allocate memory in SRAM heap\n");
+      // TODO: Ideally if we fail to allocate enough memory in SRAM, we should
+      // try and allocate in DRAM. Revisit this once all nanoapps have been
+      // loaded, and the full repercussions of tiered memory usage have been
+      // hashed out.
     }
   }
 
@@ -176,11 +186,15 @@ void *memoryAllocDram(size_t size) {
 
 void memoryFree(void *pointer) {
   if (pointer != nullptr) {
-    void *handle = GetHeapFromPointer(pointer);
-    if (handle == nullptr) {
-      printf("CHRE: Tried to free memory from a non-CHRE heap\n");
+    if (!IsInHeap(ChreHeap::DRAM, pointer)) {
+      void *handle = GetHeapFromPointer(pointer);
+      if (handle == nullptr) {
+        printf("CHRE: Tried to free memory from a non-CHRE heap\n");
+      } else {
+        HeapFree(handle, pointer);
+      }
     } else {
-      HeapFree(handle, pointer);
+      printf("Please call memoryFreeDram to free DRAM heap mem\n");
     }
   }
 }

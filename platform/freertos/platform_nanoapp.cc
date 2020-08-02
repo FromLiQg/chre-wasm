@@ -31,6 +31,7 @@ namespace chre {
 
 PlatformNanoapp::~PlatformNanoapp() {
   if (mAppBinary != nullptr) {
+    DramGuard guard;
     memoryFreeDram(mAppBinary);
   }
 }
@@ -63,18 +64,24 @@ void PlatformNanoapp::end() {
 }
 
 uint64_t PlatformNanoapp::getAppId() const {
+  // TODO (karthikmb/stange): Ideally, we should store the metadata as SRAM
+  // variables, to avoid bumping into DRAM for basic queries.
+  DramGuard guard;
   return (mAppInfo != nullptr) ? mAppInfo->appId : mExpectedAppId;
 }
 
 uint32_t PlatformNanoapp::getAppVersion() const {
+  DramGuard guard;
   return (mAppInfo != nullptr) ? mAppInfo->appVersion : mExpectedAppVersion;
 }
 
 uint32_t PlatformNanoapp::getTargetApiVersion() const {
+  DramGuard guard;
   return (mAppInfo != nullptr) ? mAppInfo->targetApiVersion : 0;
 }
 
 bool PlatformNanoapp::isSystemNanoapp() const {
+  DramGuard guard;
   return (mAppInfo != nullptr && mAppInfo->isSystemNanoapp);
 }
 
@@ -84,14 +91,24 @@ void PlatformNanoapp::logStateToBuffer(
 }
 
 bool PlatformNanoappBase::isLoaded() const {
-  return (mIsStatic ||
-          ((mAppBinary != nullptr) && (mAppBinaryLen != 0) &&
-           (mBytesLoaded == mAppBinaryLen)) ||
-          (mDsoHandle != nullptr));
+  // TODO (karthikmb/stange): The link register pop post DRAM guard destructor
+  // (which removes dram access vote) causes a crash if called from an
+  // unguarded context. Revisit to remove this when we store metadata in SRAM.
+  bool isLoaded = false;
+  if (mIsStatic) {
+    isLoaded = true;
+  } else {
+    DramGuard guard;
+    isLoaded = ((mAppBinary != nullptr) && (mAppBinaryLen != 0) &&
+                (mBytesLoaded == mAppBinaryLen)) ||
+               (mDsoHandle != nullptr);
+  }
+  return isLoaded;
 }
 
 bool PlatformNanoappBase::isDramApp() const {
-  // TODO: Determine if an app is in DRAM or not once SRAM is supported.
+  // TODO: Determine if an app is in DRAM or not once nanoapps in SRAM
+  // are supported.
   return true;
 }
 
@@ -104,6 +121,8 @@ void PlatformNanoappBase::loadStatic(const struct chreNslNanoappInfo *appInfo) {
 bool PlatformNanoappBase::reserveBuffer(uint64_t appId, uint32_t appVersion,
                                         size_t appBinaryLen) {
   CHRE_ASSERT(!isLoaded());
+
+  DramGuard guard;
 
   bool success = false;
   mAppBinary = memoryAllocDram(appBinaryLen);
@@ -123,6 +142,8 @@ bool PlatformNanoappBase::reserveBuffer(uint64_t appId, uint32_t appVersion,
 bool PlatformNanoappBase::copyNanoappFragment(const void *buffer,
                                               size_t bufferLen) {
   CHRE_ASSERT(!isLoaded());
+
+  DramGuard guard;
 
   bool success = true;
 
@@ -145,6 +166,7 @@ bool PlatformNanoappBase::verifyNanoappInfo() {
   if (mDsoHandle == nullptr) {
     LOGE("No nanoapp info to verify");
   } else {
+    DramGuard guard;
     mAppInfo = static_cast<const struct chreNslNanoappInfo *>(
         dlsym(mDsoHandle, CHRE_NSL_DSO_NANOAPP_INFO_SYMBOL_NAME));
     if (mAppInfo == nullptr) {
@@ -170,6 +192,7 @@ bool PlatformNanoappBase::openNanoapp() {
     success = true;
   } else if (mAppBinary != nullptr) {
     if (mDsoHandle == nullptr) {
+      DramGuard guard;
       mDsoHandle = dlopenbuf(mAppBinary);
       if (mDsoHandle != nullptr) {
         mAppInfo = static_cast<struct chreNslNanoappInfo *>(
