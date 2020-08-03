@@ -55,6 +55,7 @@
 
   #ifndef CHRE_ASSERT_USES_STDLIB_ASSERT
     #pragma push_macro("assert")
+    #undef assert
     #define assert CHRE_ASSERT
   #endif  // CHRE_ASSERT_USES_STDLIB_ASSERT
 #endif  // FLATBUFFERS_CHRE
