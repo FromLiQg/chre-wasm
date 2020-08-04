@@ -76,6 +76,14 @@ ARMV8A_CC = $(CXX)
 ARMV8A_LD = $(LD)
 
 ifneq ($(IS_NANOAPP_BUILD),)
+ifeq ($(CHRE_NANOAPP_BUILD_ID),)
+# Set to "local" to indicate this was generated locally. Any production build
+# of the nanoapp will specify this ID.
+CHRE_NANOAPP_BUILD_ID=local
+endif
+
+TARGET_CFLAGS += -DNANOAPP_BUILD_ID=\"nanoapp_build=$(NANOAPP_NAME)@$(CHRE_NANOAPP_BUILD_ID)\"
+
 include $(CHRE_PREFIX)/build/nanoapp/google_aoc.mk
 ifeq ($(CHRE_TCM_ENABLED),true)
 TARGET_CFLAGS += -DCHRE_TCM_ENABLED
