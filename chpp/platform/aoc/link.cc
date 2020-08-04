@@ -65,5 +65,8 @@ void chppPlatformLinkDoWork(struct ChppPlatformLinkParameters *params,
 }
 
 void chppPlatformLinkReset(struct ChppPlatformLinkParameters *params) {
-  // TODO: Implement this
+  UartLinkManager *manager =
+      static_cast<UartLinkManager *>(params->uartLinkManager);
+  manager->deinit();
+  manager->init();
 }
