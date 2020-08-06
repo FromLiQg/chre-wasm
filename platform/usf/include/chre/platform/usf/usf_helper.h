@@ -19,6 +19,7 @@
 
 #include "chre/core/sensor_type.h"
 #include "chre/platform/system_time.h"
+#include "chre/util/dynamic_vector.h"
 #include "chre/util/unique_ptr.h"
 
 #include "usf/error.h"
