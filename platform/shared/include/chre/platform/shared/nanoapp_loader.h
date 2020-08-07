@@ -22,6 +22,7 @@
 
 #include "chre/platform/shared/loader_util.h"
 
+#include "chre/util/dynamic_vector.h"
 #include "chre/util/nested_data_ptr.h"
 
 namespace chre {
@@ -73,6 +74,15 @@ class NanoappLoader {
    * @return function pointer on successful lookup, nullptr otherwise
    */
   void *findSymbolByName(const char *name);
+
+  /**
+   * Registers a function provided through atexit during static initialization
+   * that should be called prior to unloading a nanoapp.
+   *
+   * @param function Function that should be invoked prior to unloading a
+   *     nanoapp.
+   */
+  void registerAtexitFunction(void (*function)(void));
 
  private:
   /**
@@ -133,11 +143,22 @@ class NanoappLoader {
   //! The difference between where the first load segment was mapped into
   //! virtual memory and what the virtual load offset was of that segment.
   ElfAddr mLoadBias;
+  //! Dynamic vector containing functions that should be invoked prior to
+  //! unloading this nanoapp. Note that functions are stored in the order they
+  //! were added and should be called in reverse.
+  DynamicVector<void (*)(void)> mAtexitFunctions;
+
+  /**
+   * Invokes all functions registered via atexit during static initialization.
+   */
+  void callAtexitFunctions();
 
   /**
    * Invokes all initialization functions in .init_array segment.
+   *
+   * @return true if static initialization succeeded.
    */
-  void callInitArray();
+  bool callInitArray();
 
   /**
    * Invokes all termination functions in the .fini_array segment.

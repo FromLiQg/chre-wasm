@@ -57,8 +57,8 @@ void eventHandler(void *context, usf::UsfEvent *event) {
     auto *mgr = static_cast<UsfHelper *>(context);
 
     switch (msgEvent->event_type()) {
-      case usf::UsfMsgEventType_kSample:
-        mgr->processSensorSample(msgEvent);
+      case usf::UsfMsgEventType_kSensorReport:
+        mgr->processSensorReport(msgEvent);
         break;
       default:
         LOGD("Received unknown event type %" PRIu8, msgEvent->event_type());
@@ -178,19 +178,23 @@ bool prepareSensorEvent(size_t numSamples, uint32_t sensorHandle,
 /**
  * Populates CHRE sensor sample structure using USF sensor samples.
  *
- * @param sampleMsg The USF message that contains sensor samples
+ * @param sampleReport The USF report that contains sensor samples
  * @param sensor The CHRE sensor instance for the sensor that produced the
  *     events
  * @param sensorSample Reference to a UniquePtr instance that points to non-null
  *     memory that will be populated with sensor samples
  */
-void populateSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
+void populateSensorEvent(const usf::UsfSensorSampleReport *sampleReport,
                          uint8_t sensorType, UniquePtr<uint8_t> &sensorSample) {
   uint64_t prevSampleTimeNs = 0;
 
-  for (size_t i = 0; i < sampleMsg->sample_list()->size(); i++) {
-    const float *sensorVal =
-        sampleMsg->sample_list()->Get(i)->samples()->data();
+  for (int i = 0; i < sampleReport->GetSampleCount(); i++) {
+    usf::UsfSampleEvent sampleEvent;
+    UsfErr err = sampleReport->GetSample(i, &sampleEvent);
+    if (err != kErrNone) {
+      LOG_USF_ERR(err);
+      continue;
+    }
 
     SensorSampleType sampleType =
         PlatformSensorTypeHelpers::getSensorSampleTypeFromSensorType(
@@ -204,7 +208,7 @@ void populateSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
 
         // TODO(b/143139477): Apply calibration to data from these sensors
         for (size_t valIndex = 0; valIndex < 3; valIndex++) {
-          event->readings[i].values[valIndex] = sensorVal[valIndex];
+          event->readings[i].values[valIndex] = sampleEvent.data[valIndex];
         }
         timestampDelta = &event->readings[i].timestampDelta;
         break;
@@ -212,7 +216,7 @@ void populateSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
       case SensorSampleType::Float: {
         auto *event =
             reinterpret_cast<chreSensorFloatData *>(sensorSample.get());
-        event->readings[i].value = sensorVal[0];
+        event->readings[i].value = sampleEvent.data[0];
         timestampDelta = &event->readings[i].timestampDelta;
         break;
       }
@@ -220,7 +224,7 @@ void populateSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
         auto *event =
             reinterpret_cast<chreSensorByteData *>(sensorSample.get());
         event->readings[i].value = 0;
-        event->readings[i].isNear = (sensorVal[0] > 0.5f);
+        event->readings[i].isNear = (sampleEvent.data[0] > 0.5f);
         timestampDelta = &event->readings[i].timestampDelta;
         break;
       }
@@ -236,31 +240,25 @@ void populateSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
     }
 
     // First sample determines the base timestamp for all other sensor samples
-    uint64_t timestampNsHigh =
-        sampleMsg->sample_list()->Get(i)->timestamp_ns_hi();
-    uint64_t sampleTimestampNs =
-        (timestampNsHigh << 32) |
-        sampleMsg->sample_list()->Get(i)->timestamp_ns_lo();
-
     if (i == 0) {
       auto *header =
           reinterpret_cast<chreSensorDataHeader *>(sensorSample.get());
-      header->baseTimestamp = sampleTimestampNs;
+      header->baseTimestamp = sampleEvent.timestamp_ns;
       if (timestampDelta != nullptr) {
         *timestampDelta = 0;
       }
     } else {
-      uint64_t delta = sampleTimestampNs - prevSampleTimeNs;
+      uint64_t delta = sampleEvent.timestamp_ns - prevSampleTimeNs;
       if (delta > UINT32_MAX) {
         LOGE("Sensor %" PRIu8 " timestampDelta overflow: prev %" PRIu64
              " curr %" PRIu64,
-             sensorType, prevSampleTimeNs, sampleTimestampNs);
+             sensorType, prevSampleTimeNs, sampleEvent.timestamp_ns);
         delta = UINT32_MAX;
       }
       *timestampDelta = static_cast<uint32_t>(delta);
     }
 
-    prevSampleTimeNs = sampleTimestampNs;
+    prevSampleTimeNs = sampleEvent.timestamp_ns;
   }
 }
 
@@ -471,42 +469,44 @@ bool UsfHelper::flushAsync(const usf::UsfServerHandle usfSensorHandle,
   return success;
 }
 
-void UsfHelper::processSensorSample(const usf::UsfMsgEvent *event) {
-  const usf::UsfMsgSampleBatch *sampleMsg;
+void UsfHelper::processSensorReport(const usf::UsfMsgEvent *event) {
+  usf::UsfSensorReport *sensorReport = nullptr;
   UniquePtr<uint8_t> sensorSample;
-  uint8_t sensorType;
+  UsfErr err = usf::UsfSensorReport::Get(event, &sensorReport);
 
-  UsfErr err;
-  if ((err = usf::UsfMsgGet(event->data(), usf::GetUsfMsgSampleBatch,
-                            usf::VerifyUsfMsgSampleBatchBuffer, &sampleMsg)) !=
-      kErrNone) {
+  if (err != kErrNone) {
     LOG_USF_ERR(err);
-  } else if (sampleMsg->sample_list()->size() == 0) {
-    LOGE("Received empty sample batch");
-  } else {
-    auto usfType = static_cast<usf::UsfSensorType>(sampleMsg->sensor_type());
-
-    if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
-            usfType, &sensorType) &&
-        !createSensorEvent(sampleMsg, sensorType, sensorSample)) {
-      // USF shares the same sensor type between calibrated and uncalibrated
-      // sensors. Try the uncalibrated type to see if the sampling ID matches.
-      uint8_t uncalType =
-          SensorTypeHelpers::toUncalibratedSensorType(sensorType);
-      if (uncalType != sensorType) {
-        sensorType = uncalType;
-        createSensorEvent(sampleMsg, uncalType, sensorSample);
-        // USF shares a sensor type for both gyro and accel temp.
-      } else if (sensorType == CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE) {
-        createSensorEvent(sampleMsg, CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE,
-                          sensorSample);
+  } else if (sensorReport->GetType() == usf::UsfSensorReport::kTypeSample) {
+    auto *sampleReport =
+        static_cast<usf::UsfSensorSampleReport *>(sensorReport);
+    if (sampleReport->GetSampleCount() == 0) {
+      LOGE("Received empty sample batch");
+    } else {
+      auto usfType = sampleReport->GetSensorType();
+      uint8_t sensorType;
+      if (PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
+              usfType, &sensorType) &&
+          !createSensorEvent(sampleReport, sensorType, sensorSample)) {
+        // USF shares the same sensor type between calibrated and uncalibrated
+        // sensors. Try the uncalibrated type to see if the sampling ID matches.
+        uint8_t uncalType =
+            SensorTypeHelpers::toUncalibratedSensorType(sensorType);
+        if (uncalType != sensorType) {
+          sensorType = uncalType;
+          createSensorEvent(sampleReport, uncalType, sensorSample);
+          // USF shares a sensor type for both gyro and accel temp.
+        } else if (sensorType == CHRE_SENSOR_TYPE_GYROSCOPE_TEMPERATURE) {
+          createSensorEvent(sampleReport,
+                            CHRE_SENSOR_TYPE_ACCELEROMETER_TEMPERATURE,
+                            sensorSample);
+        }
+      }
+      if (!sensorSample.isNull() && mCallback != nullptr) {
+        mCallback->onSensorDataEvent(sensorType, std::move(sensorSample));
       }
     }
   }
-
-  if (!sensorSample.isNull() && mCallback != nullptr) {
-    mCallback->onSensorDataEvent(sensorType, std::move(sensorSample));
-  }
+  delete sensorReport;
 }
 
 void UsfHelper::processStatusUpdate(const usf::UsfSensorSamplingEvent *update) {
@@ -568,17 +568,17 @@ void UsfHelper::processApPowerStateUpdate(
   // TODO: Implement
 }
 
-bool UsfHelper::createSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
-                                  uint8_t sensorType,
-                                  UniquePtr<uint8_t> &sensorSample) {
+bool UsfHelper::createSensorEvent(
+    const usf::UsfSensorSampleReport *sampleReport, uint8_t sensorType,
+    UniquePtr<uint8_t> &sensorSample) {
   bool success = false;
 
   SensorInfo info;
   if (mCallback != nullptr && mCallback->getSensorInfo(sensorType, &info) &&
-      (info.samplingId == sampleMsg->sampling_id())) {
-    if (prepareSensorEvent(sampleMsg->sample_list()->size(), info.sensorHandle,
+      (info.samplingId == sampleReport->GetSamplingId())) {
+    if (prepareSensorEvent(sampleReport->GetSampleCount(), info.sensorHandle,
                            sensorType, sensorSample)) {
-      populateSensorEvent(sampleMsg, sensorType, sensorSample);
+      populateSensorEvent(sampleReport, sensorType, sensorSample);
       success = true;
     }
   }

@@ -27,6 +27,7 @@
 #include "usf/reffed_ptr.h"
 #include "usf/usf_power.h"
 #include "usf/usf_sensor.h"
+#include "usf/usf_sensor_report.h"
 #include "usf/usf_sensor_req.h"
 #include "usf/usf_transport_client.h"
 
@@ -226,12 +227,12 @@ class UsfHelper {
                   uint32_t *requestId);
 
   /**
-   * Used to process sensor samples delivered through a listener registered with
+   * Used to process sensor reports delivered through a listener registered with
    * USF.
    *
-   * @param event Pointer containing a valid sensor sample
+   * @param event Pointer containing a valid sensor report
    */
-  void processSensorSample(const usf::UsfMsgEvent *event);
+  void processSensorReport(const usf::UsfMsgEvent *event);
 
   /**
    * Used to process a sensor sampling status update delivered through a
@@ -291,13 +292,13 @@ class UsfHelper {
   /**
    * Creates a CHRE sensor event from a USF sensor event
    *
-   * @param sampleMsg Valid decoded USF sensor event
+   * @param sampleReport Valid decoded USF sensor sample report
    * @param sensorType CHRE sensor type corresponding to the event
    * @param sensorSample Upon success, populated with a valid CHRE sensor event
    * @return true if the USF sensor event corresponds to a valid, active
    *     sampling request and event creation was successful
    */
-  bool createSensorEvent(const usf::UsfMsgSampleBatch *sampleMsg,
+  bool createSensorEvent(const usf::UsfSensorSampleReport *sampleReport,
                          uint8_t sensorType, UniquePtr<uint8_t> &sensorSample);
 
   /**

@@ -42,6 +42,12 @@ struct ExportedData {
   const char *dataName;
 };
 
+//! If non-null, a nanoapp is currently being loaded. This allows certain C
+//! functions to access the nanoapp if called during static init.
+NanoappLoader *gCurrentlyLoadingNanoapp = nullptr;
+//! Indicates whether a failure occurred during static initialization.
+bool gStaticInitFailure = false;
+
 // The new operator is used by singleton.h which causes the delete operator to
 // be undefined in nanoapp binaries even though it's unused. Define this in case
 // a nanoapp actually tries to use the operator.
@@ -51,12 +57,16 @@ void deleteOverride(void *ptr) {
 
 // atexit is used to register functions that must be called when a binary is
 // removed from the system.
-// TODO(b/151847750): Support atexit to ensure nanoapps that call it are
-// properly destroyed before they are removed. Or, potentially see if atexit
-// can be replaced with a .fini_array section.
 int atexitOverride(void (*function)(void)) {
-  LOGE("atexit invoked with %p", function);
-  return -1;
+  LOGV("atexit invoked with %p", function);
+  if (gCurrentlyLoadingNanoapp == nullptr) {
+    CHRE_ASSERT_LOG(false,
+                    "atexit is only supported during static initialization.");
+    return -1;
+  }
+
+  gCurrentlyLoadingNanoapp->registerAtexitFunction(function);
+  return 0;
 }
 
 #define ADD_EXPORTED_SYMBOL(function_name, function_string) \
@@ -108,11 +118,15 @@ void *NanoappLoader::create(void *elfInput) {
   } else {
     LOG_OOM();
   }
+
   return instance;
 }
 
 void NanoappLoader::destroy(NanoappLoader *loader) {
   loader->close();
+  // TODO(b/151847750): Modify utilities to support free'ing from regions other
+  // than SRAM.
+  loader->~NanoappLoader();
   memoryFreeDram(loader);
 }
 
@@ -139,8 +153,9 @@ bool NanoappLoader::open() {
       LOGE("Failed to fix relocations");
     } else if (!resolveGot()) {
       LOGE("Failed to resolve GOT");
+    } else if (!callInitArray()) {
+      LOGE("Failed to perform static init");
     } else {
-      callInitArray();
       success = true;
     }
   }
@@ -153,8 +168,7 @@ bool NanoappLoader::open() {
 }
 
 void NanoappLoader::close() {
-  // TODO(karthikmb/stange): Ensure functions registered through atexit are
-  // called.
+  callAtexitFunctions();
   callTerminatorArray();
   freeAllocatedData();
 }
@@ -176,6 +190,13 @@ void *NanoappLoader::findSymbolByName(const char *name) {
   return symbol;
 }
 
+void NanoappLoader::registerAtexitFunction(void (*function)(void)) {
+  if (!mAtexitFunctions.push_back(function)) {
+    LOG_OOM();
+    gStaticInitFailure = true;
+  }
+}
+
 void NanoappLoader::mapBss(const ProgramHeader *hdr) {
   // if the memory size of this segment exceeds the file size zero fill the
   // difference.
@@ -191,7 +212,12 @@ void NanoappLoader::mapBss(const ProgramHeader *hdr) {
   }
 }
 
-void NanoappLoader::callInitArray() {
+bool NanoappLoader::callInitArray() {
+  bool success = true;
+  // Sets global variable used by atexit in case it's invoked as part of
+  // initializing static data.
+  gCurrentlyLoadingNanoapp = this;
+
   // TODO(b/151847750): ELF can have other sections like .init, .preinit, .fini
   // etc. Be sure to look for those if they end up being something that should
   // be supported for nanoapps.
@@ -203,14 +229,22 @@ void NanoappLoader::callInitArray() {
           mLoadBias + mSectionHeadersPtr[i].sh_addr);
       ElfAddr offset = 0;
       while (offset < mSectionHeadersPtr[i].sh_size) {
-        uintptr_t initFunction =
-            reinterpret_cast<uintptr_t>(*initArray + offset);
+        uintptr_t initFunction = reinterpret_cast<uintptr_t>(initArray[offset]);
         ((void (*)())initFunction)();
         offset += sizeof(initFunction);
+        if (gStaticInitFailure) {
+          success = false;
+          break;
+        }
       }
       break;
     }
   }
+
+  //! Reset global state so it doesn't leak into the next load.
+  gCurrentlyLoadingNanoapp = nullptr;
+  gStaticInitFailure = false;
+  return success;
 }
 
 uintptr_t NanoappLoader::roundDownToAlign(uintptr_t virtualAddr) {
@@ -502,7 +536,7 @@ bool NanoappLoader::createMappings() {
       if (mMapping.dataPtr == nullptr) {
         LOG_OOM();
       } else {
-        LOGV("Starting location of mappings %p", data->mMapping.dataPtr);
+        LOGV("Starting location of mappings %p", mMapping.dataPtr);
 
         // Calculate the load bias using the first load segment.
         uintptr_t adjustedFirstLoadSegAddr = roundDownToAlign(first->p_vaddr);
@@ -629,7 +663,7 @@ bool NanoappLoader::fixRelocations() {
       int relocType = ELFW_R_TYPE(curr->r_info);
       switch (relocType) {
         case R_ARM_RELATIVE:
-          LOGV("Resolving ARM_RELATIVE at offset %" PRIu32, curr->r_offset);
+          LOGV("Resolving ARM_RELATIVE at offset %" PRIx32, curr->r_offset);
           addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
           // TODO: When we move to DRAM allocations, we need to check if the
           // above address is in a Read-Only section of memory, and give it
@@ -638,7 +672,7 @@ bool NanoappLoader::fixRelocations() {
           break;
 
         case R_ARM_GLOB_DAT: {
-          LOGV("Resolving R_ARM_GLOB_DAT at offset %" PRIu32, curr->r_offset);
+          LOGV("Resolving R_ARM_GLOB_DAT at offset %" PRIx32, curr->r_offset);
           addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
           size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
           void *resolved = resolveData(posInSymbolTable);
@@ -687,7 +721,7 @@ bool NanoappLoader::resolveGot() {
 
     switch (relocType) {
       case R_ARM_JUMP_SLOT: {
-        LOGV("Resolving ARM_JUMP_SLOT at offset %" PRIu32, curr->r_offset);
+        LOGV("Resolving ARM_JUMP_SLOT at offset %" PRIx32, curr->r_offset);
         addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
         size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
         void *resolved = resolveData(posInSymbolTable);
@@ -709,6 +743,14 @@ bool NanoappLoader::resolveGot() {
   return true;
 }
 
+void NanoappLoader::callAtexitFunctions() {
+  while (!mAtexitFunctions.empty()) {
+    LOGV("Calling atexit at %p", mAtexitFunctions.back());
+    mAtexitFunctions.back()();
+    mAtexitFunctions.pop_back();
+  }
+}
+
 void NanoappLoader::callTerminatorArray() {
   for (size_t i = 0; i < mNumSectionHeaders; ++i) {
     const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
@@ -717,8 +759,7 @@ void NanoappLoader::callTerminatorArray() {
           mLoadBias + mSectionHeadersPtr[i].sh_addr);
       ElfAddr offset = 0;
       while (offset < mSectionHeadersPtr[i].sh_size) {
-        uintptr_t finiFunction =
-            reinterpret_cast<uintptr_t>(*finiArray + offset);
+        uintptr_t finiFunction = reinterpret_cast<uintptr_t>(finiArray[offset]);
         ((void (*)())finiFunction)();
         offset += sizeof(finiFunction);
       }
