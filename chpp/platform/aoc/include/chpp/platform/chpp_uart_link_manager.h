@@ -121,6 +121,22 @@ class UartLinkManager : public chre::NonCopyable {
     mTransactionPending = true;
   }
 
+  /**
+   * GPIO pin numbers to be used in the argument of UartLinkManager, which
+   * defines the physical pin used for the wake_out GPIO.
+   */
+  static constexpr uint8_t kWifiWakeOutGpioPinNumber = 43;
+  static constexpr uint8_t kGnssWakeOutGpioPinNumber = 86;
+  static constexpr uint8_t kWwanWakeOutGpioPinNumber = 84;
+
+  /**
+   * GPI numbers to be used in the argument of UartLinkManager, which defines
+   * the GPI used to generate the wake_in interrupts.
+   */
+  static constexpr uint8_t kWifiWakeInGpiNumber = 46;
+  static constexpr uint8_t kGnssWakeInGpiNumber = 44;
+  static constexpr uint8_t kWwanWakeInGpiNumber = 42;
+
  private:
   struct ChppTransportState *mTransportContext = nullptr;
 
