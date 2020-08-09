@@ -292,8 +292,6 @@ void sendFragmentResponse(uint16_t hostClientId, uint32_t transactionId,
 }
 
 void finishLoadingNanoappCallback(uint16_t /*eventType*/, void *data) {
-  DramGuard guard;
-
   UniquePtr<LoadNanoappCallbackData> cbData(
       static_cast<LoadNanoappCallbackData *>(data));
   constexpr size_t kInitialBufferSize = 48;
@@ -390,8 +388,6 @@ void HostMessageHandlers::handleLoadNanoappRequest(
     uint32_t appVersion, uint32_t targetApiVersion, const void *buffer,
     size_t bufferLen, const char *appFileName, uint32_t fragmentId,
     size_t appBinaryLen) {
-  DramGuard guard;
-
   bool success = true;
   static NanoappLoadManager sLoadManager;
 

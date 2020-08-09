@@ -70,6 +70,9 @@ PlatformSensorManager::~PlatformSensorManager() {}
 
 void PlatformSensorManager::init() {
   mHelper.init(this);
+  if (!mHelper.registerForApPowerStateUpdates()) {
+    LOGE("Failed to register for AP power state updates.");
+  }
 }
 
 DynamicVector<Sensor> PlatformSensorManager::getSensors() {

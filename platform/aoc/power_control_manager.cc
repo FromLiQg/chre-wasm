@@ -16,12 +16,26 @@
 
 #include "chre/platform/power_control_manager.h"
 
+#include "chre/core/event_loop_manager.h"
+
 namespace chre {
 
 PowerControlManagerBase::PowerControlManagerBase() : mHostIsAwake(true) {}
 
-void PowerControlManagerBase::onHostWakeSuspendEvent(bool /* awake */) {
-  // TODO: stubbed out, Implement this.
+void PowerControlManagerBase::onHostWakeSuspendEvent(bool awake) {
+  if (mHostIsAwake != awake) {
+    mHostIsAwake = awake;
+
+    if (!awake) {
+      EventLoopManagerSingleton::get()
+          ->getHostCommsManager()
+          .resetBlameForNanoappHostWakeup();
+    }
+
+    EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
+        awake ? CHRE_EVENT_HOST_AWAKE : CHRE_EVENT_HOST_ASLEEP,
+        nullptr /* eventData */, nullptr /* freeCallback */);
+  }
 }
 
 void PowerControlManager::postEventLoopProcess(size_t /* numPendingEvents */) {
