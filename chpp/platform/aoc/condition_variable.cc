@@ -16,19 +16,25 @@
 
 #include "chpp/platform/platform_condition_variable.h"
 
+#include "chpp/platform/log.h"
 #include "chre/platform/fatal_error.h"
 #include "efw/include/interrupt_controller.h"
 #include "efw/include/timer.h"
 
 namespace {
 
-bool waitWithTimeout(struct ChppConditionVariable *cv, struct ChppMutex *mutex,
-                     const TickType_t &timeoutTicks) {
+bool wait(struct ChppConditionVariable *cv, struct ChppMutex *mutex) {
   chppMutexUnlock(mutex);
-  BaseType_t rc = xSemaphoreTake(cv->semaphoreHandle, timeoutTicks);
+  BaseType_t rc = xSemaphoreTake(cv->semaphoreHandle, portMAX_DELAY);
   chppMutexLock(mutex);
 
   return (rc == pdTRUE);
+}
+
+bool timeoutCallback(void *context) {
+  auto *cv = static_cast<struct ChppConditionVariable *>(context);
+  chppPlatformConditionVariableSignal(cv);
+  return false;  // one-shot
 }
 
 }  // anonymous namespace
@@ -48,16 +54,27 @@ void chppPlatformConditionVariableDeinit(struct ChppConditionVariable *cv) {
 
 bool chppPlatformConditionVariableWait(struct ChppConditionVariable *cv,
                                        struct ChppMutex *mutex) {
-  return waitWithTimeout(cv, mutex, portMAX_DELAY);  // block indefinitely
+  return wait(cv, mutex);
 }
 
 bool chppPlatformConditionVariableTimedWait(struct ChppConditionVariable *cv,
                                             struct ChppMutex *mutex,
                                             uint64_t timeoutNs) {
-  // TODO: Address once b/159135482 is resolved
+  bool success = false;
+  Timer *timer = Timer::Instance();
   const TickType_t timeoutTicks =
-      static_cast<TickType_t>(Timer::Instance()->NsToTicks(timeoutNs));
-  return waitWithTimeout(cv, mutex, timeoutTicks);
+      static_cast<TickType_t>(timer->NsToTicks(timeoutNs));
+
+  void *timerHandle;
+  int rc =
+      timer->EventAddAtOffset(timeoutTicks, timeoutCallback, cv, &timerHandle);
+  if (rc != 0) {
+    CHPP_LOGE("Failed to set cv timeout timer");
+  } else {
+    success = wait(cv, mutex) && (timer->EventRemove(timerHandle) == 0);
+  }
+
+  return success;
 }
 
 void chppPlatformConditionVariableSignal(struct ChppConditionVariable *cv) {
