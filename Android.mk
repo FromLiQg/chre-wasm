@@ -75,6 +75,9 @@ USF_DAEMON_SRC_FILES := \
     host/usf_daemon/usf_daemon.cc \
     host/usf_daemon/main.cc
 
+USF_DAEMON_CFLAGS := \
+    -DFLATBUFFERS_USF
+
 LOCAL_C_INCLUDES := \
     system/chre/external/flatbuffers/include \
     system/chre/host/common/include \
@@ -112,6 +115,7 @@ USF_DAEMON_SHARED_LIBRARIES := libusf
 ifeq ($(CHRE_DAEMON_USES_USF),true)
 LOCAL_C_INCLUDES += $(USF_DAEMON_INCLUDES)
 LOCAL_SRC_FILES += $(USF_DAEMON_SRC_FILES)
+LOCAL_CFLAGS += $(USF_DAEMON_CFLAGS)
 LOCAL_SHARED_LIBRARIES += $(USF_DAEMON_SHARED_LIBRARIES)
 else
 LOCAL_SRC_FILES += $(MSM_DAEMON_SRC_FILES)
