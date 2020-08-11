@@ -22,6 +22,12 @@
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/unique_ptr.h"
 
+/*
+ * Include USF FlatBuffers services header before including other USF
+ * FlatBuffers headers.
+ */
+#include "usf/usf_flatbuffers.h"
+
 #include "usf/error.h"
 #include "usf/fbs/usf_msg_sample_root_generated.h"
 #include "usf/reffed_ptr.h"
