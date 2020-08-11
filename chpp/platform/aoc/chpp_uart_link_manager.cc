@@ -53,10 +53,7 @@ void onTransactionHandshakeInterrupt(void *context, uint32_t /* interrupt */) {
   manager->getWakeInGpi()->SetTriggerFunction(GPIAoC::GPI_DISABLE);
   manager->getWakeInGpi()->ClearInterrupt();
 
-  BaseType_t xHigherPriorityTaskWoken = 0;
-  xSemaphoreGiveFromISR(manager->getSemaphoreHandle(),
-                        &xHigherPriorityTaskWoken);
-  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  chppConditionVariableSignal(manager->getCondVar());
 }
 
 }  // anonymous namespace
@@ -68,19 +65,16 @@ UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
       mUart(uart),
       mWakeOutGpio(wakeOutPinNumber, IP_LOCK_GPIO),
       mWakeInGpi(wakeInGpiNumber) {
-  mSemaphoreHandle = xSemaphoreCreateBinaryStatic(&mStaticSemaphore);
-  if (mSemaphoreHandle == nullptr) {
-    FATAL_ERROR("Failed to create cv semaphore");
-  }
+  chppMutexInit(&mMutex);
+  chppConditionVariableInit(&mCondVar);
 
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
 }
 
 UartLinkManager::~UartLinkManager() {
-  if (mSemaphoreHandle != nullptr) {
-    vSemaphoreDelete(mSemaphoreHandle);
-  }
+  chppConditionVariableDeinit(&mCondVar);
+  chppMutexDeinit(&mMutex);
 }
 
 void UartLinkManager::init() {
@@ -133,8 +127,10 @@ bool UartLinkManager::startTransaction() {
 
     mWakeInGpi.SetInterruptHandler(onTransactionHandshakeInterrupt, this);
     mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
-    // TODO: Add timeout
-    if (xSemaphoreTake(mSemaphoreHandle, portMAX_DELAY) == pdTRUE) {
+
+    chppMutexLock(&mMutex);
+    if (mWakeInGpi.PadValue() ||
+        chppConditionVariableTimedWait(&mCondVar, &mMutex, kStartTimeoutNs)) {
       if (hasTxPacket()) {
         int bytesTransmitted = mUart->Tx(mCurrentBuffer, mCurrentBufferLen);
 
@@ -152,17 +148,20 @@ bool UartLinkManager::startTransaction() {
       }
 
       mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_LOW);
-      // TODO: Add timeout
-      success &= (xSemaphoreTake(mSemaphoreHandle, portMAX_DELAY) == pdTRUE);
+      success &=
+          (!mWakeInGpi.PadValue() ||
+           chppConditionVariableTimedWait(&mCondVar, &mMutex, kStartTimeoutNs));
     } else {
       success = false;
       mWakeOutGpio.Clear();
     }
+    chppMutexUnlock(&mMutex);
 
     mTransactionPending = false;
   }
 
   // Re-enable the interrupt to handle transaction requests.
+  mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_DISABLE);
   mWakeInGpi.SetInterruptHandler(onTransactionRequestInterrupt, this);
   mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
 
