@@ -146,7 +146,6 @@ bool UartLinkManager::startTransaction() {
           success = false;
         }
 
-        clearTxPacket();
       } else {
         // TODO: Wait for pulse width requirement per specifications.
         mWakeOutGpio.Clear();
@@ -166,6 +165,9 @@ bool UartLinkManager::startTransaction() {
   // Re-enable the interrupt to handle transaction requests.
   mWakeInGpi.SetInterruptHandler(onTransactionRequestInterrupt, this);
   mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
+
+  // Remove the TX packet to allow subsequent transmission.
+  clearTxPacket();
 
   return success;
 }
