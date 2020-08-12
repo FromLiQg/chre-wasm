@@ -17,6 +17,7 @@
 #include "chre/platform/power_control_manager.h"
 
 #include "chre/core/event_loop_manager.h"
+#include "chre/platform/shared/memory.h"
 
 namespace chre {
 
@@ -38,8 +39,10 @@ void PowerControlManagerBase::onHostWakeSuspendEvent(bool awake) {
   }
 }
 
-void PowerControlManager::postEventLoopProcess(size_t /* numPendingEvents */) {
-  // TODO: stubbed out, Implement this.
+void PowerControlManager::postEventLoopProcess(size_t numPendingEvents) {
+  if (numPendingEvents == 0) {
+    removeDramAccessVote();
+  }
 }
 
 bool PowerControlManager::hostIsAwake() {

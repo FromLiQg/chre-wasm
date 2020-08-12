@@ -50,11 +50,19 @@ void *memoryAllocDram(size_t size);
 void memoryFreeDram(void *pointer);
 
 /**
- * Requests or releases access to DRAM or another large capacity region, if
- * available. If not such region exists, this method should return true and be a
+ * Ensures memory allocated through memoryAllocDram can be utilized. If memory
+ * allocated through memoryAllocDram is always available, this method can be a
  * no-op.
+ *
+ * This must be support being invoked from multiple threads.
  */
-bool requestDramAccess(bool enabled);
+void forceDramAccess();
+
+/**
+ * Removes CHRE's vote to keep DRAM accessible. This must only be called when
+ * CHRE is idle.
+ */
+void removeDramAccessVote();
 
 /**
  * Allocates memory in DRAM for an object of size T and constructs the object in

@@ -17,11 +17,11 @@
 #include "chre/platform/aoc/memory.h"
 #include "chre/platform/memory.h"
 #include "chre/platform/mutex.h"
+#include "chre/platform/shared/dram_vote_client.h"
 #include "chre/platform/shared/pal_system_api.h"
 
 #include "basic.h"
 #include "heap.h"
-#include "sysmem.h"
 
 #include <cstdlib>
 
@@ -40,13 +40,13 @@ extern uintptr_t __heap_chre_dram_end__;
 namespace chre {
 namespace {
 
-//! SRAM heap handle.
+//! Handle to the SRAM heap.
 void *gSramHeap = nullptr;
-//! SRAM heap mutex.
+//! Mutex used to synchronize access to the SRAM heap.
 Mutex gSramMutex;
-//! DRAM handle.
+//! Handle to the DRAM heap.
 void *gDramHeap = nullptr;
-//! DRAM mutex.
+//! Mutex used to synchronize access to the DRAM heap.
 Mutex gDramMutex;
 
 enum ChreHeap { DRAM, SRAM };
@@ -107,10 +107,6 @@ void *GetHeap(ChreHeap heap) {
 
 bool IsInHeap(ChreHeap heap, const void *pointer) {
   void *handle = GetHeap(heap);
-  bool isDramHeap = (heap == ChreHeap::DRAM);
-  if (isDramHeap) {
-    CHRE_ASSERT(requestDramAccess(true /*enabled*/));
-  }
   bool found = false;
   if (handle != nullptr) {
     const struct HEAP_STATS *stats = HeapStats(handle);
@@ -119,23 +115,7 @@ bool IsInHeap(ChreHeap heap, const void *pointer) {
     found = castPointer >= heapBase && castPointer < (heapBase + stats->len);
   }
 
-  if (isDramHeap) {
-    requestDramAccess(false /*enabled*/);
-  }
-
   return found;
-}
-
-void *GetHeapFromPointer(const void *pointer) {
-  if (IsInHeap(ChreHeap::SRAM, pointer)) {
-    return GetSramHeap();
-  }
-
-  if (IsInHeap(ChreHeap::DRAM, pointer)) {
-    return GetDramHeap();
-  }
-
-  return nullptr;
 }
 
 }  // namespace
@@ -145,12 +125,19 @@ void *memoryAlloc(size_t size) {
   void *handle = GetSramHeap();
   if (handle != nullptr) {
     ptr = HeapMalloc(handle, size);
-    if (ptr == nullptr) {
-      printf("CHRE: Failed to allocate memory in SRAM heap\n");
-      // TODO: Ideally if we fail to allocate enough memory in SRAM, we should
-      // try and allocate in DRAM. Revisit this once all nanoapps have been
-      // loaded, and the full repercussions of tiered memory usage have been
-      // hashed out.
+    // Fall back to DRAM memory when SRAM memory is exhausted. Must exclude size
+    // 0 as clients may not explicitly free memory of size 0, which may
+    // mistakenly leave DRAM accessible
+    if (ptr == nullptr && size != 0) {
+      // Increment DRAM vote count to prevent system from powering down DRAM
+      // while DRAM memory is in use.
+      DramVoteClientSingleton::get()->incrementDramVoteCount();
+      ptr = memoryAllocDram(size);
+
+      // DRAM allocation failed too.
+      if (ptr == nullptr) {
+        DramVoteClientSingleton::get()->decrementDramVoteCount();
+      }
     }
   }
 
@@ -158,6 +145,9 @@ void *memoryAlloc(size_t size) {
 }
 
 void *memoryAllocDramAligned(size_t alignment, size_t size) {
+  CHRE_ASSERT_LOG(DramVoteClientSingleton::get()->isDramVoteActive(),
+                  "DRAM allocation when not accessible");
+
   void *ptr = nullptr;
   void *handle = GetDramHeap();
 
@@ -172,6 +162,9 @@ void *memoryAllocDramAligned(size_t alignment, size_t size) {
 }
 
 void *memoryAllocDram(size_t size) {
+  CHRE_ASSERT_LOG(DramVoteClientSingleton::get()->isDramVoteActive(),
+                  "DRAM allocation when not accessible");
+
   void *ptr = nullptr;
   void *handle = GetDramHeap();
   if (handle != nullptr) {
@@ -186,20 +179,19 @@ void *memoryAllocDram(size_t size) {
 
 void memoryFree(void *pointer) {
   if (pointer != nullptr) {
-    if (!IsInHeap(ChreHeap::DRAM, pointer)) {
-      void *handle = GetHeapFromPointer(pointer);
-      if (handle == nullptr) {
-        printf("CHRE: Tried to free memory from a non-CHRE heap\n");
-      } else {
-        HeapFree(handle, pointer);
-      }
+    if (IsInHeap(ChreHeap::SRAM, pointer)) {
+      HeapFree(GetHeap(ChreHeap::SRAM), pointer);
     } else {
-      printf("Please call memoryFreeDram to free DRAM heap mem\n");
+      memoryFreeDram(pointer);
+      DramVoteClientSingleton::get()->decrementDramVoteCount();
     }
   }
 }
 
 void memoryFreeDram(void *pointer) {
+  CHRE_ASSERT_LOG(DramVoteClientSingleton::get()->isDramVoteActive(),
+                  "DRAM freed when not accessible");
+
   if (!IsInHeap(ChreHeap::DRAM, pointer)) {
     printf(
         "CHRE: Tried to free memory not in DRAM heap or DRAM heap not \
@@ -209,19 +201,12 @@ void memoryFreeDram(void *pointer) {
   }
 }
 
-bool requestDramAccess(bool enabled) {
-  int rc;
-  if (enabled) {
-    rc = SysMem::Instance()->MemoryRequest(SysMem::MIF, true);
-  } else {
-    rc = SysMem::Instance()->MemoryRelease(SysMem::MIF);
-  }
+void forceDramAccess() {
+  DramVoteClientSingleton::get()->voteDramAccess(true /* enabled */);
+}
 
-  if (rc != 0) {
-    LOGE("Unable to change DRAM access to %d with error code %d", enabled, rc);
-  }
-
-  return rc == 0;
+void removeDramAccessVote() {
+  DramVoteClientSingleton::get()->voteDramAccess(false /* enabled */);
 }
 
 void *palSystemApiMemoryAlloc(size_t size) {
