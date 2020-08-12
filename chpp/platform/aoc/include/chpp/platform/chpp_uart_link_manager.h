@@ -18,13 +18,15 @@
 #define CHPP_PLATFORM_UART_LINK_MANAGER_H_
 
 #include "FreeRTOS.h"
+#include "chpp/condition_variable.h"
 #include "chpp/link.h"
+#include "chpp/mutex.h"
 #include "chpp/transport.h"
 #include "chre/platform/atomic.h"
 #include "chre/util/non_copyable.h"
+#include "chre/util/time.h"
 #include "gpi_aoc.h"
 #include "gpio_aoc.h"
-#include "semphr.h"
 #include "uart.h"
 
 namespace chpp {
@@ -113,8 +115,8 @@ class UartLinkManager : public chre::NonCopyable {
     return &mWakeInGpi;
   }
 
-  SemaphoreHandle_t getSemaphoreHandle() const {
-    return mSemaphoreHandle;
+  struct ChppConditionVariable *getCondVar() {
+    return &mCondVar;
   }
 
   void setTransactionPending() {
@@ -155,14 +157,18 @@ class UartLinkManager : public chre::NonCopyable {
   uint8_t mRxBuf[kRxBufSize];
   size_t mRxBufIndex = 0;
 
-  /**
-   * Semaphore to use while waiting for GPI interrupts.
-   * NOTE: We use the semaphore directly instead of a condition
-   * variable, because there is no need to protect a predicate variable
-   * through a mutex.
-   */
-  SemaphoreHandle_t mSemaphoreHandle;
-  StaticSemaphore_t mStaticSemaphore;
+  //! The mutex/condition variable to use while waiting for GPI interrupts.
+  struct ChppMutex mMutex;
+  struct ChppConditionVariable mCondVar;
+
+  //! The timeout for waiting on the remote to indicate transaction readiness
+  //! (t_start per specifications).
+  static constexpr uint64_t kStartTimeoutNs =
+      100 * chre::kOneMillisecondInNanoseconds;
+
+  //! The timeout for waiting on the remote to indicate transaction ended
+  //! (t_end per specifications).
+  static constexpr uint64_t kEndTimeoutNs = chre::kOneSecondInNanoseconds;
 
   chre::AtomicBool mTransactionPending{false};
 
