@@ -84,25 +84,6 @@ struct ChppGnssServiceState {
                                          // state
 };
 
-CHPP_PACKED_START
-
-//! Parameters for controlLocationSession
-// TODO: Replace with auto-generated parser function when available
-struct ChppGnssControlLocationSessionParameters {
-  bool enable;
-  uint32_t minIntervalMs;
-  uint32_t minTimeToNextFixMs;
-} CHPP_PACKED_ATTR;
-
-//! Parameters for controlMeasurementSession
-// TODO: Replace with auto-generated parser function when available
-struct ChppGnssControlMeasurementSessionParameters {
-  bool enable;
-  uint32_t minIntervalMs;
-} CHPP_PACKED_ATTR;
-
-CHPP_PACKED_END
-
 // Note: The CHRE PAL API only allows for one definition - see comment in WWAN
 // service for details.
 // Note: There is no notion of a cookie in the CHRE GNSS API so we need to use
@@ -335,10 +316,11 @@ static enum ChppAppErrorCode chppGnssServiceGetCapabilities(
     CHPP_LOG_OOM();
     error = CHPP_APP_ERROR_OOM;
   } else {
-    response->capabilities = gnssServiceContext->api->getCapabilities();
+    response->params.capabilities = gnssServiceContext->api->getCapabilities();
 
-    CHPP_LOGD("chppGnssServiceGetCapabilities returning %" PRIx32 ", %zu bytes",
-              response->capabilities, sizeof(*response));
+    CHPP_LOGD("chppGnssServiceGetCapabilities returning 0x%" PRIx32
+              ", %zu bytes",
+              response->params.capabilities, sizeof(*response));
     chppSendTimestampedResponseOrFail(&gnssServiceContext->service,
                                       &gnssServiceContext->getCapabilities,
                                       response, sizeof(*response));
@@ -441,11 +423,14 @@ static enum ChppAppErrorCode chppGnssServiceConfigurePassiveLocationListener(
   UNUSED_VAR(requestHeader);
   enum ChppAppErrorCode error = CHPP_APP_ERROR_NONE;
 
-  if (len < sizeof(bool)) {
+  if (len < sizeof(struct ChppGnssConfigurePassiveLocationListenerParameters)) {
     error = CHPP_APP_ERROR_INVALID_ARG;
   } else {
-    bool *enable = (bool *)buf;
-    if (!gnssServiceContext->api->configurePassiveLocationListener(*enable)) {
+    struct ChppGnssConfigurePassiveLocationListenerParameters *parameters =
+        (struct ChppGnssConfigurePassiveLocationListenerParameters *)buf;
+
+    if (!gnssServiceContext->api->configurePassiveLocationListener(
+            parameters->enable)) {
       error = CHPP_APP_ERROR_UNSPECIFIED;
     }
   }

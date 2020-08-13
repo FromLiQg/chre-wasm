@@ -243,6 +243,10 @@ AOC_CFLAGS += -Ichpp/platform/aoc/include
 # We use FlatBuffers in the AOC platform layer
 AOC_CFLAGS += $(FLATBUFFERS_CFLAGS)
 
+# Ensure USF uses its own flatbuffers header. This is needed while USF migrates
+# away from CHRE's header.
+AOC_CFLAGS += -DFLATBUFFERS_USF
+
 # Simulator-specific Compiler Flags ############################################
 
 SIM_CFLAGS += -Iplatform/shared/include
@@ -282,7 +286,7 @@ SIM_SRCS += platform/shared/system_time.cc
 
 # Optional GNSS support.
 ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
-SIM_SRCS += platform/shared/pal_gnss_stub.cc
+SIM_SRCS += platform/linux/pal_gnss.cc
 SIM_SRCS += platform/shared/platform_gnss.cc
 endif
 
