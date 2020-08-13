@@ -34,12 +34,69 @@ extern "C" {
 #define CHPP_PAL_GNSS_API_VERSION CHRE_PAL_GNSS_API_V1_4
 
 /**
- * Data structure used by the Get Capabilities response.
+ * Data structures for Control Location Session request.
  */
+CHPP_PACKED_START
+struct ChppGnssControlLocationSessionParameters {
+  bool enable;
+  uint32_t minIntervalMs;
+  uint32_t minTimeToNextFixMs;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
+CHPP_PACKED_START
+struct ChppGnssControlLocationSessionRequest {
+  struct ChppAppHeader header;
+  struct ChppGnssControlLocationSessionParameters params;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
+/**
+ * Data structures for Control Measurement Session request.
+ */
+CHPP_PACKED_START
+struct ChppGnssControlMeasurementSessionParameters {
+  bool enable;
+  uint32_t minIntervalMs;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
+CHPP_PACKED_START
+struct ChppGnssControlMeasurementSessionRequest {
+  struct ChppAppHeader header;
+  struct ChppGnssControlMeasurementSessionParameters params;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
+/**
+ * Data structures for Configure Passive Listener request.
+ */
+CHPP_PACKED_START
+struct ChppGnssConfigurePassiveLocationListenerParameters {
+  bool enable;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
+CHPP_PACKED_START
+struct ChppGnssConfigurePassiveLocationListenerRequest {
+  struct ChppAppHeader header;
+  struct ChppGnssConfigurePassiveLocationListenerParameters params;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
+/**
+ * Data structures used by the Get Capabilities response.
+ */
+CHPP_PACKED_START
+struct ChppGnssGetCapabilitiesParameters {
+  uint32_t capabilities;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
 CHPP_PACKED_START
 struct ChppGnssGetCapabilitiesResponse {
   struct ChppAppHeader header;
-  uint32_t capabilities;
+  struct ChppGnssGetCapabilitiesParameters params;
 } CHPP_PACKED_ATTR;
 CHPP_PACKED_END
 
