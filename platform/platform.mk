@@ -183,6 +183,7 @@ AOC_SRCS += chpp/platform/aoc/link.cc
 AOC_SRCS += chpp/platform/aoc/chpp_uart_link_manager.cc
 AOC_SRCS += chpp/platform/aoc/memory.cc
 AOC_SRCS += chpp/platform/aoc/notifier.cc
+AOC_SRCS += chpp/platform/aoc/time.cc
 AOC_SRCS += platform/aoc/chre_api_re.cc
 AOC_SRCS += platform/aoc/fatal_error.cc
 AOC_SRCS += platform/aoc/host_link.cc
