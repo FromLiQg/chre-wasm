@@ -17,6 +17,7 @@
 #include "chre/core/init.h"
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/static_nanoapps.h"
+#include "chre/platform/shared/dram_vote_client.h"
 #include "chre/target_platform/init.h"
 
 #include "task.h"
@@ -36,6 +37,8 @@ TaskHandle_t gChreTaskHandle;
 // runs on, CHRE might create additional threads, which are cleaned up when
 // CHRE exits.
 void chreThreadEntry(void *context) {
+  DramVoteClientSingleton::init();
+
   chre::init();
   chre::EventLoopManagerSingleton::get()->lateInit();
   chre::loadStaticNanoapps();
@@ -44,6 +47,8 @@ void chreThreadEntry(void *context) {
 
   // we only get here if the CHRE EventLoop exited
   chre::deinit();
+
+  DramVoteClientSingleton::deinit();
 }
 
 }  // namespace
