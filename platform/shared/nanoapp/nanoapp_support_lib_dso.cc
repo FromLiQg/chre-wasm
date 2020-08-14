@@ -75,14 +75,14 @@ void nanoappHandleEventCompat(uint32_t senderInstanceId, uint16_t eventType,
 
 }  // anonymous namespace
 
-//! Additional symbol used to determine the given build ID that this nanoapp
-//! was generated with, if any. The symbol is placed in its own section so it
-//! be stripped to determine if the nanoapp changed compared to a previous
+//! Additional symbol used to determine the given unstable ID that was provided
+//! when building this nanoapp, if any. The symbol is placed in its own section
+//! so it be stripped to determine if the nanoapp changed compared to a previous
 //! version.
-#ifdef NANOAPP_BUILD_ID
-DLL_EXPORT extern "C" const char _chreNanoappBuildId[]
-    __attribute__((section(".build_id"))) = NANOAPP_BUILD_ID;
-#endif  // NANOAPP_BUILD_ID
+#ifdef NANOAPP_UNSTABLE_ID
+DLL_EXPORT extern "C" const char _chreNanoappUnstableId[]
+    __attribute__((section(".unstable_id"))) = NANOAPP_UNSTABLE_ID;
+#endif  // NANOAPP_UNSTABLE_ID
 
 DLL_EXPORT extern "C" const struct chreNslNanoappInfo _chreNslDsoNanoappInfo = {
     /* magic */ CHRE_NSL_NANOAPP_INFO_MAGIC,
