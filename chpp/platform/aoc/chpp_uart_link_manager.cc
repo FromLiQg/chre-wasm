@@ -150,7 +150,7 @@ bool UartLinkManager::startTransaction() {
       mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_LOW);
       success &=
           (!mWakeInGpi.PadValue() ||
-           chppConditionVariableTimedWait(&mCondVar, &mMutex, kStartTimeoutNs));
+           chppConditionVariableTimedWait(&mCondVar, &mMutex, kEndTimeoutNs));
     } else {
       success = false;
       mWakeOutGpio.Clear();
