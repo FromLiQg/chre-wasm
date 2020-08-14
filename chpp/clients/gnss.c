@@ -20,14 +20,18 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "chpp/app.h"
 #include "chpp/clients.h"
 #include "chpp/common/gnss.h"
 #include "chpp/common/standard_uuids.h"
 #include "chpp/macros.h"
+#include "chpp/memory.h"
 #include "chpp/platform/log.h"
+#include "chpp/services/gnss_types.h"
 #include "chre/pal/gnss.h"
+#include "chre_api/chre/gnss.h"
 
 /************************************************
  *  Prototypes
@@ -331,10 +335,22 @@ static void chppGnssGetCapabilitiesResult(
 static void chppGnssControlLocationSessionResult(
     struct ChppGnssClientState *clientContext, uint8_t *buf, size_t len) {
   UNUSED_VAR(clientContext);
-  UNUSED_VAR(buf);
-  UNUSED_VAR(len);
-  // TODO
-  // gCallbacks->locationStatusChangeCallback(...);
+
+  if (len < sizeof(struct ChppGnssControlLocationSessionResponse)) {
+    CHPP_LOGE("GNSS ControlLocationSession result too short");
+
+  } else {
+    struct ChppGnssControlLocationSessionResponse *result =
+        (struct ChppGnssControlLocationSessionResponse *)buf;
+
+    CHPP_LOGD(
+        "chppGnssControlLocationSessionResult received enable=%s, "
+        "errorCode=%" PRIu8,
+        result->enabled ? "true" : "false", result->errorCode);
+
+    gCallbacks->locationStatusChangeCallback(result->enabled,
+                                             result->errorCode);
+  }
 }
 
 /**
@@ -350,10 +366,22 @@ static void chppGnssControlLocationSessionResult(
 static void chppGnssControlMeasurementSessionResult(
     struct ChppGnssClientState *clientContext, uint8_t *buf, size_t len) {
   UNUSED_VAR(clientContext);
-  UNUSED_VAR(buf);
-  UNUSED_VAR(len);
-  // TODO
-  // gCallbacks->measurementStatusChangeCallback(...);
+
+  if (len < sizeof(struct ChppGnssControlMeasurementSessionResponse)) {
+    CHPP_LOGE("GNSS ControlMeasurementSession result too short");
+
+  } else {
+    struct ChppGnssControlMeasurementSessionResponse *result =
+        (struct ChppGnssControlMeasurementSessionResponse *)buf;
+
+    CHPP_LOGD(
+        "chppGnssControlMeasurementSessionResult received enable=%s, "
+        "errorCode=%" PRIu8,
+        result->enabled ? "true" : "false", result->errorCode);
+
+    gCallbacks->measurementStatusChangeCallback(result->enabled,
+                                                result->errorCode);
+  }
 }
 
 /**
@@ -386,10 +414,26 @@ static void chppGnssStateResyncNotification(
 static void chppGnssLocationResultNotification(
     struct ChppGnssClientState *clientContext, uint8_t *buf, size_t len) {
   UNUSED_VAR(clientContext);
-  UNUSED_VAR(buf);
-  UNUSED_VAR(len);
-  // TODO: Use parser, i.e. chppGnssLocationEventToChre(), to convert
-  // gCallbacks->locationEventCallback(chreResult);
+
+  if (len < sizeof(struct ChppGnssLocationEvent)) {
+    CHPP_LOGE("GNSS LocationResultNotification too short");
+
+  } else {
+    CHPP_LOGD("chppGnssLocationResultNotification received location");
+
+    // TODO: Use parser script instead. i.e. chppGnssLocationEventToChre()
+
+    struct chreGnssLocationEvent *chreResult =
+        chppMalloc(sizeof(struct chreGnssLocationEvent));
+
+    if (chreResult == NULL) {
+      CHPP_LOG_OOM();
+
+    } else {
+      memcpy(chreResult, buf, sizeof(struct ChppGnssLocationEvent));
+      gCallbacks->locationEventCallback(chreResult);
+    }
+  }
 }
 
 /**
@@ -406,7 +450,8 @@ static void chppGnssMeasurementResultNotification(
   UNUSED_VAR(clientContext);
   UNUSED_VAR(buf);
   UNUSED_VAR(len);
-  // TODO: Use parser, i.e. chppGnssMeasurementEventToChre(), to convert
+  // TODO: Use parser script, i.e. chppGnssMeasurementEventToChre(), to convert
+
   // gCallbacks->measurementEventCallback(chreResult);
 }
 
@@ -542,8 +587,7 @@ static bool chppGnssClientControlLocationSession(bool enable,
  */
 static void chppGnssClientReleaseLocationEvent(
     struct chreGnssLocationEvent *event) {
-  // TODO
-  UNUSED_VAR(event);
+  CHPP_FREE_AND_NULLIFY(event);
 }
 
 /**
@@ -589,8 +633,7 @@ static bool chppGnssClientControlMeasurementSession(bool enable,
  */
 static void chppGnssClientReleaseMeasurementDataEvent(
     struct chreGnssDataEvent *event) {
-  // TODO
-  UNUSED_VAR(event);
+  CHPP_FREE_AND_NULLIFY(event);
 }
 
 /**
