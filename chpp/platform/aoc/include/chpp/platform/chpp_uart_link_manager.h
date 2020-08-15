@@ -96,8 +96,12 @@ class UartLinkManager : public chre::NonCopyable {
   bool startTransaction();
 
   /**
-   * Pulls RX data from the UART peripheral, and sends them to the CHPP
-   * transport layer.
+   * Pulls RX data from the UART peripheral.
+   */
+  void pullRxSamples();
+
+  /**
+   * Same as pullRxSamples() but also sends the data to the CHPP transport.
    */
   void processRxSamples();
 
@@ -130,6 +134,10 @@ class UartLinkManager : public chre::NonCopyable {
    */
   bool waitForHandshakeIrq(uint64_t timeoutNs);
 
+  bool isRxBufferFull() const {
+    return mRxBufIndex == kRxBufSize;
+  }
+
   /**
    * GPIO pin numbers to be used in the argument of UartLinkManager, which
    * defines the physical pin used for the wake_out GPIO.
@@ -161,10 +169,12 @@ class UartLinkManager : public chre::NonCopyable {
   uint8_t *mCurrentBuffer = nullptr;
   size_t mCurrentBufferLen = 0;
 
-  //! UART FIFO length is 256 bytes.
-  static constexpr size_t kRxBufSize = 256;
-  uint8_t mRxBuf[kRxBufSize];
-  size_t mRxBufIndex = 0;
+  //! The temporary buffer to store RX data.
+  //! NOTE: Access to these variables must be done when the RX interrupt is
+  //! disabled.
+  static constexpr size_t kRxBufSize = CHPP_PLATFORM_LINK_RX_MTU_BYTES;
+  volatile uint8_t mRxBuf[kRxBufSize];
+  volatile size_t mRxBufIndex = 0;
 
   //! The timeout for waiting on the remote to indicate transaction readiness
   //! (t_start per specifications).
