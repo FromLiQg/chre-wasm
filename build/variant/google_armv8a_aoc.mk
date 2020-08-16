@@ -82,7 +82,14 @@ ifeq ($(CHRE_NANOAPP_BUILD_ID),)
 CHRE_NANOAPP_BUILD_ID=local
 endif
 
-TARGET_CFLAGS += -DNANOAPP_BUILD_ID=\"nanoapp_build=$(NANOAPP_NAME)@$(CHRE_NANOAPP_BUILD_ID)\"
+# Provide the CHRE commit hash to make it easy to identify CHRE changes that
+# may be present in a nanoapp. This ID may change even if no nanoapp changes
+# have been made so it has to go in the unstable ID section.
+COMMIT_HASH_COMMAND = git describe --always --long --dirty
+CHRE_COMMIT_HASH = $(shell cd $(CHRE_PREFIX) && $(COMMIT_HASH_COMMAND))
+
+TARGET_CFLAGS += \
+    -DNANOAPP_UNSTABLE_ID=\"nanoapp_id=$(CHRE_NANOAPP_BUILD_ID)@chre-$(CHRE_COMMIT_HASH)\"
 
 include $(CHRE_PREFIX)/build/nanoapp/google_aoc.mk
 ifeq ($(CHRE_TCM_ENABLED),true)

@@ -19,15 +19,13 @@
 #include "chre/core/host_comms_manager.h"
 #include "chre/core/settings.h"
 #include "chre/platform/aoc/system_time.h"
-#include "chre/platform/shared/dram_util.h"
 #include "chre/platform/shared/host_protocol_chre.h"
 #include "chre/platform/shared/nanoapp_load_manager.h"
 #include "chre/util/fixed_size_blocking_queue.h"
+#include "chre/util/flatbuffers/helpers.h"
 #include "chre_api/chre/version.h"
 
 #include "usf/usf_transport.h"
-
-using flatbuffers::FlatBufferBuilder;
 
 namespace chre {
 
@@ -163,7 +161,7 @@ usf::UsfErr handleUsfMessage(usf::UsfTransport *transport,
 
 void sendTimeSyncRequest() {
   constexpr size_t kInitialSize = 52;
-  flatbuffers::FlatBufferBuilder builder(kInitialSize);
+  ChreFlatBufferBuilder builder(kInitialSize);
   HostProtocolChre::encodeTimeSyncRequest(builder);
 
   transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
@@ -223,7 +221,7 @@ bool getSettingStateFromFbs(fbs::SettingState state,
 void sendDebugDumpData(uint16_t hostClientId, const char *debugStr,
                        size_t debugStrSize) {
   constexpr size_t kFixedSizePortion = 52;
-  flatbuffers::FlatBufferBuilder builder(kFixedSizePortion + debugStrSize);
+  ChreFlatBufferBuilder builder(kFixedSizePortion + debugStrSize);
   HostProtocolChre::encodeDebugDumpData(builder, hostClientId, debugStr,
                                         debugStrSize);
 
@@ -233,7 +231,7 @@ void sendDebugDumpData(uint16_t hostClientId, const char *debugStr,
 void sendDebugDumpResponse(uint16_t hostClientId, bool success,
                            uint32_t dataCount) {
   constexpr size_t kFixedSizePortion = 52;
-  flatbuffers::FlatBufferBuilder builder(kFixedSizePortion);
+  ChreFlatBufferBuilder builder(kFixedSizePortion);
   HostProtocolChre::encodeDebugDumpResponse(builder, hostClientId, success,
                                             dataCount);
   transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
@@ -244,7 +242,7 @@ void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
   clientIdCbData.ptr = deferCbData;
 
   struct NanoappListData {
-    FlatBufferBuilder *builder;
+    ChreFlatBufferBuilder *builder;
     DynamicVector<NanoappListEntryOffset> nanoappEntries;
   };
   NanoappListData cbData;
@@ -259,7 +257,7 @@ void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
     size_t initialBufferSize =
         (kFixedOverhead + expectedNanoappCount * kPerNanoappSize);
 
-    flatbuffers::FlatBufferBuilder builder(initialBufferSize);
+    ChreFlatBufferBuilder builder(initialBufferSize);
     cbData.builder = &builder;
 
     auto nanoappAdderCallback = [](const Nanoapp *nanoapp, void *data) {
@@ -279,7 +277,7 @@ void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
 void sendFragmentResponse(uint16_t hostClientId, uint32_t transactionId,
                           uint32_t fragmentId, bool success) {
   constexpr size_t kInitialBufferSize = 52;
-  flatbuffers::FlatBufferBuilder builder(kInitialBufferSize);
+  ChreFlatBufferBuilder builder(kInitialBufferSize);
   HostProtocolChre::encodeLoadNanoappResponse(
       builder, hostClientId, transactionId, success, fragmentId);
 
@@ -295,7 +293,7 @@ void finishLoadingNanoappCallback(uint16_t /*eventType*/, void *data) {
   UniquePtr<LoadNanoappCallbackData> cbData(
       static_cast<LoadNanoappCallbackData *>(data));
   constexpr size_t kInitialBufferSize = 48;
-  flatbuffers::FlatBufferBuilder builder(kInitialBufferSize);
+  ChreFlatBufferBuilder builder(kInitialBufferSize);
 
   CHRE_ASSERT(cbData != nullptr);
   LOGD("Finished loading nanoapp cb on fragment ID: %u", cbData->fragmentId);
@@ -328,8 +326,7 @@ void HostLink::flushMessagesSentByNanoapp(uint64_t /* appId */) {
 
 bool HostLink::sendMessage(const MessageToHost *message) {
   constexpr size_t kFixedReserveSize = 80;
-  flatbuffers::FlatBufferBuilder builder(message->message.size() +
-                                         kFixedReserveSize);
+  ChreFlatBufferBuilder builder(message->message.size() + kFixedReserveSize);
   HostProtocolChre::encodeNanoappMessage(
       builder, message->appId, message->toHostData.messageType,
       message->toHostData.hostEndpoint, message->message.data(),
@@ -340,7 +337,7 @@ bool HostLink::sendMessage(const MessageToHost *message) {
 
 void HostLink::sendLogMessage(const char *logMessage, size_t logMessageSize) {
   constexpr size_t kInitialSize = 128;
-  flatbuffers::FlatBufferBuilder builder(logMessageSize + kInitialSize);
+  ChreFlatBufferBuilder builder(logMessageSize + kInitialSize);
   HostProtocolChre::encodeLogMessages(builder, logMessage, logMessageSize);
 
   transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
@@ -371,7 +368,7 @@ void HostMessageHandlers::handleHubInfoRequest(uint16_t hostClientId) {
   constexpr float kSleepPower = 0;
   constexpr float kPeakPower = 0;
 
-  flatbuffers::FlatBufferBuilder builder(kInitialBufferSize);
+  ChreFlatBufferBuilder builder(kInitialBufferSize);
   HostProtocolChre::encodeHubInfoResponse(
       builder, kHubName, kVendor, kToolchain, kLegacyPlatformVersion,
       kLegacyToolchainVersion, kPeakMips, kStoppedPower, kSleepPower,

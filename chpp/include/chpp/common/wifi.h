@@ -34,23 +34,52 @@ extern "C" {
 #define CHPP_PAL_WIFI_API_VERSION CHRE_PAL_WIFI_API_V1_2
 
 /**
- * Data structure used by the Get Capabilities Response.
+ * Data structures used by the Configure Scan Monitor request.
  */
 CHPP_PACKED_START
-struct ChppWifiGetCapabilitiesResponse {
+struct ChppWifiConfigureScanMonitorAsyncRequestParameters {
+  bool enable;
+  const void *cookie;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
+CHPP_PACKED_START
+struct ChppWifiConfigureScanMonitorAsyncRequest {
   struct ChppAppHeader header;
-  uint32_t capabilities;
+  struct ChppWifiConfigureScanMonitorAsyncRequestParameters params;
 } CHPP_PACKED_ATTR;
 CHPP_PACKED_END
 
 /**
- * Data structure used by the Configure Scan Monitor Async Response.
+ * Data structures used by the Get Capabilities Response.
  */
+CHPP_PACKED_START
+struct ChppWifiGetCapabilitiesParameters {
+  uint32_t capabilities;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
+CHPP_PACKED_START
+struct ChppWifiGetCapabilitiesResponse {
+  struct ChppAppHeader header;
+  struct ChppWifiGetCapabilitiesParameters params;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
+/**
+ * Data structures used by the Configure Scan Monitor Async Response.
+ */
+CHPP_PACKED_START
+struct ChppWifiConfigureScanMonitorAsyncResponseParameters {
+  bool enabled;
+  uint8_t errorCode;
+} CHPP_PACKED_ATTR;
+CHPP_PACKED_END
+
 CHPP_PACKED_START
 struct ChppWifiConfigureScanMonitorAsyncResponse {
   struct ChppAppHeader header;
-  bool enabled;
-  uint8_t errorCode;
+  struct ChppWifiConfigureScanMonitorAsyncResponseParameters params;
 } CHPP_PACKED_ATTR;
 CHPP_PACKED_END
 
@@ -76,16 +105,16 @@ enum ChppWifiCommands {
   CHPP_WIFI_CLOSE = 0x0001,
 
   //! Retrieves a set of flags indicating supported features.
-  CHPP_WIFI_GET_CAPABILITIES = 0x3010,
+  CHPP_WIFI_GET_CAPABILITIES = 0x0002,
 
   //! Configures whether scanEventCallback receives unsolicited scan results.
-  CHPP_WIFI_CONFIGURE_SCAN_MONITOR_ASYNC = 0x3020,
+  CHPP_WIFI_CONFIGURE_SCAN_MONITOR_ASYNC = 0x0003,
 
   //!  Request that the WiFi chipset perform a scan, or deliver cached results.
-  CHPP_WIFI_REQUEST_SCAN_ASYNC = 0x3030,
+  CHPP_WIFI_REQUEST_SCAN_ASYNC = 0x0004,
 
   //! Request that the WiFi chipset perform RTT ranging.
-  CHPP_WIFI_REQUEST_RANGING_ASYNC = 0x3040,
+  CHPP_WIFI_REQUEST_RANGING_ASYNC = 0x0005,
 };
 
 #ifdef __cplusplus

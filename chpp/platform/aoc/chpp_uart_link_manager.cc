@@ -22,6 +22,7 @@
 #include "chre/platform/fatal_error.h"
 #include "efw/include/interrupt_controller.h"
 #include "efw/include/processor.h"
+#include "efw/include/timer.h"
 #include "ipc-regions.h"
 
 namespace chpp {
@@ -53,7 +54,11 @@ void onTransactionHandshakeInterrupt(void *context, uint32_t /* interrupt */) {
   manager->getWakeInGpi()->SetTriggerFunction(GPIAoC::GPI_DISABLE);
   manager->getWakeInGpi()->ClearInterrupt();
 
-  chppConditionVariableSignal(manager->getCondVar());
+  BaseType_t xHigherPriorityTaskWoken = 0;
+  xTaskNotifyFromISR(manager->getTaskHandle(),
+                     CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ, eSetBits,
+                     &xHigherPriorityTaskWoken);
+  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 }  // anonymous namespace
@@ -65,16 +70,9 @@ UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
       mUart(uart),
       mWakeOutGpio(wakeOutPinNumber, IP_LOCK_GPIO),
       mWakeInGpi(wakeInGpiNumber) {
-  chppMutexInit(&mMutex);
-  chppConditionVariableInit(&mCondVar);
-
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
-}
-
-UartLinkManager::~UartLinkManager() {
-  chppConditionVariableDeinit(&mCondVar);
-  chppMutexDeinit(&mMutex);
+  mTaskHandle = xTaskGetCurrentTaskHandle();
 }
 
 void UartLinkManager::init() {
@@ -113,6 +111,46 @@ bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
   return success;
 }
 
+bool UartLinkManager::waitForHandshakeIrq(uint64_t timeoutNs) {
+  bool success = false;
+  Timer *timer = Timer::Instance();
+  const TickType_t timeoutTicks =
+      static_cast<TickType_t>(timer->NsToTicks(timeoutNs));
+
+  // Treat as if the IRQ occurred in the timeout case. We check if the timer
+  // was successfully cancelled to determine if we timed out or not.
+  auto timeoutCallback = [](void *context) -> bool {
+    onTransactionHandshakeInterrupt(context, 0);
+    return false;  // one-shot
+  };
+
+  void *timerHandle;
+  int rc = timer->EventAddAtOffset(timeoutTicks, timeoutCallback, this,
+                                   &timerHandle);
+  if (rc != 0) {
+    CHPP_LOGE("Failed to set handshake timeout timer");
+  } else {
+    uint32_t signal = 0;
+    while ((signal & CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ) == 0) {
+      xTaskNotifyWait(
+          0 /* ulBitsToClearOnEntry */,
+          CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ /* ulBitsToClearOnExit */,
+          &signal, portMAX_DELAY /* xTicksToWait */);
+    }
+
+    // If we cleared the notification while another one is in progress,
+    // re-notify the task so it doesn't get lost.
+    if ((signal & ~(CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ)) != 0) {
+      xTaskNotify(mTaskHandle, 0, eNoAction);
+    }
+
+    // EventRemove() will not return 0 if the timer already fired.
+    success = (timer->EventRemove(timerHandle) == 0);
+  }
+
+  return success;
+}
+
 bool UartLinkManager::startTransaction() {
   bool success = true;
   mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_DISABLE);
@@ -128,9 +166,7 @@ bool UartLinkManager::startTransaction() {
     mWakeInGpi.SetInterruptHandler(onTransactionHandshakeInterrupt, this);
     mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
 
-    chppMutexLock(&mMutex);
-    if (mWakeInGpi.PadValue() ||
-        chppConditionVariableTimedWait(&mCondVar, &mMutex, kStartTimeoutNs)) {
+    if (waitForHandshakeIrq(kStartTimeoutNs)) {
       if (hasTxPacket()) {
         int bytesTransmitted = mUart->Tx(mCurrentBuffer, mCurrentBufferLen);
 
@@ -148,14 +184,11 @@ bool UartLinkManager::startTransaction() {
       }
 
       mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_LOW);
-      success &=
-          (!mWakeInGpi.PadValue() ||
-           chppConditionVariableTimedWait(&mCondVar, &mMutex, kEndTimeoutNs));
+      success &= waitForHandshakeIrq(kEndTimeoutNs);
     } else {
       success = false;
       mWakeOutGpio.Clear();
     }
-    chppMutexUnlock(&mMutex);
 
     mTransactionPending = false;
   }

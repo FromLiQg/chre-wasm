@@ -65,8 +65,6 @@ class UartLinkManager : public chre::NonCopyable {
   UartLinkManager(struct ChppTransportState *context, UART *uart,
                   uint8_t wakeOutPinNumber, uint8_t wakeInGpiNumber);
 
-  ~UartLinkManager();
-
   /**
    * This method must be called before invoking the rest of the public methods
    * in this class.
@@ -115,13 +113,22 @@ class UartLinkManager : public chre::NonCopyable {
     return &mWakeInGpi;
   }
 
-  struct ChppConditionVariable *getCondVar() {
-    return &mCondVar;
-  }
-
   void setTransactionPending() {
     mTransactionPending = true;
   }
+
+  TaskHandle_t getTaskHandle() const {
+    return mTaskHandle;
+  }
+
+  /**
+   * Waits for a wake handshaking IRQ to trigger, with a specified timeout.
+   *
+   * @param timeoutNs The timeout in nanoseconds.
+   *
+   * @return false if timed out
+   */
+  bool waitForHandshakeIrq(uint64_t timeoutNs);
 
   /**
    * GPIO pin numbers to be used in the argument of UartLinkManager, which
@@ -140,6 +147,8 @@ class UartLinkManager : public chre::NonCopyable {
   static constexpr uint8_t kWwanWakeInGpiNumber = 42;
 
  private:
+  TaskHandle_t mTaskHandle = nullptr;
+
   struct ChppTransportState *mTransportContext = nullptr;
 
   UART *mUart = nullptr;
@@ -156,10 +165,6 @@ class UartLinkManager : public chre::NonCopyable {
   static constexpr size_t kRxBufSize = 256;
   uint8_t mRxBuf[kRxBufSize];
   size_t mRxBufIndex = 0;
-
-  //! The mutex/condition variable to use while waiting for GPI interrupts.
-  struct ChppMutex mMutex;
-  struct ChppConditionVariable mCondVar;
 
   //! The timeout for waiting on the remote to indicate transaction readiness
   //! (t_start per specifications).
