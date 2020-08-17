@@ -188,8 +188,12 @@ bool UartLinkManager::startTransaction() {
       }
 
       mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_LOW);
-      success &= waitForHandshakeIrq(kEndTimeoutNs);
+      if (!waitForHandshakeIrq(kEndTimeoutNs)) {
+        CHPP_LOGE("Wake handshaking end timed out");
+        success = false;
+      }
     } else {
+      CHPP_LOGE("Wake handshaking start timed out");
       success = false;
       mWakeOutGpio.Clear();
     }
