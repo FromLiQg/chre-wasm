@@ -32,8 +32,12 @@ namespace {
 void onUartRxInterrupt(void *context) {
   UartLinkManager *manager = static_cast<UartLinkManager *>(context);
   manager->getUart()->DisableRxInterrupt();
+  manager->pullRxSamples();
   chppWorkThreadSignalFromLink(&manager->getTransportContext()->linkParams,
                                CHPP_TRANSPORT_SIGNAL_LINK_RX_PROCESS);
+  if (!manager->isRxBufferFull()) {
+    manager->getUart()->EnableRxInterrupt();
+  }
 }
 
 //! This is the interrupt to use when handling requests from the remote
@@ -204,13 +208,18 @@ bool UartLinkManager::startTransaction() {
   return success;
 }
 
-void UartLinkManager::processRxSamples() {
+void UartLinkManager::pullRxSamples() {
   int ch;
   while ((ch = mUart->GetChar()) != EOF && mRxBufIndex < kRxBufSize) {
     mRxBuf[mRxBufIndex++] = static_cast<uint8_t>(ch);
   }
+}
 
-  chppRxDataCb(mTransportContext, mRxBuf, mRxBufIndex);
+void UartLinkManager::processRxSamples() {
+  mUart->DisableRxInterrupt();
+  pullRxSamples();
+
+  chppRxDataCb(mTransportContext, const_cast<uint8_t *>(mRxBuf), mRxBufIndex);
   mRxBufIndex = 0;
   mUart->EnableRxInterrupt();
 }

@@ -183,6 +183,7 @@ AOC_SRCS += chpp/platform/aoc/link.cc
 AOC_SRCS += chpp/platform/aoc/chpp_uart_link_manager.cc
 AOC_SRCS += chpp/platform/aoc/memory.cc
 AOC_SRCS += chpp/platform/aoc/notifier.cc
+AOC_SRCS += chpp/platform/aoc/time.cc
 AOC_SRCS += platform/aoc/chre_api_re.cc
 AOC_SRCS += platform/aoc/dram_vote_client.cc
 AOC_SRCS += platform/aoc/fatal_error.cc
@@ -294,7 +295,7 @@ endif
 
 # Optional Wi-Fi support.
 ifeq ($(CHRE_WIFI_SUPPORT_ENABLED), true)
-SIM_SRCS += platform/shared/pal_wifi_stub.cc
+SIM_SRCS += platform/linux/pal_wifi.cc
 SIM_SRCS += platform/shared/platform_wifi.cc
 endif
 
