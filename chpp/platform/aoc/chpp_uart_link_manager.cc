@@ -25,6 +25,9 @@
 #include "efw/include/timer.h"
 #include "ipc-regions.h"
 
+// Define as 0 to disable wake handshaking
+#define WAKE_HANDSHAKE_ENABLE 1
+
 namespace chpp {
 
 namespace {
@@ -51,6 +54,7 @@ void onTransactionRequestInterrupt(void *context, uint32_t /* interrupt */) {
                                CHPP_TRANSPORT_SIGNAL_LINK_WAKE_IN_IRQ);
 }
 
+#if WAKE_HANDSHAKE_ENABLE
 //! This is the interrupt to use when handling signal handshaking during
 //! an on-going transaction.
 void onTransactionHandshakeInterrupt(void *context, uint32_t /* interrupt */) {
@@ -64,6 +68,7 @@ void onTransactionHandshakeInterrupt(void *context, uint32_t /* interrupt */) {
                      &xHigherPriorityTaskWoken);
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
+#endif  // WAKE_HANDSHAKE_ENABLE
 
 }  // anonymous namespace
 
@@ -116,6 +121,7 @@ bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
 }
 
 bool UartLinkManager::waitForHandshakeIrq(uint64_t timeoutNs) {
+#if WAKE_HANDSHAKE_ENABLE
   bool success = false;
   Timer *timer = Timer::Instance();
   const TickType_t timeoutTicks =
@@ -153,6 +159,9 @@ bool UartLinkManager::waitForHandshakeIrq(uint64_t timeoutNs) {
   }
 
   return success;
+#else
+  return true;
+#endif  // WAKE_HANDSHAKE_ENABLE
 }
 
 bool UartLinkManager::startTransaction() {
@@ -167,8 +176,10 @@ bool UartLinkManager::startTransaction() {
   if (mTransactionPending.load()) {
     mWakeOutGpio.Set(true /* set */);
 
+#if WAKE_HANDSHAKE_ENABLE
     mWakeInGpi.SetInterruptHandler(onTransactionHandshakeInterrupt, this);
     mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
+#endif  // WAKE_HANDSHAKE_ENABLE
 
     if (waitForHandshakeIrq(kStartTimeoutNs)) {
       if (hasTxPacket()) {
@@ -187,9 +198,15 @@ bool UartLinkManager::startTransaction() {
         mWakeOutGpio.Clear();
       }
 
+#if WAKE_HANDSHAKE_ENABLE
       mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_LOW);
-      success &= waitForHandshakeIrq(kEndTimeoutNs);
+      if (!waitForHandshakeIrq(kEndTimeoutNs)) {
+        CHPP_LOGE("Wake handshaking end timed out");
+        success = false;
+      }
+#endif  // WAKE_HANDSHAKE_ENABLE
     } else {
+      CHPP_LOGE("Wake handshaking start timed out");
       success = false;
       mWakeOutGpio.Clear();
     }
