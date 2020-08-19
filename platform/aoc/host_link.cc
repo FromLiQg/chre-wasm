@@ -72,9 +72,18 @@ class ChreUsfTransportManager {
   ChreUsfTransportManager() : mInitialized(false), mTransportHandle(nullptr) {
     usf::UsfErr err = usf::UsfTransportMgr::SetMsgHandler(
         usf::UsfMsgType::UsfMsgType_CHRE, handleUsfMessage, nullptr);
-    if (usf::kErrNone != err) {
-      FATAL_ERROR("Failed to set USF msg handler");
+    if (err == usf::kErrNone) {
+      err = usf::UsfWorkMgr::CreateWorker(&mWorker);
     }
+
+    if (err != usf::kErrNone) {
+      FATAL_ERROR("Failed to initialize CHRE transport");
+    }
+  }
+
+  ~ChreUsfTransportManager() {
+    mWorker->Stop();
+    mWorker.reset();
   }
 
   // Check if we've already received a message from the AP, since that's the
@@ -105,12 +114,17 @@ class ChreUsfTransportManager {
     return (usf::kErrNone == err);
   }
 
+  refcount::reffed_ptr<usf::UsfWorker> &getWorker() {
+    return mWorker;
+  }
+
  private:
   bool mInitialized;
   usf::UsfTransport *mTransportHandle;
+  refcount::reffed_ptr<usf::UsfWorker> mWorker;
 };
 
-ChreUsfTransportManager transportMgr;
+ChreUsfTransportManager gTransportMgr;
 
 /**
  * The USF external message handler function for CHRE, that
@@ -128,11 +142,10 @@ usf::UsfErr handleUsfMessage(usf::UsfTransport *transport,
   usf::UsfErr rc = usf::kErrFailed;
 
   // check for initialization if this is the first message received
-  transportMgr.checkInit(transport);
+  gTransportMgr.checkInit(transport);
 
   if (msg == nullptr) {
-    return usf::kErrInvalid;
-
+    rc = usf::kErrInvalid;
   } else {
     usf::UsfMsgType msgType = msg->msg_type();
 
@@ -140,9 +153,38 @@ usf::UsfErr handleUsfMessage(usf::UsfTransport *transport,
       auto *dataVector = msg->data();
       if (dataVector != nullptr) {
         size_t dataLen = dataVector->size();
-        bool success = HostProtocolChre::decodeMessageFromHost(
-            dataVector->data(), dataLen);
-        rc = (success == true) ? usf::kErrNone : usf::kErrFailed;
+        struct MessageData {
+          uint64_t dataLen;
+          void *data;
+        };
+
+        // handleUsfMessage isn't single-threaded. Make a copy and process
+        // on a worker thread to ensure CHRE only processes incoming messages
+        // on a single thread. CHRE's thread isn't used since several messages
+        // can be processed without posting to it.
+        //
+        // TODO(b/163592230): Improve USF messaging interface to remove extra
+        // data copies and keep work single-threaded.
+        MessageData data;
+        data.dataLen = dataLen;
+        data.data = memoryAlloc(dataLen);
+        if (data.data == nullptr) {
+          LOG_OOM();
+          rc = usf::kErrAllocation;
+        } else {
+          memcpy(data.data, dataVector->data(), dataLen);
+
+          auto callback = [](void *data) {
+            MessageData *dataInfo = static_cast<MessageData *>(data);
+            HostProtocolChre::decodeMessageFromHost(dataInfo->data,
+                                                    dataInfo->dataLen);
+            memoryFree(dataInfo->data);
+            // USF owns the passed in data pointer and will free it after the
+            // callback returns.
+          };
+          rc =
+              gTransportMgr.getWorker()->Enqueue(callback, &data, sizeof(data));
+        }
       }
     } else {
       rc = usf::kErrInvalid;
@@ -164,7 +206,7 @@ void sendTimeSyncRequest() {
   ChreFlatBufferBuilder builder(kInitialSize);
   HostProtocolChre::encodeTimeSyncRequest(builder);
 
-  transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+  gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
 
   gLastTimeSyncRequestNanos = SystemTime::getMonotonicTime();
 }
@@ -225,7 +267,7 @@ void sendDebugDumpData(uint16_t hostClientId, const char *debugStr,
   HostProtocolChre::encodeDebugDumpData(builder, hostClientId, debugStr,
                                         debugStrSize);
 
-  transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+  gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void sendDebugDumpResponse(uint16_t hostClientId, bool success,
@@ -234,7 +276,7 @@ void sendDebugDumpResponse(uint16_t hostClientId, bool success,
   ChreFlatBufferBuilder builder(kFixedSizePortion);
   HostProtocolChre::encodeDebugDumpResponse(builder, hostClientId, success,
                                             dataCount);
-  transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+  gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
@@ -270,7 +312,7 @@ void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
     eventLoop.forEachNanoapp(nanoappAdderCallback, &cbData);
     HostProtocolChre::finishNanoappListResponse(builder, cbData.nanoappEntries,
                                                 clientIdCbData.hostClientId);
-    transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+    gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
   }
 }
 
@@ -281,7 +323,7 @@ void sendFragmentResponse(uint16_t hostClientId, uint32_t transactionId,
   HostProtocolChre::encodeLoadNanoappResponse(
       builder, hostClientId, transactionId, success, fragmentId);
 
-  if (!transportMgr.send(builder.GetBufferPointer(), builder.GetSize())) {
+  if (!gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize())) {
     LOGE(
         "Failed to send fragment response for HostClientID: %x FragmentID: %x"
         "transactionID: 0x%x",
@@ -332,7 +374,7 @@ bool HostLink::sendMessage(const MessageToHost *message) {
       message->toHostData.hostEndpoint, message->message.data(),
       message->message.size());
 
-  return transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+  return gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void HostLink::sendLogMessage(const char *logMessage, size_t logMessageSize) {
@@ -340,7 +382,7 @@ void HostLink::sendLogMessage(const char *logMessage, size_t logMessageSize) {
   ChreFlatBufferBuilder builder(logMessageSize + kInitialSize);
   HostProtocolChre::encodeLogMessages(builder, logMessage, logMessageSize);
 
-  transportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+  gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void HostMessageHandlers::handleDebugDumpRequest(uint16_t hostClientId) {
@@ -375,7 +417,7 @@ void HostMessageHandlers::handleHubInfoRequest(uint16_t hostClientId) {
       kPeakPower, CHRE_MESSAGE_TO_HOST_MAX_SIZE, chreGetPlatformId(),
       chreGetVersion(), hostClientId);
 
-  if (!transportMgr.send(builder.GetBufferPointer(), builder.GetSize())) {
+  if (!gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize())) {
     LOGE("Failed to send Hub Info Response message");
   }
 }
