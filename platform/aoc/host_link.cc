@@ -15,6 +15,7 @@
  */
 
 #include "chre/platform/host_link.h"
+
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/host_comms_manager.h"
 #include "chre/core/settings.h"
@@ -25,15 +26,11 @@
 #include "chre/util/flatbuffers/helpers.h"
 #include "chre_api/chre/version.h"
 
-#include "usf/usf_transport.h"
-
 namespace chre {
 
-namespace {
+Nanoseconds HostLinkBase::mLastTimeSyncRequestNanos(0);
 
-//! The last time a time sync request message has been sent.
-//! TODO: Make this a member of HostLinkBase
-Nanoseconds gLastTimeSyncRequestNanos(0);
+namespace {
 
 //! Used to pass the client ID through the user data pointer in deferCallback
 union HostClientIdCallbackData {
@@ -51,164 +48,9 @@ struct LoadNanoappCallbackData {
   uint32_t fragmentId;
 };
 
-/**
- * Sends a request to the host for a time sync message.
- */
-void sendTimeSyncRequest();
-
-// Forward declare the USF external message handler
-usf::UsfErr handleUsfMessage(usf::UsfTransport *transport,
-                             const usf::UsfMsg *msg, void *arg);
-
-// This class implements a basic wrapper for sending/receiving messages
-// over USF transports. It sets up a callback into the USF transport layer
-// for receiving messages on instantiation. The first message that we
-// receive from the USF transport layer includes a pointer to a 'transport'
-// abstraction, that can be used to send messages out of CHRE.
-// TODO: Revisit this implementation after the USF feature requests in
-// b/149318001 and b/149317051 are fulfilled
-class ChreUsfTransportManager {
- public:
-  ChreUsfTransportManager() : mInitialized(false), mTransportHandle(nullptr) {
-    usf::UsfErr err = usf::UsfTransportMgr::SetMsgHandler(
-        usf::UsfMsgType::UsfMsgType_CHRE, handleUsfMessage, nullptr);
-    if (err == usf::kErrNone) {
-      err = usf::UsfWorkMgr::CreateWorker(&mWorker);
-    }
-
-    if (err != usf::kErrNone) {
-      FATAL_ERROR("Failed to initialize CHRE transport");
-    }
-  }
-
-  ~ChreUsfTransportManager() {
-    mWorker->Stop();
-    mWorker.reset();
-  }
-
-  // Check if we've already received a message from the AP, since that's the
-  // only way we can send outgoing messages.
-  // AP (transport is valid).
-  // TODO (b/149317051) This needs to go away once USF exposes an API to
-  // acquire a transport.
-  void checkInit(usf::UsfTransport *transport) {
-    if (!mInitialized) {
-      if (transport == nullptr) {
-        FATAL_ERROR("Null transport at init, cannot send out messages!");
-      }
-      mTransportHandle = transport;
-      mInitialized = true;
-    }
-  }
-
-  bool send(uint8_t *data, size_t dataLen) {
-    usf::UsfErr err = usf::kErrFailed;
-
-    if (mInitialized) {
-      usf::UsfTxMsg msg;
-      msg.SetMsgType(usf::UsfMsgType_CHRE);
-      msg.SetData(data, dataLen);
-      err = mTransportHandle->SendMsg(&msg);
-    }
-
-    return (usf::kErrNone == err);
-  }
-
-  refcount::reffed_ptr<usf::UsfWorker> &getWorker() {
-    return mWorker;
-  }
-
- private:
-  bool mInitialized;
-  usf::UsfTransport *mTransportHandle;
-  refcount::reffed_ptr<usf::UsfWorker> mWorker;
-};
-
-ChreUsfTransportManager gTransportMgr;
-
-/**
- * The USF external message handler function for CHRE, that
- * is invoked on CHRE inbound messages from the AP
- *
- * @param transport A pointer to a transport that is used to send messages
- * out of CHRE to the AP
- * @param msg flatbuffer encoded message of type UsfMsgType_CHRE
- * @param arg yields the message length when cast to size_t
- * @return usf::kErrNone if success, an error code indicating the failure
- * otherwise
- */
-usf::UsfErr handleUsfMessage(usf::UsfTransport *transport,
-                             const usf::UsfMsg *msg, void * /* arg */) {
-  usf::UsfErr rc = usf::kErrFailed;
-
-  // check for initialization if this is the first message received
-  gTransportMgr.checkInit(transport);
-
-  if (msg == nullptr) {
-    rc = usf::kErrInvalid;
-  } else {
-    usf::UsfMsgType msgType = msg->msg_type();
-
-    if (msgType == usf::UsfMsgType_CHRE) {
-      auto *dataVector = msg->data();
-      if (dataVector != nullptr) {
-        size_t dataLen = dataVector->size();
-        struct MessageData {
-          uint64_t dataLen;
-          void *data;
-        };
-
-        // handleUsfMessage isn't single-threaded. Make a copy and process
-        // on a worker thread to ensure CHRE only processes incoming messages
-        // on a single thread. CHRE's thread isn't used since several messages
-        // can be processed without posting to it.
-        //
-        // TODO(b/163592230): Improve USF messaging interface to remove extra
-        // data copies and keep work single-threaded.
-        MessageData data;
-        data.dataLen = dataLen;
-        data.data = memoryAlloc(dataLen);
-        if (data.data == nullptr) {
-          LOG_OOM();
-          rc = usf::kErrAllocation;
-        } else {
-          memcpy(data.data, dataVector->data(), dataLen);
-
-          auto callback = [](void *data) {
-            MessageData *dataInfo = static_cast<MessageData *>(data);
-            HostProtocolChre::decodeMessageFromHost(dataInfo->data,
-                                                    dataInfo->dataLen);
-            memoryFree(dataInfo->data);
-            // USF owns the passed in data pointer and will free it after the
-            // callback returns.
-          };
-          rc =
-              gTransportMgr.getWorker()->Enqueue(callback, &data, sizeof(data));
-        }
-      }
-    } else {
-      rc = usf::kErrInvalid;
-    }
-  }
-
-  // Opportunistically send a time sync message (1 hour period threshold)
-  constexpr Seconds kOpportunisticTimeSyncPeriod = Seconds(60 * 60 * 1);
-  if (SystemTime::getMonotonicTime() >
-      gLastTimeSyncRequestNanos + kOpportunisticTimeSyncPeriod) {
-    sendTimeSyncRequest();
-  }
-
-  return rc;
-}
-
-void sendTimeSyncRequest() {
-  constexpr size_t kInitialSize = 52;
-  ChreFlatBufferBuilder builder(kInitialSize);
-  HostProtocolChre::encodeTimeSyncRequest(builder);
-
-  gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
-
-  gLastTimeSyncRequestNanos = SystemTime::getMonotonicTime();
+/** Helper function used to retrieve the HostLink from a static context. */
+inline HostLink &getHostLink() {
+  return EventLoopManagerSingleton::get()->getHostCommsManager().getHostLink();
 }
 
 void setTimeSyncRequestTimer(Nanoseconds delay) {
@@ -220,7 +62,7 @@ void setTimeSyncRequestTimer(Nanoseconds delay) {
   }
 
   auto callback = [](uint16_t /* eventType */, void * /* data */) {
-    sendTimeSyncRequest();
+    HostLinkBase::sendTimeSyncRequest();
   };
   sHandle = EventLoopManagerSingleton::get()->setDelayedCallback(
       SystemCallbackType::TimerSyncRequest, nullptr /* data */, callback,
@@ -267,7 +109,7 @@ void sendDebugDumpData(uint16_t hostClientId, const char *debugStr,
   HostProtocolChre::encodeDebugDumpData(builder, hostClientId, debugStr,
                                         debugStrSize);
 
-  gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+  getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void sendDebugDumpResponse(uint16_t hostClientId, bool success,
@@ -276,7 +118,7 @@ void sendDebugDumpResponse(uint16_t hostClientId, bool success,
   ChreFlatBufferBuilder builder(kFixedSizePortion);
   HostProtocolChre::encodeDebugDumpResponse(builder, hostClientId, success,
                                             dataCount);
-  gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+  getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
@@ -312,7 +154,7 @@ void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
     eventLoop.forEachNanoapp(nanoappAdderCallback, &cbData);
     HostProtocolChre::finishNanoappListResponse(builder, cbData.nanoappEntries,
                                                 clientIdCbData.hostClientId);
-    gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+    getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
   }
 }
 
@@ -323,7 +165,7 @@ void sendFragmentResponse(uint16_t hostClientId, uint32_t transactionId,
   HostProtocolChre::encodeLoadNanoappResponse(
       builder, hostClientId, transactionId, success, fragmentId);
 
-  if (!gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize())) {
+  if (!getHostLink().send(builder.GetBufferPointer(), builder.GetSize())) {
     LOGE(
         "Failed to send fragment response for HostClientID: %x FragmentID: %x"
         "transactionID: 0x%x",
@@ -374,7 +216,7 @@ bool HostLink::sendMessage(const MessageToHost *message) {
       message->toHostData.hostEndpoint, message->message.data(),
       message->message.size());
 
-  return gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+  return getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void HostLink::sendLogMessage(const char *logMessage, size_t logMessageSize) {
@@ -382,7 +224,119 @@ void HostLink::sendLogMessage(const char *logMessage, size_t logMessageSize) {
   ChreFlatBufferBuilder builder(logMessageSize + kInitialSize);
   HostProtocolChre::encodeLogMessages(builder, logMessage, logMessageSize);
 
-  gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize());
+  getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
+}
+
+HostLinkBase::HostLinkBase() {
+  usf::UsfErr err = usf::UsfTransportMgr::SetMsgHandler(
+      usf::UsfMsgType::UsfMsgType_CHRE, handleUsfMessage, nullptr);
+  if (err == usf::kErrNone) {
+    err = usf::UsfWorkMgr::CreateWorker(&mWorker);
+  }
+
+  if (err != usf::kErrNone) {
+    FATAL_ERROR("Failed to initialize CHRE transport");
+  }
+}
+
+HostLinkBase::~HostLinkBase() {
+  mWorker->Stop();
+  mWorker.reset();
+}
+
+void HostLinkBase::init(usf::UsfTransport *transport) {
+  if (mTransportHandle == nullptr) {
+    if (transport == nullptr) {
+      FATAL_ERROR("Null transport at init, cannot send out messages!");
+    }
+    mTransportHandle = transport;
+  }
+}
+
+bool HostLinkBase::send(uint8_t *data, size_t dataLen) {
+  usf::UsfErr err = usf::kErrFailed;
+
+  if (mTransportHandle != nullptr) {
+    usf::UsfTxMsg msg;
+    msg.SetMsgType(usf::UsfMsgType_CHRE);
+    msg.SetData(data, dataLen);
+    err = mTransportHandle->SendMsg(&msg);
+  }
+
+  return (usf::kErrNone == err);
+}
+
+usf::UsfErr HostLinkBase::handleUsfMessage(usf::UsfTransport *transport,
+                                           const usf::UsfMsg *msg,
+                                           void * /* arg */) {
+  usf::UsfErr rc = usf::kErrFailed;
+  getHostLink().init(transport);
+
+  if (msg == nullptr) {
+    rc = usf::kErrInvalid;
+  } else {
+    usf::UsfMsgType msgType = msg->msg_type();
+
+    if (msgType == usf::UsfMsgType_CHRE) {
+      auto *dataVector = msg->data();
+      if (dataVector != nullptr) {
+        size_t dataLen = dataVector->size();
+        struct MessageData {
+          uint64_t dataLen;
+          void *data;
+        };
+
+        // handleUsfMessage isn't single-threaded. Make a copy and process
+        // on a worker thread to ensure CHRE only processes incoming messages
+        // on a single thread. CHRE's thread isn't used since several messages
+        // can be processed without posting to it.
+        //
+        // TODO(b/163592230): Improve USF messaging interface to remove extra
+        // data copies and keep work single-threaded.
+        MessageData data;
+        data.dataLen = dataLen;
+        data.data = memoryAlloc(dataLen);
+        if (data.data == nullptr) {
+          LOG_OOM();
+          rc = usf::kErrAllocation;
+        } else {
+          memcpy(data.data, dataVector->data(), dataLen);
+
+          auto callback = [](void *data) {
+            MessageData *dataInfo = static_cast<MessageData *>(data);
+            HostProtocolChre::decodeMessageFromHost(dataInfo->data,
+                                                    dataInfo->dataLen);
+            memoryFree(dataInfo->data);
+            // USF owns the passed in data pointer and will free it after the
+            // callback returns.
+          };
+          rc =
+              getHostLink().getWorker()->Enqueue(callback, &data, sizeof(data));
+        }
+      }
+    } else {
+      rc = usf::kErrInvalid;
+    }
+  }
+
+  // Opportunistically send a time sync message (1 hour period threshold)
+  constexpr Seconds kOpportunisticTimeSyncPeriod = Seconds(60 * 60 * 1);
+  if (SystemTime::getMonotonicTime() >
+      mLastTimeSyncRequestNanos + kOpportunisticTimeSyncPeriod) {
+    sendTimeSyncRequest();
+  }
+
+  return rc;
+}
+
+void HostLinkBase::sendTimeSyncRequest() {
+  constexpr size_t kInitialSize = 52;
+  ChreFlatBufferBuilder builder(kInitialSize);
+  HostProtocolChre::encodeTimeSyncRequest(builder);
+
+  getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
+
+  mLastTimeSyncRequestNanos = SystemTime::getMonotonicTime();
 }
 
 void HostMessageHandlers::handleDebugDumpRequest(uint16_t hostClientId) {
@@ -417,7 +371,7 @@ void HostMessageHandlers::handleHubInfoRequest(uint16_t hostClientId) {
       kPeakPower, CHRE_MESSAGE_TO_HOST_MAX_SIZE, chreGetPlatformId(),
       chreGetVersion(), hostClientId);
 
-  if (!gTransportMgr.send(builder.GetBufferPointer(), builder.GetSize())) {
+  if (!getHostLink().send(builder.GetBufferPointer(), builder.GetSize())) {
     LOGE("Failed to send Hub Info Response message");
   }
 }
