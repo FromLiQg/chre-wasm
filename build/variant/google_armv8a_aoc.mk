@@ -89,7 +89,7 @@ COMMIT_HASH_COMMAND = git describe --always --long --dirty
 CHRE_COMMIT_HASH = $(shell cd $(CHRE_PREFIX) && $(COMMIT_HASH_COMMAND))
 
 TARGET_CFLAGS += \
-    -DNANOAPP_UNSTABLE_ID=\"nanoapp_id=$(CHRE_NANOAPP_BUILD_ID)@chre-$(CHRE_COMMIT_HASH)\"
+    -DNANOAPP_UNSTABLE_ID=\"nanoapp_unstable_id=$(CHRE_NANOAPP_BUILD_ID)@chre-$(CHRE_COMMIT_HASH)\"
 
 include $(CHRE_PREFIX)/build/nanoapp/google_aoc.mk
 ifeq ($(CHRE_TCM_ENABLED),true)
