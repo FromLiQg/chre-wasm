@@ -15,7 +15,11 @@
  */
 
 #include "chre/platform/platform_audio.h"
+#include <cinttypes>
+#include "chre/core/event_loop_manager.h"
+#include "chre/platform/assert.h"
 #include "chre/platform/log.h"
+#include "chre/platform/system_time.h"
 
 namespace chre {
 
@@ -24,33 +28,48 @@ PlatformAudio::PlatformAudio() {}
 PlatformAudio::~PlatformAudio() {}
 
 void PlatformAudio::init() {
-  LOGE("Stubbed out, to be implemented");
+  mAudioController.Start();
+  mAudioController.SetUpRemoteCore();
 }
 
 size_t PlatformAudio::getSourceCount() {
-  LOGE("Stubbed out, to be implemented");
-  return 0;
+  return AudioController::kMaxAocMicrophones;
 }
 
-bool PlatformAudio::getAudioSource(uint32_t /*handle*/,
-                                   struct chreAudioSource * /*source*/) const {
-  LOGE("Stubbed out, to be implemented");
-  return false;
+bool PlatformAudio::getAudioSource(uint32_t handle,
+                                   struct chreAudioSource *source) const {
+  bool success = false;
+  if ((handle < AudioController::kMaxAocMicrophones) && (source != nullptr)) {
+    memcpy(source, mAudioController.GetSource(handle), sizeof(chreAudioSource));
+    success = true;
+  }
+
+  return success;
 }
 
-void PlatformAudio::setHandleEnabled(uint32_t /*handle*/, bool /*enabled*/) {
-  LOGE("Stubbed out, to be implemented");
+void PlatformAudio::setHandleEnabled(uint32_t handle, bool enabled) {
+  mAudioController.SetEnabled(handle, enabled);
 }
 
-void PlatformAudio::cancelAudioDataEventRequest(uint32_t /*handle*/) {
-  LOGE("Stubbed out, to be implemented");
+void PlatformAudio::cancelAudioDataEventRequest(uint32_t handle) {
+  mAudioController.ReleaseAudio(handle);
 }
 
-bool PlatformAudio::requestAudioDataEvent(uint32_t /*handle*/,
-                                          uint32_t /*numSamples*/,
-                                          Nanoseconds /*eventDelay*/) {
-  LOGE("Stubbed out, to be implemented");
-  return false;
+bool PlatformAudio::requestAudioDataEvent(uint32_t handle, uint32_t numSamples,
+                                          Nanoseconds eventDelay) {
+  // TODO: Event delay
+  bool success = mAudioController.RequestAudio(handle);
+  LOGV("Request audio data for hdl %u, numSamples %u @ %" PRIu64
+       ", success: %d",
+       handle, numSamples, SystemTime::getMonotonicTime().toRawNanoseconds(),
+       success);
+
+  return success;
+}
+
+void PlatformAudio::releaseAudioDataEvent(
+    struct chreAudioDataEvent * /*event*/) {
+  mAudioController.OnBufferReleased();
 }
 
 }  // namespace chre

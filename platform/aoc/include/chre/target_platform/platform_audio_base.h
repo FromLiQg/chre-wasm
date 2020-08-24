@@ -17,13 +17,23 @@
 #ifndef CHRE_PLATFORM_AOC_PLATFORM_AUDIO_BASE_H_
 #define CHRE_PLATFORM_AOC_PLATFORM_AUDIO_BASE_H_
 
+#include <cstring>
+
+#include "chre/platform/aoc/audio_controller.h"
+#include "chre/platform/platform_audio.h"
+
 namespace chre {
 
 /**
  * The base PlatformAudio class for AoC to inject platform
- * specific functionality from.
+ * specific functionality from. Instantiates an Audio Controller object,
+ * which handles communications, data buffering, and audio data event
+ * dispatch for CHRE.
  */
-class PlatformAudioBase {};
+class PlatformAudioBase {
+ protected:
+  AudioController mAudioController;
+};
 
 }  // namespace chre
 
