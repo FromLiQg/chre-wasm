@@ -23,6 +23,7 @@
 #include "ash.h"
 #include "chre.h"
 #include "chre/platform/assert.h"
+#include "chre/platform/shared/debug_dump.h"
 #include "chre/platform/shared/memory.h"
 #include "chre/target_platform/platform_cache_management.h"
 #include "chre/util/dynamic_vector.h"
@@ -110,6 +111,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(memcpy),
     ADD_EXPORTED_C_SYMBOL(memmove),
     ADD_EXPORTED_C_SYMBOL(memset),
+    ADD_EXPORTED_C_SYMBOL(platform_chreDebugDumpVaLog),
     ADD_EXPORTED_C_SYMBOL(sqrtf),
     ADD_EXPORTED_C_SYMBOL(strcmp),
     ADD_EXPORTED_C_SYMBOL(strncmp),
