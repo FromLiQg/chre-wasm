@@ -29,6 +29,8 @@
 namespace chre {
 
 PlatformNanoapp::~PlatformNanoapp() {
+  closeNanoapp();
+
   if (mAppBinary != nullptr) {
     forceDramAccess();
     memoryFreeDram(mAppBinary);
@@ -58,6 +60,7 @@ void PlatformNanoapp::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
 void PlatformNanoapp::end() {
   forceDramAccess();
   mAppInfo->entryPoints.end();
+  closeNanoapp();
 }
 
 uint64_t PlatformNanoapp::getAppId() const {
@@ -185,12 +188,27 @@ bool PlatformNanoappBase::openNanoapp() {
     }
   }
 
+  if (!success) {
+    closeNanoapp();
+  }
+
   if (mAppBinary != nullptr) {
     memoryFreeDram(mAppBinary);
     mAppBinary = nullptr;
   }
 
   return success;
+}
+
+void PlatformNanoappBase::closeNanoapp() {
+  if (mDsoHandle != nullptr) {
+    forceDramAccess();
+    mAppInfo = nullptr;
+    if (dlclose(mDsoHandle) != 0) {
+      LOGE("dlclose failed");
+    }
+    mDsoHandle = nullptr;
+  }
 }
 
 }  // namespace chre
