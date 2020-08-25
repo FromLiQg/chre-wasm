@@ -24,6 +24,7 @@
 #include "chre.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/shared/memory.h"
+#include "chre/target_platform/platform_cache_management.h"
 #include "chre/util/dynamic_vector.h"
 #include "chre/util/macros.h"
 
@@ -162,6 +163,8 @@ bool NanoappLoader::open() {
 
   if (!success) {
     freeAllocatedData();
+  } else {
+    wipeSystemCaches();
   }
 
   return success;
