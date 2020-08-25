@@ -70,6 +70,12 @@ int atexitOverride(void (*function)(void)) {
   return 0;
 }
 
+// Must be overidden because frexp is an overloaded function and the compiler
+// won't know what template to use unless the types are explicit.
+double frexpOverride(double value, int *exp) {
+  return frexp(value, exp);
+}
+
 #define ADD_EXPORTED_SYMBOL(function_name, function_string) \
   { reinterpret_cast<void *>(function_name), function_string }
 #define ADD_EXPORTED_C_SYMBOL(function_name) \
@@ -100,9 +106,13 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreTimerSet),
     ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
     ADD_EXPORTED_SYMBOL(dlsym, "_Z5dlsymPvPKc"),
+    ADD_EXPORTED_SYMBOL(frexpOverride, "frexp"),
     ADD_EXPORTED_C_SYMBOL(memcpy),
+    ADD_EXPORTED_C_SYMBOL(memmove),
     ADD_EXPORTED_C_SYMBOL(memset),
     ADD_EXPORTED_C_SYMBOL(sqrtf),
+    ADD_EXPORTED_C_SYMBOL(strcmp),
+    ADD_EXPORTED_C_SYMBOL(strncmp),
 };
 
 }  // namespace
