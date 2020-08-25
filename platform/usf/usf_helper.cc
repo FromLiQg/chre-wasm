@@ -171,8 +171,6 @@ bool prepareSensorEvent(size_t numSamples, uint32_t sensorHandle,
         reinterpret_cast<chreSensorDataHeader *>(sensorSamples.get());
     header->sensorHandle = sensorHandle;
     header->readingCount = numSamples;
-    // TODO(b/150308661): Populate this
-    header->accuracy = CHRE_SENSOR_ACCURACY_UNKNOWN;
     header->reserved = 0;
   }
 
@@ -243,7 +241,8 @@ void populateSensorEvent(const usf::UsfSensorSampleReport *sampleReport,
         LOGE("Invalid sample type %" PRIu8, static_cast<uint8_t>(sampleType));
     }
 
-    // First sample determines the base timestamp for all other sensor samples
+    // First sample determines the base timestamp and accuracy for all other
+    // sensor samples
     if (i == 0) {
       auto *header =
           reinterpret_cast<chreSensorDataHeader *>(sensorSample.get());
@@ -251,6 +250,11 @@ void populateSensorEvent(const usf::UsfSensorSampleReport *sampleReport,
       if (timestampDelta != nullptr) {
         *timestampDelta = 0;
       }
+      auto usfAccuracy = sampleEvent.accuracy;
+      header->accuracy =
+          PlatformSensorTypeHelpersBase::convertUsfToChreSampleAccuracy(
+              usfAccuracy);
+
     } else {
       uint64_t delta = sampleEvent.timestamp_ns - prevSampleTimeNs;
       if (delta > UINT32_MAX) {
@@ -443,7 +447,7 @@ bool UsfHelper::getThreeAxisBias(
     if (data.hasBias) {
       bias->header.baseTimestamp = data.timestamp;
       bias->header.readingCount = 1;
-      // TODO(150308661): Provide accuracy value
+      bias->header.accuracy = data.accuracy;
       bias->header.reserved = 0;
       for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
         bias->readings[0].bias[i] = data.bias[i];
@@ -650,6 +654,9 @@ UniquePtr<struct chreSensorThreeAxisData> UsfHelper::convertUsfBiasUpdateToData(
     for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
       data.bias[i] = data.hasBias ? update->GetOffset()[i] : 0;
     }
+    data.accuracy =
+        PlatformSensorTypeHelpersBase::convertUsfToChreSampleAccuracy(
+            update->GetAccuracy());
 
     biasData = MakeUniqueZeroFill<struct chreSensorThreeAxisData>();
     if (biasData.isNull()) {
@@ -657,9 +664,7 @@ UniquePtr<struct chreSensorThreeAxisData> UsfHelper::convertUsfBiasUpdateToData(
     } else {
       biasData->header.baseTimestamp = data.timestamp;
       biasData->header.readingCount = 1;
-      biasData->header.accuracy =
-          PlatformSensorTypeHelpersBase::convertUsfToChreSampleAccuracy(
-              update->GetAccuracy());
+      biasData->header.accuracy = data.accuracy;
       biasData->header.reserved = 0;
       for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
         biasData->readings[0].bias[i] = data.bias[i];
