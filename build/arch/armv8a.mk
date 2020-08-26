@@ -23,7 +23,10 @@ TARGET_CFLAGS += -Wno-missing-prototypes
 # TODO: Fix log_null so this can be removed.
 TARGET_CFLAGS += -Wno-unused-parameter
 
-TARGET_CFLAGS += -Wframe-larger-than=1024
+# CHRE's stack size is 8KB so leave a little room to ensure the stack isn't
+# blown when calling nanoapps since nanoappStart will be invoked with some data
+# on the stack.
+TARGET_CFLAGS += -Wframe-larger-than=7000
 
 # Don't add these flags when building just the static archive as they generate
 # sections that will break static linking.

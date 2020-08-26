@@ -15,20 +15,29 @@
  */
 
 #include "chre/platform/platform_nanoapp.h"
-#include "chre/platform/shared/memory.h"
-#include "chre/platform/shared/nanoapp_dso_util.h"
-#include "chre/platform/shared/nanoapp_loader.h"
 
 #include <dlfcn.h>
 #include <cinttypes>
 
 #include "chre/platform/assert.h"
 #include "chre/platform/log.h"
+#include "chre/platform/shared/memory.h"
+#include "chre/platform/shared/nanoapp_dso_util.h"
+#include "chre/platform/shared/nanoapp_loader.h"
+#include "chre/util/macros.h"
 #include "chre_api/chre/version.h"
 
 namespace chre {
+namespace {
+
+const char kDefaultAppVersionString[] = "<undefined>";
+size_t kDefaultAppVersionStringSize = ARRAY_SIZE(kDefaultAppVersionString);
+
+}  // namespace
 
 PlatformNanoapp::~PlatformNanoapp() {
+  closeNanoapp();
+
   if (mAppBinary != nullptr) {
     forceDramAccess();
     memoryFreeDram(mAppBinary);
@@ -58,6 +67,7 @@ void PlatformNanoapp::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
 void PlatformNanoapp::end() {
   forceDramAccess();
   mAppInfo->entryPoints.end();
+  closeNanoapp();
 }
 
 uint64_t PlatformNanoapp::getAppId() const {
@@ -72,6 +82,11 @@ uint32_t PlatformNanoapp::getAppVersion() const {
   return (mAppInfo != nullptr) ? mAppInfo->appVersion : mExpectedAppVersion;
 }
 
+const char *PlatformNanoapp::getAppName() const {
+  forceDramAccess();
+  return (mAppInfo != nullptr) ? mAppInfo->name : "Unknown";
+}
+
 uint32_t PlatformNanoapp::getTargetApiVersion() const {
   forceDramAccess();
   return (mAppInfo != nullptr) ? mAppInfo->targetApiVersion : 0;
@@ -82,9 +97,48 @@ bool PlatformNanoapp::isSystemNanoapp() const {
   return (mAppInfo != nullptr && mAppInfo->isSystemNanoapp);
 }
 
-void PlatformNanoapp::logStateToBuffer(
-    DebugDumpWrapper & /* debugDump */) const {
-  // TODO: stubbed out, Implement this.
+void PlatformNanoapp::logStateToBuffer(DebugDumpWrapper &debugDump) const {
+  if (mAppInfo != nullptr) {
+    size_t versionLen = 0;
+    const char *version = getAppVersionString(&versionLen);
+    debugDump.print("%s (%s) @ build: %.*s", mAppInfo->name, mAppInfo->vendor,
+                    versionLen, version);
+  }
+}
+
+const char *PlatformNanoappBase::getAppVersionString(size_t *length) const {
+  const char *versionString = kDefaultAppVersionString;
+  *length = kDefaultAppVersionStringSize;
+
+  size_t endOffset = 0;
+  if (mAppUnstableId != nullptr) {
+    size_t appVersionStringLength = strlen(mAppUnstableId);
+
+    //! The unstable ID is expected to be in the format of
+    //! <descriptor>=<build ID>@<more descriptors>. Use this expected layout
+    //! knowledge to parse the string and only return the build ID portion that
+    //! should be printed.
+    size_t startOffset = SIZE_MAX;
+    for (size_t i = 0; i < appVersionStringLength; i++) {
+      size_t offset = i + 1;
+      if (startOffset == SIZE_MAX && mAppUnstableId[i] == '=' &&
+          offset < appVersionStringLength) {
+        startOffset = offset;
+      }
+
+      if (mAppUnstableId[i] == '@') {
+        endOffset = i;
+        break;
+      }
+    }
+
+    if (startOffset < endOffset) {
+      versionString = &mAppUnstableId[startOffset];
+      *length = endOffset - startOffset;
+    }
+  }
+
+  return versionString;
 }
 
 bool PlatformNanoappBase::isLoaded() const {
@@ -155,8 +209,12 @@ bool PlatformNanoappBase::verifyNanoappInfo() {
   } else {
     mAppInfo = static_cast<const struct chreNslNanoappInfo *>(
         dlsym(mDsoHandle, CHRE_NSL_DSO_NANOAPP_INFO_SYMBOL_NAME));
+    mAppUnstableId = static_cast<const char *>(
+        dlsym(mDsoHandle, CHRE_NSL_DSO_NANOAPP_UNSTABLE_ID_SYMBOL_NAME));
     if (mAppInfo == nullptr) {
       LOGE("Failed to find app info symbol");
+    } else if (mAppUnstableId == nullptr) {
+      LOGE("Failed to find unstable ID symbol");
     } else {
       success = validateAppInfo(mExpectedAppId, mExpectedAppVersion, mAppInfo);
       if (!success) {
@@ -185,12 +243,27 @@ bool PlatformNanoappBase::openNanoapp() {
     }
   }
 
+  if (!success) {
+    closeNanoapp();
+  }
+
   if (mAppBinary != nullptr) {
     memoryFreeDram(mAppBinary);
     mAppBinary = nullptr;
   }
 
   return success;
+}
+
+void PlatformNanoappBase::closeNanoapp() {
+  if (mDsoHandle != nullptr) {
+    forceDramAccess();
+    mAppInfo = nullptr;
+    if (dlclose(mDsoHandle) != 0) {
+      LOGE("dlclose failed");
+    }
+    mDsoHandle = nullptr;
+  }
 }
 
 }  // namespace chre

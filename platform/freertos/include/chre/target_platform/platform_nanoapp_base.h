@@ -107,6 +107,9 @@ class PlatformNanoappBase {
   //! Pointer to the app info structure within this nanoapp
   const struct chreNslNanoappInfo *mAppInfo = nullptr;
 
+  //! Pointer containing the unstable ID section for this nanoapp
+  const char *mAppUnstableId = nullptr;
+
   //! Set to true if this app is built into the CHRE binary, and was loaded via
   //! loadStatic(). In this case, the member variables above are not valid or
   //! applicable.
@@ -134,6 +137,17 @@ class PlatformNanoappBase {
    * result in execution of any unload handlers in the nanoapp.
    */
   void closeNanoapp();
+
+  /**
+   * Retrieves the nanoapp's version string. This is intended to be a human
+   * readable version string to aid in debugging. This must always return a
+   * valid string so if none is available it is recommended to return
+   * "<undefined>" or similar.
+   *
+   * @param length The length of the returned version string
+   * @return A char array containing the version string for this nanoapp.
+   */
+  const char *getAppVersionString(size_t *length) const;
 };
 
 }  // namespace chre
