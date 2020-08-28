@@ -223,6 +223,7 @@ AOC_SRCS += platform/shared/host_protocol_common.cc
 AOC_SRCS += platform/shared/memory_manager.cc
 AOC_SRCS += platform/shared/nanoapp_loader.cc
 AOC_SRCS += platform/shared/nanoapp_load_manager.cc
+AOC_SRCS += platform/shared/log_buffer.cc
 AOC_SRCS += platform/shared/pal_system_api.cc
 AOC_SRCS += platform/shared/pal_sensor_stub.cc
 AOC_SRCS += platform/shared/system_time.cc
