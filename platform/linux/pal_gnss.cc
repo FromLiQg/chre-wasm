@@ -20,6 +20,7 @@
 #include "chre/util/unique_ptr.h"
 
 #include <chrono>
+#include <cinttypes>
 #include <future>
 #include <thread>
 
@@ -106,7 +107,7 @@ uint32_t chrePalGnssGetCapabilities() {
 }
 
 bool chrePalControlLocationSession(bool enable, uint32_t minIntervalMs,
-                                   uint32_t minTimeToNextFixMs) {
+                                   uint32_t /* minTimeToNextFixMs */) {
   stopLocationThreads();
 
   if (enable) {
@@ -176,5 +177,13 @@ const struct chrePalGnssApi *chrePalGnssGetApi(uint32_t requestedApiVersion) {
       .releaseMeasurementDataEvent = chrePalGnssReleaseMeasurementDataEvent,
   };
 
-  return &kApi;
+  if (!CHRE_PAL_VERSIONS_ARE_COMPATIBLE(kApi.moduleVersion,
+                                        requestedApiVersion)) {
+    LOGE("Incompatible version: requested 0x%" PRIx32
+         " module version 0x%" PRIx32,
+         requestedApiVersion, kApi.moduleVersion);
+    return nullptr;
+  } else {
+    return &kApi;
+  }
 }
