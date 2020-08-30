@@ -20,6 +20,7 @@
 #include "chre/util/unique_ptr.h"
 
 #include <chrono>
+#include <cinttypes>
 #include <thread>
 
 /**
@@ -77,7 +78,7 @@ bool chrePalWifiConfigureScanMonitor(bool enable) {
   return true;
 }
 
-bool chrePalWifiApiRequestScan(const struct chreWifiScanParams *params) {
+bool chrePalWifiApiRequestScan(const struct chreWifiScanParams * /* params */) {
   stopScanEventThreads();
 
   gScanEventsThread = std::thread(sendScanResponse);
@@ -122,5 +123,13 @@ const struct chrePalWifiApi *chrePalWifiGetApi(uint32_t requestedApiVersion) {
       .releaseScanEvent = chrePalWifiApiReleaseScanEvent,
   };
 
-  return &kApi;
+  if (!CHRE_PAL_VERSIONS_ARE_COMPATIBLE(kApi.moduleVersion,
+                                        requestedApiVersion)) {
+    LOGE("Incompatible version: requested 0x%" PRIx32
+         " module version 0x%" PRIx32,
+         requestedApiVersion, kApi.moduleVersion);
+    return nullptr;
+  } else {
+    return &kApi;
+  }
 }
