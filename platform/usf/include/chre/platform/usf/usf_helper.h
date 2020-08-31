@@ -265,11 +265,6 @@ class UsfHelper {
 
  private:
   /**
-   * Disconnects from underlying services prior to shutdown
-   */
-  void deinit();
-
-  /**
    * Sends a synchronous request to USF with any returned data stored in the
    * given callback.
    *
@@ -363,6 +358,9 @@ class UsfHelper {
 
   //! Currently registered callback
   UsfHelperCallbackInterface *mCallback = nullptr;
+
+  //! The error encountered during initialization, if any.
+  usf::UsfErr mInitError = usf::UsfErr::kErrNone;
 };
 
 }  // namespace chre
