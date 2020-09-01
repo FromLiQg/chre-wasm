@@ -15,6 +15,8 @@
  */
 
 #include "chre/core/init.h"
+
+#include "chpp/platform/chpp_init.h"
 #include "chre/core/event_loop_manager.h"
 #include "chre/core/static_nanoapps.h"
 #include "chre/platform/shared/dram_vote_client.h"
@@ -27,6 +29,7 @@ namespace freertos {
 namespace {
 
 constexpr configSTACK_DEPTH_TYPE kChreTaskStackDepthWords = 0x800;
+
 constexpr UBaseType_t kChreTaskPriority = tskIDLE_PRIORITY + 1;
 
 TaskHandle_t gChreTaskHandle;
@@ -61,6 +64,9 @@ BaseType_t init() {
                               kChreTaskStackDepthWords, nullptr /* args */,
                               kChreTaskPriority, &gChreTaskHandle);
   CHRE_ASSERT(rc == pdPASS);
+
+  chpp::init();
+
   return rc;
 }
 
@@ -70,6 +76,8 @@ void deinit() {
   if (gChreTaskHandle != nullptr) {
     chre::EventLoopManagerSingleton::get()->getEventLoop().stop();
   }
+
+  chpp::deinit();
 }
 
 const char *getChreTaskName() {
