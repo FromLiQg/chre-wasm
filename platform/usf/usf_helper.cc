@@ -19,6 +19,7 @@
 #include <cinttypes>
 
 #include "chre/core/sensor_type_helpers.h"
+#include "chre/platform/fatal_error.h"
 #include "chre/util/macros.h"
 
 #include "usf/fbs/usf_msg_event_root_generated.h"
@@ -273,7 +274,19 @@ void populateSensorEvent(const usf::UsfSensorSampleReport *sampleReport,
 }  // namespace
 
 UsfHelper::~UsfHelper() {
-  deinit();
+  for (usf::UsfEventListener *listener : mUsfEventListeners) {
+    listener->event_type->RemoveListener(listener);
+  }
+
+  if (mWorker.get() != nullptr) {
+    mWorker->Stop();
+    mWorker.reset();
+  }
+
+  if (mTransportClient.get() != nullptr) {
+    mTransportClient->Disconnect();
+    mTransportClient.reset();
+  }
 }
 
 uint8_t UsfHelper::usfErrorToChreError(UsfErr err) {
@@ -295,18 +308,22 @@ uint8_t UsfHelper::usfErrorToChreError(UsfErr err) {
 
 void UsfHelper::init(UsfHelperCallbackInterface *callback,
                      usf::UsfWorker *worker) {
+  CHRE_ASSERT(callback != nullptr);
+
   usf::UsfDeviceMgr::GetDeviceProbeCompletePrecondition()->Wait();
 
-  UsfErr err = kErrNone;
+  UsfErr err = UsfErr::kErrAllocation;
   if (worker != nullptr) {
     mWorker.reset(worker, refcount::RefTakingMode::kCreate);
+    err = kErrNone;
   } else {
     err = usf::UsfWorkMgr::CreateWorker(&mWorker);
   }
 
-  if (!mUsfEventListeners.emplace_back()) {
+  if (callback == nullptr) {
+    err = UsfErr::kErrBadValue;
+  } else if (!mUsfEventListeners.emplace_back()) {
     LOG_OOM();
-    deinit();
   } else if ((err != kErrNone) ||
              ((err = usf::UsfTransportClient::Create(
                    &mTransportClient, usf::kUsfHeapLowPower)) != kErrNone) ||
@@ -318,9 +335,15 @@ void UsfHelper::init(UsfHelperCallbackInterface *callback,
                                              &usf::kUsfSensorMgrServerUuid,
                                              &mSensorMgrHandle)) != kErrNone)) {
     LOG_USF_ERR(err);
-    deinit();
+    // TODO(b/143139477): Debate removing the error capture if it proves to be
+    // unneeded in ramdump analysis.
+    mInitError = err;
   } else {
     mCallback = callback;
+  }
+
+  if (err != kErrNone) {
+    FATAL_ERROR("Failed to initialize UsfHelper: %" PRIu8, err);
   }
 }
 
@@ -331,22 +354,6 @@ bool UsfHelper::getSensorList(
     LOG_USF_ERR(err);
   }
   return err == kErrNone;
-}
-
-void UsfHelper::deinit() {
-  for (usf::UsfEventListener *listener : mUsfEventListeners) {
-    listener->event_type->RemoveListener(listener);
-  }
-
-  if (mWorker.get() != nullptr) {
-    mWorker->Stop();
-    mWorker.reset();
-  }
-
-  if (mTransportClient.get() != nullptr) {
-    mTransportClient->Disconnect();
-    mTransportClient.reset();
-  }
 }
 
 bool UsfHelper::startSampling(usf::UsfStartSamplingReq *request,

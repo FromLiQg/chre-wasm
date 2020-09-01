@@ -11,10 +11,13 @@
 
 #include <cstdlib>
 
-#define FATAL_ERROR_QUIT() \
-  do {                     \
-    chre::preFatalError(); \
-    abort();               \
+// Abort doesn't currently cause a coredump, so dereference an invalid address
+// instead.
+// TODO(b/166532395): Use abort once it causes a coredump.
+#define FATAL_ERROR_QUIT()    \
+  do {                        \
+    chre::preFatalError();    \
+    *(volatile int *)0x4 = 0; \
   } while (0)
 
 namespace chre {
