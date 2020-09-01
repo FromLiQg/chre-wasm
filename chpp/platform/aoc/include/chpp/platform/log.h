@@ -20,8 +20,12 @@
 #include <chre.h>
 #include <inttypes.h>
 
-#define CHPP_AOC_LOG(level, fmt, ...) \
-  chreLog(level, "CHPP: " fmt, ##__VA_ARGS__)
+#include "FreeRTOS.h"
+#include "task.h"
+
+#define CHPP_AOC_LOG(level, fmt, ...)                                    \
+  chreLog(level, "%s: " fmt, pcTaskGetName(xTaskGetCurrentTaskHandle()), \
+          ##__VA_ARGS__)
 
 #define CHPP_LOGE(fmt, ...) CHPP_AOC_LOG(CHRE_LOG_ERROR, fmt, ##__VA_ARGS__)
 #define CHPP_LOGW(fmt, ...) CHPP_AOC_LOG(CHRE_LOG_WARN, fmt, ##__VA_ARGS__)
