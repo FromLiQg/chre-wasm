@@ -274,9 +274,9 @@ bool UsfChreDaemon::loadNanoapp(const std::vector<uint8_t> &header,
     uint32_t targetApiVersion = (appHeader->targetChreApiMajorVersion << 24) |
                                 (appHeader->targetChreApiMinorVersion << 16);
 
-    success = sendFragmentedNanoappLoad(appHeader->appId, appHeader->appVersion,
-                                        targetApiVersion, nanoapp.data(),
-                                        nanoapp.size(), transactionId);
+    success = sendFragmentedNanoappLoad(
+        appHeader->appId, appHeader->appVersion, appHeader->flags,
+        targetApiVersion, nanoapp.data(), nanoapp.size(), transactionId);
   }
 
   return success;
@@ -309,8 +309,9 @@ bool UsfChreDaemon::sendFragmentAndWaitOnResponse(
 }
 
 bool UsfChreDaemon::sendFragmentedNanoappLoad(
-    uint64_t appId, uint32_t appVersion, uint32_t appTargetApiVersion,
-    const uint8_t *appBinary, size_t appSize, uint32_t transactionId) {
+    uint64_t appId, uint32_t appVersion, uint32_t appFlags,
+    uint32_t appTargetApiVersion, const uint8_t *appBinary, size_t appSize,
+    uint32_t transactionId) {
   // TODO: This is currently limited by the USF Message size, revisit
   // and increase this when the USF message size increases.
   constexpr size_t kFragmentSize = 512;
@@ -318,7 +319,7 @@ bool UsfChreDaemon::sendFragmentedNanoappLoad(
   std::copy(appBinary, appBinary + appSize, binary.begin());
 
   FragmentedLoadTransaction transaction(transactionId, appId, appVersion,
-                                        appTargetApiVersion, binary,
+                                        appFlags, appTargetApiVersion, binary,
                                         kFragmentSize);
 
   bool success = true;
