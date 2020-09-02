@@ -155,6 +155,13 @@ endif
 # the nanoapp, the version and the app ID. Marshalling this data from the
 # Makefile environment into something like python or even a small C program
 # is an unnecessary step.
+#
+# For the flags field of the struct, the following values are currently defined:
+# Signed                 = 0x00000001
+# Encrypted              = 0x00000002
+# TCM-capable            = 0x00000004
+#
+# The highest order byte is reserved for platform-specific usage.
 
 $$($$(1)_HEADER): $$(OUT)/$$$(1) $$($$$(1)_DIRS)
 	printf "00000000  %.8x " `$(BE_TO_LE_SCRIPT) 0x00000001` > $$@
@@ -267,13 +274,6 @@ TARGET_CFLAGS_LOCAL = $(TARGET_CFLAGS)
 TARGET_CFLAGS_LOCAL += -DCHRE_PLATFORM_ID=$(TARGET_PLATFORM_ID)
 
 # Default the nanoapp header flag values to signed if not overidden.
-# The current format is:
-# Signed                 = 0x00000001
-# Encrypted              = 0x00000002
-# TCM-capable            = 0x00000004
-#
-# Highest order half word reserved for the platform
-# Platform-specific bits = 0x0XXXXXXX - 0xFXXXXXXX
 TARGET_NANOAPP_FLAGS ?= 0x00000001
 $(eval $(call BUILD_TEMPLATE, $(TARGET_NAME), \
                               $(COMMON_CFLAGS) $(TARGET_CFLAGS_LOCAL), \
