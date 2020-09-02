@@ -248,7 +248,14 @@ bool HostLink::sendMessage(const MessageToHost *message) {
       message->toHostData.hostEndpoint, message->message.data(),
       message->message.size());
 
-  return getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
+  bool success =
+      getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
+
+  auto &hostCommsManager =
+      EventLoopManagerSingleton::get()->getHostCommsManager();
+  hostCommsManager.onMessageToHostComplete(message);
+
+  return success;
 }
 
 void HostLink::sendLogMessage(const char *logMessage, size_t logMessageSize) {
