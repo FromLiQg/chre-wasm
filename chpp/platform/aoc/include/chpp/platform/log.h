@@ -23,6 +23,10 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#ifndef PRIuSIZE
+#define PRIuSIZE "zu"
+#endif
+
 #define CHPP_AOC_LOG(level, fmt, ...)                                    \
   chreLog(level, "%s: " fmt, pcTaskGetName(xTaskGetCurrentTaskHandle()), \
           ##__VA_ARGS__)
