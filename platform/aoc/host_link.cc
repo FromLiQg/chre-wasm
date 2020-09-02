@@ -417,19 +417,19 @@ void HostMessageHandlers::handleHubInfoRequest(uint16_t hostClientId) {
 
 void HostMessageHandlers::handleLoadNanoappRequest(
     uint16_t hostClientId, uint32_t transactionId, uint64_t appId,
-    uint32_t appVersion, uint32_t targetApiVersion, const void *buffer,
-    size_t bufferLen, const char *appFileName, uint32_t fragmentId,
-    size_t appBinaryLen) {
+    uint32_t appVersion, uint32_t appFlags, uint32_t targetApiVersion,
+    const void *buffer, size_t bufferLen, const char *appFileName,
+    uint32_t fragmentId, size_t appBinaryLen) {
   bool success = true;
   static NanoappLoadManager sLoadManager;
 
   if (fragmentId == 0 || fragmentId == 1) {
     size_t totalAppBinaryLen = (fragmentId == 0) ? bufferLen : appBinaryLen;
     LOGD("Load nanoapp request for app ID 0x%016" PRIx64 " ver 0x%" PRIx32
-         " target API 0x%08" PRIx32 " size %zu (txnId %" PRIu32
-         " client %" PRIu16 ")",
-         appId, appVersion, targetApiVersion, totalAppBinaryLen, transactionId,
-         hostClientId);
+         " flags 0x%" PRIx32 " target API 0x%08" PRIx32
+         " size %zu (txnId %" PRIu32 " client %" PRIu16 ")",
+         appId, appVersion, appFlags, targetApiVersion, totalAppBinaryLen,
+         transactionId, hostClientId);
 
     if (sLoadManager.hasPendingLoadTransaction()) {
       FragmentedLoadInfo info = sLoadManager.getTransactionInfo();
