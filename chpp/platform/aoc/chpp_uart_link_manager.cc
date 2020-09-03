@@ -26,7 +26,8 @@
 #include "ipc-regions.h"
 
 // Define as 0 to disable wake handshaking
-#define WAKE_HANDSHAKE_ENABLE 1
+// TODO: Enable once ready
+#define WAKE_HANDSHAKE_ENABLE 0
 
 namespace chpp {
 
