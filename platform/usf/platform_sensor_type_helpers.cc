@@ -15,6 +15,7 @@
  */
 #include "chre/platform/platform_sensor_type_helpers.h"
 #include "chre/target_platform/assert.h"
+#include "chre/util/macros.h"
 
 #ifdef CHREX_SENSOR_SUPPORT
 #include "chre/extensions/platform/vendor_sensor_types.h"
@@ -41,9 +42,13 @@ bool PlatformSensorTypeHelpers::getVendorSensorBiasEventType(
 }
 
 const char *PlatformSensorTypeHelpers::getVendorSensorTypeName(
-    uint8_t /* sensorType */) {
-  // TODO: Stubbed out, implement this
+    uint8_t sensorType) {
+#ifdef CHREX_SENSOR_SUPPORT
+  return extension::vendorSensorTypeName(sensorType);
+#else
+  UNUSED_VAR(sensorType);
   return "";
+#endif
 }
 
 size_t PlatformSensorTypeHelpers::getVendorSensorLastEventSize(
@@ -155,9 +160,14 @@ bool PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
       *chreSensorType = CHRE_SENSOR_TYPE_STEP_DETECT;
       break;
     default:
+#ifdef CHREX_SENSOR_SUPPORT
+      success = extension::vendorConvertUsfToChreSensorType(usfSensorType,
+                                                            chreSensorType);
+#else
       // Don't print anything as USF exposes sensor types CHRE doesn't care
       // about (e.g. Camera Vsync, and color)
       success = false;
+#endif
       break;
   }
   return success;
