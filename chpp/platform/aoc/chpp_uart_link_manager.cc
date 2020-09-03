@@ -90,8 +90,7 @@ void UartLinkManager::init() {
   mUart->EnableRxInterrupt();
 
   mWakeInGpi.SetInterruptHandler(onTransactionRequestInterrupt, this);
-  // Use level triggered interrupts to handle possible race conditions.
-  mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
+  mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_RISING_EDGE);
   InterruptController::Instance()->InterruptEnable(
       IRQ_GPI0 + mWakeInGpi.GetGpiNumber(), Processor::Instance()->CoreID(),
       true /* enable */);
@@ -218,7 +217,8 @@ bool UartLinkManager::startTransaction() {
   // Re-enable the interrupt to handle transaction requests.
   mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_DISABLE);
   mWakeInGpi.SetInterruptHandler(onTransactionRequestInterrupt, this);
-  mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
+  // TODO: Handle potential cases where we miss a rising edge
+  mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_RISING_EDGE);
 
   // Remove the TX packet to allow subsequent transmission.
   clearTxPacket();
