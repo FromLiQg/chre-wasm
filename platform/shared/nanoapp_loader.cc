@@ -71,10 +71,27 @@ int atexitOverride(void (*function)(void)) {
   return 0;
 }
 
-// Must be overidden because frexp is an overloaded function and the compiler
-// won't know what template to use unless the types are explicit.
+// The following functions from the cmath header need to be overridden, since
+// they're overloaded functions, and we need to specify explicit types of the
+// template for the compiler.
 double frexpOverride(double value, int *exp) {
   return frexp(value, exp);
+}
+
+double sinOverride(double rad) {
+  return sin(rad);
+}
+
+double asinOverride(double val) {
+  return asin(val);
+}
+
+double cosOverride(double rad) {
+  return cos(rad);
+}
+
+float sqrtOverride(float val) {
+  return sqrt(val);
 }
 
 #define ADD_EXPORTED_SYMBOL(function_name, function_string) \
@@ -86,35 +103,58 @@ double frexpOverride(double value, int *exp) {
 // "hello-world" prototyping, the list of exported symbols must be
 // generated to minimize runtime errors and build breaks.
 const ExportedData gExportedData[] = {
+    /* libmath overrrides and symbols */
+    ADD_EXPORTED_SYMBOL(asinOverride, "asin"),
+    ADD_EXPORTED_SYMBOL(cosOverride, "cos"),
+    ADD_EXPORTED_SYMBOL(frexpOverride, "frexp"),
+    ADD_EXPORTED_SYMBOL(sinOverride, "sin"),
+    ADD_EXPORTED_SYMBOL(sqrtOverride, "sqrt"),
+    ADD_EXPORTED_C_SYMBOL(atan2f),
+    ADD_EXPORTED_C_SYMBOL(expf),
+    ADD_EXPORTED_C_SYMBOL(sqrtf),
+    ADD_EXPORTED_C_SYMBOL(tanhf),
+    /* libc overrides and symbols */
+    ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
+    ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
+    ADD_EXPORTED_SYMBOL(dlsym, "_Z5dlsymPvPKc"),
+    ADD_EXPORTED_C_SYMBOL(memcpy),
+    ADD_EXPORTED_C_SYMBOL(memmove),
+    ADD_EXPORTED_C_SYMBOL(memset),
+    ADD_EXPORTED_C_SYMBOL(strcmp),
+    ADD_EXPORTED_C_SYMBOL(strlen),
+    ADD_EXPORTED_C_SYMBOL(strncmp),
+    /* ash symbols */
     ADD_EXPORTED_C_SYMBOL(ashLoadCalibrationParams),
     ADD_EXPORTED_C_SYMBOL(ashSaveCalibrationParams),
     ADD_EXPORTED_C_SYMBOL(ashSetCalibration),
-    ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
+    /* CHRE symbols */
+    ADD_EXPORTED_C_SYMBOL(chreAbort),
+    ADD_EXPORTED_C_SYMBOL(chreAudioConfigureSource),
+    ADD_EXPORTED_C_SYMBOL(chreAudioGetSource),
     ADD_EXPORTED_C_SYMBOL(chreConfigureDebugDumpEvent),
     ADD_EXPORTED_C_SYMBOL(chreConfigureHostSleepStateEvents),
+    ADD_EXPORTED_C_SYMBOL(chreConfigureNanoappInfoEvents),
     ADD_EXPORTED_C_SYMBOL(chreGetApiVersion),
+    ADD_EXPORTED_C_SYMBOL(chreGetAppId),
+    ADD_EXPORTED_C_SYMBOL(chreGetInstanceId),
     ADD_EXPORTED_C_SYMBOL(chreGetEstimatedHostTimeOffset),
+    ADD_EXPORTED_C_SYMBOL(chreGetNanoappInfoByAppId),
     ADD_EXPORTED_C_SYMBOL(chreGetPlatformId),
     ADD_EXPORTED_C_SYMBOL(chreGetSensorSamplingStatus),
     ADD_EXPORTED_C_SYMBOL(chreGetTime),
+    ADD_EXPORTED_C_SYMBOL(chreGnssGetCapabilities),
+    ADD_EXPORTED_C_SYMBOL(chreGnssLocationSessionStartAsync),
+    ADD_EXPORTED_C_SYMBOL(chreGnssLocationSessionStopAsync),
     ADD_EXPORTED_C_SYMBOL(chreHeapAlloc),
     ADD_EXPORTED_C_SYMBOL(chreHeapFree),
     ADD_EXPORTED_C_SYMBOL(chreLog),
+    ADD_EXPORTED_C_SYMBOL(chreSendEvent),
     ADD_EXPORTED_C_SYMBOL(chreSendMessageToHostEndpoint),
     ADD_EXPORTED_C_SYMBOL(chreSensorConfigure),
     ADD_EXPORTED_C_SYMBOL(chreSensorFindDefault),
     ADD_EXPORTED_C_SYMBOL(chreTimerCancel),
     ADD_EXPORTED_C_SYMBOL(chreTimerSet),
-    ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
-    ADD_EXPORTED_SYMBOL(dlsym, "_Z5dlsymPvPKc"),
-    ADD_EXPORTED_SYMBOL(frexpOverride, "frexp"),
-    ADD_EXPORTED_C_SYMBOL(memcpy),
-    ADD_EXPORTED_C_SYMBOL(memmove),
-    ADD_EXPORTED_C_SYMBOL(memset),
     ADD_EXPORTED_C_SYMBOL(platform_chreDebugDumpVaLog),
-    ADD_EXPORTED_C_SYMBOL(sqrtf),
-    ADD_EXPORTED_C_SYMBOL(strcmp),
-    ADD_EXPORTED_C_SYMBOL(strncmp),
 };
 
 }  // namespace
