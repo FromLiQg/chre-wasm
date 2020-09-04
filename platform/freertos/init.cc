@@ -49,6 +49,9 @@ void chreThreadEntry(void *context) {
   chre::deinit();
 
   DramVoteClientSingleton::deinit();
+
+  vTaskDelete(nullptr);
+  gChreTaskHandle = nullptr;
 }
 
 }  // namespace
@@ -62,10 +65,10 @@ BaseType_t init() {
 }
 
 void deinit() {
+  // On a deinit call, we just stop the CHRE event loop. This causes the 'run'
+  // method in the task function exit, and move on to handle task cleanup
   if (gChreTaskHandle != nullptr) {
     chre::EventLoopManagerSingleton::get()->getEventLoop().stop();
-    vTaskDelete(gChreTaskHandle);
-    gChreTaskHandle = nullptr;
   }
 }
 
