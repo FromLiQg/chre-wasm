@@ -42,7 +42,9 @@ namespace {
 
 constexpr configSTACK_DEPTH_TYPE kChppTaskStackDepthWords = 0x400;
 
-constexpr UBaseType_t kChppTaskPriority = tskIDLE_PRIORITY + 1;
+// Choose an appripriate priority to avoid initializing things too late.
+// TODO: Configure priority in relation to CHRE based on end to end testing.
+constexpr UBaseType_t kChppTaskPriority = tskIDLE_PRIORITY + 2;
 
 // Structures to hold CHPP task related variables
 constexpr size_t kChppLinkTotal = ChppLinkType::CHPP_LINK_TYPE_TOTAL;
@@ -60,6 +62,9 @@ void chppThreadEntry(void *context) {
       &gChppTransportStateList[type.data];
   struct ChppAppState *appState = &gChppAppStateList[type.data];
 
+  chppTransportInit(transportState, appState);
+  chppAppInit(appState, transportState);
+
   chppWorkThreadStart(transportState);
 
   chppAppDeinit(appState);
@@ -70,14 +75,8 @@ void chppThreadEntry(void *context) {
 }
 
 BaseType_t startChppWorkThread(ChppLinkType type, const char *taskName) {
-  // Initialization must occur prior to task creation to avoid initializing
-  // things too late.
   struct ChppTransportState *transportState = &gChppTransportStateList[type];
-  struct ChppAppState *appState = &gChppAppStateList[type];
   transportState->linkParams.uartLinkManager = &gManagerList[type];
-
-  chppTransportInit(transportState, appState);
-  chppAppInit(appState, transportState);
 
   NestedDataPtr<ChppLinkType> linkType(type);
   return xTaskCreate(chppThreadEntry, taskName, kChppTaskStackDepthWords,
