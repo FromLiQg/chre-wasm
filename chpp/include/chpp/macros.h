@@ -18,6 +18,7 @@
 #define CHPP_MACROS_H_
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -52,6 +53,10 @@ extern "C" {
 #define CHPP_DEBUG_ASSERT(var) CHPP_ASSERT(var)
 #endif
 
+#ifndef PRIu64  // Pre-C99 lacks PRIu64 / llu support
+#define PRIu64 "lu"
+#endif
+
 #if defined(__GNUC__) && (__STDC_VERSION__ >= 201112L)
 #define CHPP_C11_OR_NEWER
 #endif
@@ -66,7 +71,7 @@ extern "C" {
 #define CHPP_STATIC_ASSERT2(cond, line) CHPP_STATIC_ASSERT3(cond, line)
 #define CHPP_STATIC_ASSERT(cond, msg) CHPP_STATIC_ASSERT2(cond, __LINE__)
 
-#endif
+#endif  // CHPP_C11_OR_NEWER
 
 // Time-related macros
 #define CHPP_TIME_NONE 0

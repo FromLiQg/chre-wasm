@@ -17,6 +17,7 @@
 #ifndef CHPP_LOG_H_
 #define CHPP_LOG_H_
 
+#include <inttypes.h>
 #include <pthread.h>
 #include <stdio.h>
 
@@ -26,6 +27,10 @@ extern "C" {
 
 #ifndef __FILENAME__
 #define __FILENAME__ __FILE__
+#endif
+
+#ifndef PRIuSIZE
+#define PRIuSIZE "zu"
 #endif
 
 // TODO: Should use PRIu8 etc. from inttypes.h instead of %d, etc. (add -Wall
