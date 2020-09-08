@@ -201,6 +201,7 @@ AOC_SRCS += platform/aoc/memory.cc
 AOC_SRCS += platform/aoc/power_control_manager.cc
 AOC_SRCS += platform/aoc/platform_audio.cc
 AOC_SRCS += platform/aoc/platform_cache_management.cc
+AOC_SRCS += platform/aoc/platform_pal.cc
 AOC_SRCS += platform/aoc/system_time.cc
 AOC_SRCS += platform/aoc/system_timer.cc
 AOC_SRCS += platform/shared/chre_api_audio.cc
