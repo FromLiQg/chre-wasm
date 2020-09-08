@@ -159,9 +159,9 @@ const ExportedData gExportedData[] = {
 
 }  // namespace
 
-void *NanoappLoader::create(void *elfInput) {
+void *NanoappLoader::create(void *elfInput, bool mapIntoTcm) {
   void *instance = nullptr;
-  NanoappLoader *loader = memoryAllocDram<NanoappLoader>(elfInput);
+  NanoappLoader *loader = memoryAllocDram<NanoappLoader>(elfInput, mapIntoTcm);
   if (loader != nullptr) {
     if (loader->open()) {
       instance = loader;
@@ -307,7 +307,11 @@ uintptr_t NanoappLoader::roundDownToAlign(uintptr_t virtualAddr) {
 }
 
 void NanoappLoader::freeAllocatedData() {
-  memoryFreeDram(mMapping.dataPtr);
+  if (mIsTcmBinary) {
+    memoryFree(mMapping.dataPtr);
+  } else {
+    memoryFreeDram(mMapping.dataPtr);
+  }
   memoryFreeDram(mSectionHeadersPtr);
   memoryFreeDram(mSectionNamesPtr);
   memoryFreeDram(mSymbolTablePtr);
@@ -587,7 +591,12 @@ bool NanoappLoader::createMappings() {
       size_t memorySpan = last->p_vaddr + last->p_memsz - first->p_vaddr;
       LOGV("Nanoapp image Memory Span: %u", memorySpan);
 
-      mMapping.dataPtr = memoryAllocDramAligned(kBinaryAlignment, memorySpan);
+      if (mIsTcmBinary) {
+        mMapping.dataPtr = memoryAllocAligned(kBinaryAlignment, memorySpan);
+      } else {
+        mMapping.dataPtr = memoryAllocDramAligned(kBinaryAlignment, memorySpan);
+      }
+
       if (mMapping.dataPtr == nullptr) {
         LOG_OOM();
       } else {
