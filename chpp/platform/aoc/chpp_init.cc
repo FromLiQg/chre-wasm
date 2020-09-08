@@ -53,6 +53,26 @@ ChppTransportState gChppTransportStateList[kChppLinkTotal];
 ChppAppState gChppAppStateList[kChppLinkTotal];
 FixedSizeVector<chpp::UartLinkManager, kChppLinkTotal> gManagerList;
 
+struct ChppClientServiceSet getClientServiceSet(ChppLinkType type) {
+  struct ChppClientServiceSet set = {};
+  switch (type) {
+    case ChppLinkType::CHPP_LINK_TYPE_WIFI:
+      set.wifiClient = 1;
+      break;
+    case ChppLinkType::CHPP_LINK_TYPE_GNSS:
+      set.gnssClient = 1;
+      break;
+    case ChppLinkType::CHPP_LINK_TYPE_WWAN:
+      set.wwanClient = 1;
+      break;
+    default:
+      LOGE("Invalid type %d to get client/service set", type);
+      CHRE_ASSERT(false);
+  }
+
+  return set;
+}
+
 // Initializes the CHPP instance and runs the work thread.
 void chppThreadEntry(void *context) {
   NestedDataPtr<ChppLinkType> type;
@@ -63,7 +83,8 @@ void chppThreadEntry(void *context) {
   struct ChppAppState *appState = &gChppAppStateList[type.data];
 
   chppTransportInit(transportState, appState);
-  chppAppInit(appState, transportState);
+  chppAppInitWithClientServiceSet(appState, transportState,
+                                  getClientServiceSet(type.data));
 
   chppWorkThreadStart(transportState);
 
