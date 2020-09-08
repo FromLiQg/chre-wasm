@@ -139,6 +139,7 @@ class UsfChreDaemon : public ChreDaemonBase {
    *
    * @param appId The ID of the nanoapp to load.
    * @param appVersion The version of the nanoapp to load.
+   * @param appFlags The flags specified by the nanoapp to be loaded.
    * @param appTargetApiVersion The version of the CHRE API that the app
    * targets.
    * @param appBinary The application binary code.
@@ -147,6 +148,7 @@ class UsfChreDaemon : public ChreDaemonBase {
    * @return true if successful, false otherwise.
    */
   bool sendFragmentedNanoappLoad(uint64_t appId, uint32_t appVersion,
+                                 uint32_t appFlags,
                                  uint32_t appTargetApiVersion,
                                  const uint8_t *appBinary, size_t appSize,
                                  uint32_t transactionId);
