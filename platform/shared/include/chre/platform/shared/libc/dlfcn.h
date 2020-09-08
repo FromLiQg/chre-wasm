@@ -37,8 +37,10 @@
  * entire elf file in memory (cannot be a FILE pointer, for example).
  *
  * @param elfBinary is a buffer containing the elf file
+ * @param mapIntoTcm Indicates whether the elfBinary should be mapped into
+ *     tightly coupled memory.
  */
-void *dlopenbuf(void *elfBinary);
+void *dlopenbuf(void *elfBinary, bool mapIntoTcm);
 
 /**
  * Returns a (function) pointer to the symbol named by the input argument.

@@ -25,6 +25,7 @@
 #include "chre/platform/shared/nanoapp_dso_util.h"
 #include "chre/platform/shared/nanoapp_loader.h"
 #include "chre/util/macros.h"
+#include "chre/util/system/napp_header_utils.h"
 #include "chre_api/chre/version.h"
 
 namespace chre {
@@ -160,6 +161,7 @@ void PlatformNanoappBase::loadStatic(const struct chreNslNanoappInfo *appInfo) {
 }
 
 bool PlatformNanoappBase::reserveBuffer(uint64_t appId, uint32_t appVersion,
+                                        uint32_t appFlags,
                                         size_t appBinaryLen) {
   CHRE_ASSERT(!isLoaded());
 
@@ -168,11 +170,16 @@ bool PlatformNanoappBase::reserveBuffer(uint64_t appId, uint32_t appVersion,
   bool success = false;
   mAppBinary = memoryAllocDram(appBinaryLen);
 
-  if (mAppBinary == nullptr) {
+  bool isSigned = IS_BIT_SET(appFlags, CHRE_NAPP_HEADER_SIGNED);
+  if (!isSigned) {
+    LOGE("Unable to load unsigned nanoapps");
+  } else if (mAppBinary == nullptr) {
     LOG_OOM();
   } else {
+    bool tcmCapable = IS_BIT_SET(appFlags, CHRE_NAPP_HEADER_TCM_CAPABLE);
     mExpectedAppId = appId;
     mExpectedAppVersion = appVersion;
+    mExpectedTcmCapable = tcmCapable;
     mAppBinaryLen = appBinaryLen;
     success = true;
   }
@@ -217,6 +224,12 @@ bool PlatformNanoappBase::verifyNanoappInfo() {
       LOGE("Failed to find unstable ID symbol");
     } else {
       success = validateAppInfo(mExpectedAppId, mExpectedAppVersion, mAppInfo);
+      if (success && mAppInfo->isTcmNanoapp != mExpectedTcmCapable) {
+        success = false;
+        LOGE("Expected TCM nanoapp %d found %d", mExpectedTcmCapable,
+             mAppInfo->isTcmNanoapp);
+      }
+
       if (!success) {
         mAppInfo = nullptr;
       } else {
@@ -236,7 +249,7 @@ bool PlatformNanoappBase::openNanoapp() {
     success = true;
   } else if (mAppBinary != nullptr) {
     if (mDsoHandle == nullptr) {
-      mDsoHandle = dlopenbuf(mAppBinary);
+      mDsoHandle = dlopenbuf(mAppBinary, mExpectedTcmCapable);
       success = verifyNanoappInfo();
     } else {
       LOGE("Trying to reopen an existing buffer");

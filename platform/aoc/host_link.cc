@@ -438,8 +438,9 @@ void HostMessageHandlers::handleLoadNanoappRequest(
       sLoadManager.markFailure();
     }
 
-    success = sLoadManager.prepareForLoad(hostClientId, transactionId, appId,
-                                          appVersion, totalAppBinaryLen);
+    success =
+        sLoadManager.prepareForLoad(hostClientId, transactionId, appId,
+                                    appVersion, appFlags, totalAppBinaryLen);
   }
 
   if (success) {

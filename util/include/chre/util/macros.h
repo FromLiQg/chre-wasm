@@ -32,6 +32,11 @@
 #define ARRAY_END(array) (array + ARRAY_SIZE(array))
 #endif
 
+/** Determines if the provided bit is set in the provided value. */
+#ifndef IS_BIT_SET
+#define IS_BIT_SET(value, bit) (((value) & (bit)) == (bit))
+#endif
+
 /**
  * Performs macro expansion then converts the value into a string literal
  */
