@@ -156,8 +156,11 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreGnssGetCapabilities),
     ADD_EXPORTED_C_SYMBOL(chreGnssLocationSessionStartAsync),
     ADD_EXPORTED_C_SYMBOL(chreGnssLocationSessionStopAsync),
+    ADD_EXPORTED_C_SYMBOL(chreGnssMeasurementSessionStartAsync),
+    ADD_EXPORTED_C_SYMBOL(chreGnssMeasurementSessionStopAsync),
     ADD_EXPORTED_C_SYMBOL(chreHeapAlloc),
     ADD_EXPORTED_C_SYMBOL(chreHeapFree),
+    ADD_EXPORTED_C_SYMBOL(chreIsHostAwake),
     ADD_EXPORTED_C_SYMBOL(chreLog),
     ADD_EXPORTED_C_SYMBOL(chreSendEvent),
     ADD_EXPORTED_C_SYMBOL(chreSendMessageToHostEndpoint),
@@ -165,6 +168,11 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreSensorFindDefault),
     ADD_EXPORTED_C_SYMBOL(chreTimerCancel),
     ADD_EXPORTED_C_SYMBOL(chreTimerSet),
+    ADD_EXPORTED_C_SYMBOL(chreWifiConfigureScanMonitorAsync),
+    ADD_EXPORTED_C_SYMBOL(chreWifiGetCapabilities),
+    ADD_EXPORTED_C_SYMBOL(chreWifiRequestScanAsync),
+    ADD_EXPORTED_C_SYMBOL(chreWwanGetCapabilities),
+    ADD_EXPORTED_C_SYMBOL(chreWwanGetCellInfoAsync),
     ADD_EXPORTED_C_SYMBOL(platform_chreDebugDumpVaLog),
 };
 
