@@ -100,6 +100,8 @@ PlatformSensorTypeHelpersBase::getSensorSampleTypeFromSensorType(
       return SensorSampleType::Occurrence;
     case CHRE_SENSOR_TYPE_PROXIMITY:
       return SensorSampleType::Byte;
+    case CHRE_SENSOR_TYPE_STEP_COUNTER:
+      return SensorSampleType::Uint64;
     default:
 #ifdef CHREX_SENSOR_SUPPORT
       return extension::vendorSensorSampleTypeFromSensorType(sensorType);
@@ -158,6 +160,9 @@ bool PlatformSensorTypeHelpersBase::convertUsfToChreSensorType(
       break;
     case usf::UsfSensorType::kUsfSensorStepDetector:
       *chreSensorType = CHRE_SENSOR_TYPE_STEP_DETECT;
+      break;
+    case usf::UsfSensorType::kUsfSensorStepCounter:
+      *chreSensorType = CHRE_SENSOR_TYPE_STEP_COUNTER;
       break;
     default:
 #ifdef CHREX_SENSOR_SUPPORT
