@@ -15,6 +15,7 @@
  */
 
 #include <dlfcn.h>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 
@@ -117,6 +118,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_SYMBOL(sqrtOverride, "sqrt"),
     ADD_EXPORTED_C_SYMBOL(atan2f),
     ADD_EXPORTED_C_SYMBOL(expf),
+    ADD_EXPORTED_C_SYMBOL(fmodf),
     ADD_EXPORTED_C_SYMBOL(sqrtf),
     ADD_EXPORTED_C_SYMBOL(tanhf),
     /* libc overrides and symbols */
@@ -124,12 +126,14 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
     ADD_EXPORTED_SYMBOL(dlsym, "_Z5dlsymPvPKc"),
+    ADD_EXPORTED_C_SYMBOL(memcmp),
     ADD_EXPORTED_C_SYMBOL(memcpy),
     ADD_EXPORTED_C_SYMBOL(memmove),
     ADD_EXPORTED_C_SYMBOL(memset),
     ADD_EXPORTED_C_SYMBOL(strcmp),
     ADD_EXPORTED_C_SYMBOL(strlen),
     ADD_EXPORTED_C_SYMBOL(strncmp),
+    ADD_EXPORTED_C_SYMBOL(tolower),
     /* ash symbols */
     ADD_EXPORTED_C_SYMBOL(ashLoadCalibrationParams),
     ADD_EXPORTED_C_SYMBOL(ashSaveCalibrationParams),
