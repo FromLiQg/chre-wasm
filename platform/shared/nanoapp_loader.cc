@@ -291,11 +291,12 @@ bool NanoappLoader::callInitArray() {
     const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
     if (strncmp(name, kInitArrayName, strlen(kInitArrayName)) == 0) {
       LOGV("Invoking init function");
-      ElfAddr *initArray = reinterpret_cast<ElfAddr *>(
+      uintptr_t initArray = reinterpret_cast<uintptr_t>(
           mLoadBias + mSectionHeadersPtr[i].sh_addr);
-      ElfAddr offset = 0;
+      uintptr_t offset = 0;
       while (offset < mSectionHeadersPtr[i].sh_size) {
-        uintptr_t initFunction = reinterpret_cast<uintptr_t>(initArray[offset]);
+        ElfAddr *funcPtr = reinterpret_cast<ElfAddr *>(initArray + offset);
+        uintptr_t initFunction = reinterpret_cast<uintptr_t>(*funcPtr);
         ((void (*)())initFunction)();
         offset += sizeof(initFunction);
         if (gStaticInitFailure) {
@@ -823,11 +824,12 @@ void NanoappLoader::callTerminatorArray() {
   for (size_t i = 0; i < mNumSectionHeaders; ++i) {
     const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
     if (strncmp(name, kFiniArrayName, strlen(kFiniArrayName)) == 0) {
-      ElfAddr *finiArray = reinterpret_cast<ElfAddr *>(
+      uintptr_t finiArray = reinterpret_cast<uintptr_t>(
           mLoadBias + mSectionHeadersPtr[i].sh_addr);
-      ElfAddr offset = 0;
+      uintptr_t offset = 0;
       while (offset < mSectionHeadersPtr[i].sh_size) {
-        uintptr_t finiFunction = reinterpret_cast<uintptr_t>(finiArray[offset]);
+        ElfAddr *funcPtr = reinterpret_cast<ElfAddr *>(finiArray + offset);
+        uintptr_t finiFunction = reinterpret_cast<uintptr_t>(*funcPtr);
         ((void (*)())finiFunction)();
         offset += sizeof(finiFunction);
       }
