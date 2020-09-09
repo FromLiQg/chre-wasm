@@ -839,7 +839,8 @@ struct LoadNanoappRequest FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_APP_BINARY = 12,
     VT_FRAGMENT_ID = 14,
     VT_TOTAL_APP_SIZE = 16,
-    VT_APP_BINARY_FILE_NAME = 18
+    VT_APP_BINARY_FILE_NAME = 18,
+    VT_APP_FLAGS = 20
   };
   uint32_t transaction_id() const {
     return GetField<uint32_t>(VT_TRANSACTION_ID, 0);
@@ -871,6 +872,11 @@ struct LoadNanoappRequest FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   const flatbuffers::Vector<int8_t> *app_binary_file_name() const {
     return GetPointer<const flatbuffers::Vector<int8_t> *>(VT_APP_BINARY_FILE_NAME);
   }
+  /// The nanoapp flag values from the nanoapp header defined in
+  /// build/build_template.mk. Refer to that file for more details.
+  uint32_t app_flags() const {
+    return GetField<uint32_t>(VT_APP_FLAGS, 0);
+  }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint32_t>(verifier, VT_TRANSACTION_ID) &&
@@ -883,6 +889,7 @@ struct LoadNanoappRequest FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            VerifyField<uint32_t>(verifier, VT_TOTAL_APP_SIZE) &&
            VerifyOffset(verifier, VT_APP_BINARY_FILE_NAME) &&
            verifier.VerifyVector(app_binary_file_name()) &&
+           VerifyField<uint32_t>(verifier, VT_APP_FLAGS) &&
            verifier.EndTable();
   }
 };
@@ -915,6 +922,9 @@ struct LoadNanoappRequestBuilder {
   void add_app_binary_file_name(flatbuffers::Offset<flatbuffers::Vector<int8_t>> app_binary_file_name) {
     fbb_.AddOffset(LoadNanoappRequest::VT_APP_BINARY_FILE_NAME, app_binary_file_name);
   }
+  void add_app_flags(uint32_t app_flags) {
+    fbb_.AddElement<uint32_t>(LoadNanoappRequest::VT_APP_FLAGS, app_flags, 0);
+  }
   explicit LoadNanoappRequestBuilder(flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -937,9 +947,11 @@ inline flatbuffers::Offset<LoadNanoappRequest> CreateLoadNanoappRequest(
     flatbuffers::Offset<flatbuffers::Vector<uint8_t>> app_binary = 0,
     uint32_t fragment_id = 0,
     uint32_t total_app_size = 0,
-    flatbuffers::Offset<flatbuffers::Vector<int8_t>> app_binary_file_name = 0) {
+    flatbuffers::Offset<flatbuffers::Vector<int8_t>> app_binary_file_name = 0,
+    uint32_t app_flags = 0) {
   LoadNanoappRequestBuilder builder_(_fbb);
   builder_.add_app_id(app_id);
+  builder_.add_app_flags(app_flags);
   builder_.add_app_binary_file_name(app_binary_file_name);
   builder_.add_total_app_size(total_app_size);
   builder_.add_fragment_id(fragment_id);
@@ -959,7 +971,8 @@ inline flatbuffers::Offset<LoadNanoappRequest> CreateLoadNanoappRequestDirect(
     const std::vector<uint8_t> *app_binary = nullptr,
     uint32_t fragment_id = 0,
     uint32_t total_app_size = 0,
-    const std::vector<int8_t> *app_binary_file_name = nullptr) {
+    const std::vector<int8_t> *app_binary_file_name = nullptr,
+    uint32_t app_flags = 0) {
   auto app_binary__ = app_binary ? _fbb.CreateVector<uint8_t>(*app_binary) : 0;
   auto app_binary_file_name__ = app_binary_file_name ? _fbb.CreateVector<int8_t>(*app_binary_file_name) : 0;
   return chre::fbs::CreateLoadNanoappRequest(
@@ -971,7 +984,8 @@ inline flatbuffers::Offset<LoadNanoappRequest> CreateLoadNanoappRequestDirect(
       app_binary__,
       fragment_id,
       total_app_size,
-      app_binary_file_name__);
+      app_binary_file_name__,
+      app_flags);
 }
 
 struct LoadNanoappResponse FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {

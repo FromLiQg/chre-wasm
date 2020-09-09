@@ -201,6 +201,7 @@ AOC_SRCS += platform/aoc/memory.cc
 AOC_SRCS += platform/aoc/power_control_manager.cc
 AOC_SRCS += platform/aoc/platform_audio.cc
 AOC_SRCS += platform/aoc/platform_cache_management.cc
+AOC_SRCS += platform/aoc/platform_pal.cc
 AOC_SRCS += platform/aoc/system_time.cc
 AOC_SRCS += platform/aoc/system_timer.cc
 AOC_SRCS += platform/shared/chre_api_audio.cc
@@ -226,6 +227,27 @@ AOC_SRCS += platform/usf/platform_sensor.cc
 AOC_SRCS += platform/usf/platform_sensor_manager.cc
 AOC_SRCS += platform/usf/platform_sensor_type_helpers.cc
 AOC_SRCS += platform/usf/usf_helper.cc
+
+# Optional GNSS support.
+ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
+AOC_SRCS += platform/shared/platform_gnss.cc
+AOC_SRCS += chpp/clients/gnss.c
+AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_CHRE_GNSS
+endif
+
+# Optional Wi-Fi support.
+ifeq ($(CHRE_WIFI_SUPPORT_ENABLED), true)
+AOC_SRCS += platform/shared/platform_wifi.cc
+AOC_SRCS += chpp/clients/wifi.c
+AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_CHRE_WIFI
+endif
+
+# Optional WWAN support.
+ifeq ($(CHRE_WWAN_SUPPORT_ENABLED), true)
+AOC_SRCS += platform/shared/platform_wwan.cc
+AOC_SRCS += chpp/clients/wwan.c
+AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_CHRE_WWAN
+endif
 
 # AoC-specific Compiler Flags ##################################################
 AOC_CFLAGS += -Iplatform/aoc/include
