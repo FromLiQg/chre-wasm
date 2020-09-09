@@ -94,6 +94,12 @@ float sqrtOverride(float val) {
   return sqrt(val);
 }
 
+// This function is required to be exposed to nanoapps to handle errors from
+// invoking virtual functions.
+void __cxa_pure_virtual(void) {
+  chreAbort(CHRE_ERROR /* abortCode */);
+}
+
 #define ADD_EXPORTED_SYMBOL(function_name, function_string) \
   { reinterpret_cast<void *>(function_name), function_string }
 #define ADD_EXPORTED_C_SYMBOL(function_name) \
@@ -114,6 +120,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(sqrtf),
     ADD_EXPORTED_C_SYMBOL(tanhf),
     /* libc overrides and symbols */
+    ADD_EXPORTED_C_SYMBOL(__cxa_pure_virtual),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
     ADD_EXPORTED_SYMBOL(dlsym, "_Z5dlsymPvPKc"),
@@ -726,8 +733,10 @@ bool NanoappLoader::fixRelocations() {
           *addr += mMapping.data;
           break;
 
+        case R_ARM_ABS32:
         case R_ARM_GLOB_DAT: {
-          LOGV("Resolving R_ARM_GLOB_DAT at offset %" PRIx32, curr->r_offset);
+          LOGV("Resolving type %d at offset %" PRIx32, relocType,
+               curr->r_offset);
           addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
           size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
           void *resolved = resolveData(posInSymbolTable);
