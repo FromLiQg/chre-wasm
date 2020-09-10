@@ -15,6 +15,7 @@
  */
 #include "chre/platform/aoc/audio_filter.h"
 #include "chre/core/event_loop_manager.h"
+#include "chre/platform/aoc/memory.h"
 #include "chre/platform/assert.h"
 #include "chre/platform/log.h"
 #include "chre/platform/system_time.h"
@@ -36,12 +37,26 @@ AudioFilter::AudioFilter()
 int AudioFilter::StartCallback() {
   mRingBufferHandle = ring_[kRingIndex]->ReaderRegister();
   CHRE_ASSERT(mRingBufferHandle != nullptr);
+
+  // TODO (b/168330113): The sample buffer is a fairly large chunk of
+  // contiguous memory that may be prone to allocation failures - reserve
+  // this memory statically.
+  forceDramAccess();
+  mSampleBufferDram =
+      static_cast<int16_t *>(memoryAllocDram(sizeof(mSampleBufferSram)));
+  CHRE_ASSERT(mSampleBufferDram != nullptr);
+
   return 0;
 }
 
 bool AudioFilter::StopCallback() {
   ring_[kRingIndex]->ReaderUnregister(mRingBufferHandle);
   mRingBufferHandle = nullptr;
+
+  forceDramAccess();
+  memoryFreeDram(mSampleBufferDram);
+  mSampleBufferDram = nullptr;
+
   return true;
 }
 
@@ -59,69 +74,67 @@ bool AudioFilter::SignalProcessor(int index) {
 void AudioFilter::InputProcessor(int /*pin*/, void *message, size_t size) {
   CHRE_ASSERT(message != nullptr);
 
-  if (!mBufferInUse) {
-    // TODO resync and synchronization, check metadata format etc.
-    auto *metadata = static_cast<struct AudioInputMetadata *>(message);
+  // TODO resync and synchronization, check metadata format etc.
+  auto *metadata = static_cast<struct AudioInputMetadata *>(message);
 
-    if (metadata->need_resync) {
-      LOGW("Resync request received, logic not implemented yet");
-    }
+  if (metadata->need_resync) {
+    LOGW("Resync request received, logic not implemented yet");
+  }
 
-    constexpr size_t kBytesPerAocSample = sizeof(uint32_t);
-    constexpr size_t kNumSamplesAoc = 160;
-    constexpr size_t kRingSize = kNumSamplesAoc * kBytesPerAocSample *
-                                 1;  // 1 channel of u32 samples per 10 ms
-    uint32_t buffer[kNumSamplesAoc];
-    uint32_t nBytes =
-        ring_[kRingIndex]->Read(mRingBufferHandle, &buffer, kRingSize);
-    CHRE_ASSERT_LOG(nBytes != 0, "Got data pipe notif, but no data in ring");
-    size_t nSamples = nBytes / kBytesPerAocSample;
+  constexpr size_t kBytesPerAocSample = sizeof(uint32_t);
+  constexpr size_t kNumSamplesAoc = 160;
+  constexpr size_t kRingSize = kNumSamplesAoc * kBytesPerAocSample *
+                               1;  // 1 channel of u32 samples per 10 ms
+  uint32_t buffer[kNumSamplesAoc];
+  uint32_t nBytes =
+      ring_[kRingIndex]->Read(mRingBufferHandle, &buffer, kRingSize);
+  CHRE_ASSERT_LOG(nBytes != 0, "Got data pipe notif, but no data in ring");
+  size_t nSamples = nBytes / kBytesPerAocSample;
 
-    if (mSampleCount == 0) {
-      // TODO: Get a better estimate of the timestamp of the first sample in
-      // the frame. Since the pipe notification arrives every 10ms, we could
-      // subtract 10ms from now(), and maybe even keep track of the embedded
-      // timestamp of the first sample of the current frame, and the last
-      // sample of the previous frame.
-      mDataEvent.timestamp = SystemTime::getMonotonicTime().toRawNanoseconds();
-    }
+  if (mSampleCount == 0) {
+    // TODO: Get a better estimate of the timestamp of the first sample in
+    // the frame. Since the pipe notification arrives every 10ms, we could
+    // subtract 10ms from now(), and maybe even keep track of the embedded
+    // timestamp of the first sample of the current frame, and the last
+    // sample of the previous frame.
+    mDataEvent.timestamp = SystemTime::getMonotonicTime().toRawNanoseconds();
+  }
 
-    // TODO: For the initial implementation/testing, we assume that the
-    // frame might not fit to a T in our current buffer, but that is the
-    // expectation. With the current logic, we could end up dropping a frame,
-    // revisit this to make sure we capture the exact number of samples,
-    // while continuing to buffer samples either via a ping-pong scheme, or
-    // a small extra scratch space.
-    if ((nSamples + mSampleCount) > kSamplesPer2Sec) {
+  // TODO: For the initial implementation/testing, we assume that the
+  // frame might not fit to a T in our current buffer, but that is the
+  // expectation. With the current logic, we could end up dropping a frame,
+  // revisit this to make sure we capture the exact number of samples,
+  // while continuing to buffer samples either via a ping-pong scheme, or
+  // a small extra scratch space.
+  if ((nSamples + mSampleCount) > kSamplesPer2Sec) {
+    if (!mDramBufferInUse) {
+      forceDramAccess();
+      memcpy(mSampleBufferDram, mSampleBufferSram, sizeof(mSampleBufferSram));
       mDataEvent.sampleCount = mSampleCount;
-      mDataEvent.samplesS16 = mSampleBuffer;
-      mSampleCount = 0;
-      mBufferInUse = true;
+      mDataEvent.samplesS16 = mSampleBufferDram;
+      mDramBufferInUse = true;
 
       EventLoopManagerSingleton::get()
           ->getAudioRequestManager()
           .handleAudioDataEvent(&mDataEvent);
-
     } else {
-      for (size_t i = 0; i < nSamples; ++i, ++mSampleCount) {
-        // The zeroth byte of the received sample is a timestamp, which we
-        // strip out.
-        // TODO: Verify that there's no scaling on the remaining data, in
-        // which case casting without descaling won't be the right thing to
-        // do.
-        mSampleBuffer[mSampleCount] =
-            static_cast<int16_t>((buffer[i] >> 8) & 0xff);
-      }
+      LOGW("SRAM audio buffer full while DRAM audio buffer not released!");
     }
-  } else {
-    LOGW(
-        "Received an audio notification before the previous event was "
-        "released!");
+    mSampleCount = 0;
+  }
+  for (size_t i = 0; i < nSamples; ++i, ++mSampleCount) {
+    // The zeroth byte of the received sample is a timestamp, which we
+    // strip out.
+    // TODO: Verify that there's no scaling on the remaining data, in
+    // which case casting without descaling won't be the right thing to
+    // do.
+    mSampleBufferSram[mSampleCount] =
+        static_cast<int16_t>((buffer[i] >> 8) & 0xffff);
   }
 }
 
 void AudioFilter::OnBufferReleased() {
-  mBufferInUse = false;
+  mDramBufferInUse = false;
 }
 
 }  // namespace chre
