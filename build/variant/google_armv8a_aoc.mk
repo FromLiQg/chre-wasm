@@ -9,16 +9,16 @@ $(error "The AoC root source directory needs to be exported as the AOC_TOP_DIR \
          environment variable")
 endif
 
+SUPPORTED_AOC_PLATFORMS_ON_CHRE := fpga_a32 whi_a0_a32 linux
 ifeq ($(AOC_PLATFORM) ,)
 $(error "The platform/simulator we're building for needs to be exported as the \
-         AOC_PLATFORM environment variable. For example: \
-         export AOC_PLATFORM=qemu")
+         AOC_PLATFORM environment variable. Supported platforms are \
+         [${SUPPORTED_AOC_PLATFORMS_ON_CHRE}]")
 endif
 
-SUPPORTED_AOC_PLATFORMS_ON_CHRE := fpga_a32 whi_a0_a32
 ifeq ($(filter $(AOC_PLATFORM),$(SUPPORTED_AOC_PLATFORMS_ON_CHRE)),)
-$(error "Unsupported AoC Platform - $(AOC_PLATFORM) - try PLATFORM=fpga_a32 or\
-         whi_a0_a32")
+$(error "Unsupported AoC Platform - $(AOC_PLATFORM) - Supported platforms are \
+        [${SUPPORTED_AOC_PLATFORMS_ON_CHRE}]")
 endif
 
 # The SRC_DIR variable is used in toolchain selection in AoC, add that as
