@@ -219,6 +219,7 @@ typedef struct elf32_sym {
 // at bionic/libc/kernel/uapi/linux/elf.h
 // Only the relocation types currently supported are copied.
 #define R_ARM_NONE 0
+#define R_ARM_ABS32 2
 #define R_ARM_COPY 20
 #define R_ARM_GLOB_DAT 21
 #define R_ARM_JUMP_SLOT 22

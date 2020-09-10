@@ -15,6 +15,7 @@
  */
 
 #include <dlfcn.h>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 
@@ -94,6 +95,12 @@ float sqrtOverride(float val) {
   return sqrt(val);
 }
 
+// This function is required to be exposed to nanoapps to handle errors from
+// invoking virtual functions.
+void __cxa_pure_virtual(void) {
+  chreAbort(CHRE_ERROR /* abortCode */);
+}
+
 #define ADD_EXPORTED_SYMBOL(function_name, function_string) \
   { reinterpret_cast<void *>(function_name), function_string }
 #define ADD_EXPORTED_C_SYMBOL(function_name) \
@@ -111,18 +118,22 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_SYMBOL(sqrtOverride, "sqrt"),
     ADD_EXPORTED_C_SYMBOL(atan2f),
     ADD_EXPORTED_C_SYMBOL(expf),
+    ADD_EXPORTED_C_SYMBOL(fmodf),
     ADD_EXPORTED_C_SYMBOL(sqrtf),
     ADD_EXPORTED_C_SYMBOL(tanhf),
     /* libc overrides and symbols */
+    ADD_EXPORTED_C_SYMBOL(__cxa_pure_virtual),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
     ADD_EXPORTED_SYMBOL(dlsym, "_Z5dlsymPvPKc"),
+    ADD_EXPORTED_C_SYMBOL(memcmp),
     ADD_EXPORTED_C_SYMBOL(memcpy),
     ADD_EXPORTED_C_SYMBOL(memmove),
     ADD_EXPORTED_C_SYMBOL(memset),
     ADD_EXPORTED_C_SYMBOL(strcmp),
     ADD_EXPORTED_C_SYMBOL(strlen),
     ADD_EXPORTED_C_SYMBOL(strncmp),
+    ADD_EXPORTED_C_SYMBOL(tolower),
     /* ash symbols */
     ADD_EXPORTED_C_SYMBOL(ashLoadCalibrationParams),
     ADD_EXPORTED_C_SYMBOL(ashSaveCalibrationParams),
@@ -145,8 +156,11 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreGnssGetCapabilities),
     ADD_EXPORTED_C_SYMBOL(chreGnssLocationSessionStartAsync),
     ADD_EXPORTED_C_SYMBOL(chreGnssLocationSessionStopAsync),
+    ADD_EXPORTED_C_SYMBOL(chreGnssMeasurementSessionStartAsync),
+    ADD_EXPORTED_C_SYMBOL(chreGnssMeasurementSessionStopAsync),
     ADD_EXPORTED_C_SYMBOL(chreHeapAlloc),
     ADD_EXPORTED_C_SYMBOL(chreHeapFree),
+    ADD_EXPORTED_C_SYMBOL(chreIsHostAwake),
     ADD_EXPORTED_C_SYMBOL(chreLog),
     ADD_EXPORTED_C_SYMBOL(chreSendEvent),
     ADD_EXPORTED_C_SYMBOL(chreSendMessageToHostEndpoint),
@@ -154,6 +168,11 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreSensorFindDefault),
     ADD_EXPORTED_C_SYMBOL(chreTimerCancel),
     ADD_EXPORTED_C_SYMBOL(chreTimerSet),
+    ADD_EXPORTED_C_SYMBOL(chreWifiConfigureScanMonitorAsync),
+    ADD_EXPORTED_C_SYMBOL(chreWifiGetCapabilities),
+    ADD_EXPORTED_C_SYMBOL(chreWifiRequestScanAsync),
+    ADD_EXPORTED_C_SYMBOL(chreWwanGetCapabilities),
+    ADD_EXPORTED_C_SYMBOL(chreWwanGetCellInfoAsync),
     ADD_EXPORTED_C_SYMBOL(platform_chreDebugDumpVaLog),
 };
 
@@ -280,11 +299,12 @@ bool NanoappLoader::callInitArray() {
     const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
     if (strncmp(name, kInitArrayName, strlen(kInitArrayName)) == 0) {
       LOGV("Invoking init function");
-      ElfAddr *initArray = reinterpret_cast<ElfAddr *>(
+      uintptr_t initArray = reinterpret_cast<uintptr_t>(
           mLoadBias + mSectionHeadersPtr[i].sh_addr);
-      ElfAddr offset = 0;
+      uintptr_t offset = 0;
       while (offset < mSectionHeadersPtr[i].sh_size) {
-        uintptr_t initFunction = reinterpret_cast<uintptr_t>(initArray[offset]);
+        ElfAddr *funcPtr = reinterpret_cast<ElfAddr *>(initArray + offset);
+        uintptr_t initFunction = reinterpret_cast<uintptr_t>(*funcPtr);
         ((void (*)())initFunction)();
         offset += sizeof(initFunction);
         if (gStaticInitFailure) {
@@ -726,8 +746,10 @@ bool NanoappLoader::fixRelocations() {
           *addr += mMapping.data;
           break;
 
+        case R_ARM_ABS32:
         case R_ARM_GLOB_DAT: {
-          LOGV("Resolving R_ARM_GLOB_DAT at offset %" PRIx32, curr->r_offset);
+          LOGV("Resolving type %d at offset %" PRIx32, relocType,
+               curr->r_offset);
           addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
           size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
           void *resolved = resolveData(posInSymbolTable);
@@ -810,11 +832,12 @@ void NanoappLoader::callTerminatorArray() {
   for (size_t i = 0; i < mNumSectionHeaders; ++i) {
     const char *name = getSectionHeaderName(mSectionHeadersPtr[i].sh_name);
     if (strncmp(name, kFiniArrayName, strlen(kFiniArrayName)) == 0) {
-      ElfAddr *finiArray = reinterpret_cast<ElfAddr *>(
+      uintptr_t finiArray = reinterpret_cast<uintptr_t>(
           mLoadBias + mSectionHeadersPtr[i].sh_addr);
-      ElfAddr offset = 0;
+      uintptr_t offset = 0;
       while (offset < mSectionHeadersPtr[i].sh_size) {
-        uintptr_t finiFunction = reinterpret_cast<uintptr_t>(finiArray[offset]);
+        ElfAddr *funcPtr = reinterpret_cast<ElfAddr *>(finiArray + offset);
+        uintptr_t finiFunction = reinterpret_cast<uintptr_t>(*funcPtr);
         ((void (*)())finiFunction)();
         offset += sizeof(finiFunction);
       }
