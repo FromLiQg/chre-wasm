@@ -62,11 +62,13 @@ class PlatformNanoappBase {
    *
    * @param appId The unique app identifier associated with this binary
    * @param appVersion An application-defined version number
+   * @param appFlags The flags provided by the app being loaded
    * @param appBinaryLen Size of appBinary, in bytes
    *
    * @return true if the allocation was successful, false otherwise
    */
-  bool reserveBuffer(uint64_t appId, uint32_t appVersion, size_t appBinaryLen);
+  bool reserveBuffer(uint64_t appId, uint32_t appVersion, uint32_t appFlags,
+                     size_t appBinaryLen);
 
   /**
    * Copies the (possibly fragmented) application binary data into the allocated
@@ -90,6 +92,8 @@ class PlatformNanoappBase {
   //! alongside the nanoapp binary. This is also included in (and checked
   //! against) mAppInfo.
   uint32_t mExpectedAppVersion = 0;
+
+  bool mExpectedTcmCapable;
 
   //! Buffer containing the complete DSO binary - only populated if
   //! copyNanoappFragment() was used to load this nanoapp
