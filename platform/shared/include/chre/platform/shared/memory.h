@@ -23,6 +23,12 @@
 namespace chre {
 
 /**
+ * Aligned memory allocation using the lowest power heap available. The
+ * semantics are the same as malloc.
+ */
+void *memoryAllocAligned(size_t alignment, size_t size);
+
+/**
  * Aligned memory allocation specifically using the DRAM heap. The semantics are
  * the same as malloc.
  *

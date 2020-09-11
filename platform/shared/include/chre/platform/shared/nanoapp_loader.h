@@ -37,18 +37,22 @@ class NanoappLoader {
  public:
   NanoappLoader() = delete;
 
-  explicit NanoappLoader(void *elfInput) {
+  explicit NanoappLoader(void *elfInput, bool mapIntoTcm) {
     mBinary.dataPtr = elfInput;
+    mIsTcmBinary = mapIntoTcm;
   }
 
   /**
    * Factory method to create a NanoappLoader Instance after loading
    * the buffer containing the ELF binary.
    *
+   * @param elfInput Buffer containing the elf file
+   * @param mapIntoTcm Indicates whether the elfBinary should be mapped into
+   *     tightly coupled memory.
    * @return Class instance on successful load and verification,
-   * nullptr otherwise.
+   *     nullptr otherwise.
    */
-  static void *create(void *elfInput);
+  static void *create(void *elfInput, bool mapIntoTcm);
 
   /**
    * Closes and destroys the NanoappLoader instance.
@@ -147,6 +151,8 @@ class NanoappLoader {
   //! unloading this nanoapp. Note that functions are stored in the order they
   //! were added and should be called in reverse.
   DynamicVector<void (*)(void)> mAtexitFunctions;
+  //! Whether this loader instance is managing a TCM nanoapp binary.
+  bool mIsTcmBinary;
 
   /**
    * Invokes all functions registered via atexit during static initialization.

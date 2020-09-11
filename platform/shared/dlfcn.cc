@@ -20,8 +20,8 @@
 #include "chre/platform/shared/nanoapp_loader.h"
 #include "chre/util/unique_ptr.h"
 
-void *dlopenbuf(void *elfBinary, bool /* mapIntoTcm */) {
-  return chre::NanoappLoader::create(elfBinary);
+void *dlopenbuf(void *elfBinary, bool mapIntoTcm) {
+  return chre::NanoappLoader::create(elfBinary, mapIntoTcm);
 }
 
 void *dlsym(void *handle, const char *symbol) {
