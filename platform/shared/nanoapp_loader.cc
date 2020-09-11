@@ -122,6 +122,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(sqrtf),
     ADD_EXPORTED_C_SYMBOL(tanhf),
     /* libc overrides and symbols */
+    ADD_EXPORTED_C_SYMBOL(__assert_fail),
     ADD_EXPORTED_C_SYMBOL(__cxa_pure_virtual),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
@@ -151,6 +152,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreGetEstimatedHostTimeOffset),
     ADD_EXPORTED_C_SYMBOL(chreGetNanoappInfoByAppId),
     ADD_EXPORTED_C_SYMBOL(chreGetPlatformId),
+    ADD_EXPORTED_C_SYMBOL(chreGetSensorInfo),
     ADD_EXPORTED_C_SYMBOL(chreGetSensorSamplingStatus),
     ADD_EXPORTED_C_SYMBOL(chreGetTime),
     ADD_EXPORTED_C_SYMBOL(chreGnssGetCapabilities),
