@@ -276,6 +276,7 @@ AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/pal/efw/include
 
 AOC_CFLAGS += -Ichpp/include
 AOC_CFLAGS += -Ichpp/platform/aoc/include
+AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_DISCOVERY
 
 # We use FlatBuffers in the AOC platform layer
 AOC_CFLAGS += $(FLATBUFFERS_CFLAGS)
