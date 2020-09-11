@@ -41,7 +41,7 @@ void DramVoteClient::incrementDramVoteCount() {
 
   if (mDramVoteCount++ == 0) {
     mVoteCountStart = Milliseconds(SystemTime::getMonotonicTime());
-    LOGW("DRAM vote count begins");
+    LOGV("DRAM vote count begins");
 
     if (!mLastDramVote) {
       // Do not call voteDramAccess() directly as it will override
@@ -59,9 +59,8 @@ void DramVoteClient::decrementDramVoteCount() {
   CHRE_ASSERT_LOG(mDramVoteCount > 0,
                   "Tried to decrement DRAM vote count when it's 0");
 
-  Milliseconds duration = checkDramDuration();
   if (--mDramVoteCount == 0) {
-    LOGW("DRAM vote count ends: %" PRIu64 " ms", duration);
+    LOGV("DRAM vote count ends: %" PRIu64 " ms", checkDramDuration());
 
     // There's no DRAM activity now, remove CHRE's DRAM access vote.
     if (!mLastDramRequest) {
