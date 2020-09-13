@@ -28,7 +28,7 @@ extern "C" {
  */
 uint64_t chppPlatformGetCurrentTimeNs();
 
-static inline uint64_t chppGetCurrentTimeNs() {
+static inline uint64_t chppGetCurrentTimeNs(void) {
   return chppPlatformGetCurrentTimeNs();
 }
 

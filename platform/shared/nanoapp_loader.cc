@@ -122,6 +122,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(sqrtf),
     ADD_EXPORTED_C_SYMBOL(tanhf),
     /* libc overrides and symbols */
+    ADD_EXPORTED_C_SYMBOL(__assert_fail),
     ADD_EXPORTED_C_SYMBOL(__cxa_pure_virtual),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
@@ -151,6 +152,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreGetEstimatedHostTimeOffset),
     ADD_EXPORTED_C_SYMBOL(chreGetNanoappInfoByAppId),
     ADD_EXPORTED_C_SYMBOL(chreGetPlatformId),
+    ADD_EXPORTED_C_SYMBOL(chreGetSensorInfo),
     ADD_EXPORTED_C_SYMBOL(chreGetSensorSamplingStatus),
     ADD_EXPORTED_C_SYMBOL(chreGetTime),
     ADD_EXPORTED_C_SYMBOL(chreGnssGetCapabilities),
@@ -178,9 +180,9 @@ const ExportedData gExportedData[] = {
 
 }  // namespace
 
-void *NanoappLoader::create(void *elfInput) {
+void *NanoappLoader::create(void *elfInput, bool mapIntoTcm) {
   void *instance = nullptr;
-  NanoappLoader *loader = memoryAllocDram<NanoappLoader>(elfInput);
+  NanoappLoader *loader = memoryAllocDram<NanoappLoader>(elfInput, mapIntoTcm);
   if (loader != nullptr) {
     if (loader->open()) {
       instance = loader;
@@ -327,7 +329,11 @@ uintptr_t NanoappLoader::roundDownToAlign(uintptr_t virtualAddr) {
 }
 
 void NanoappLoader::freeAllocatedData() {
-  memoryFreeDram(mMapping.dataPtr);
+  if (mIsTcmBinary) {
+    memoryFree(mMapping.dataPtr);
+  } else {
+    memoryFreeDram(mMapping.dataPtr);
+  }
   memoryFreeDram(mSectionHeadersPtr);
   memoryFreeDram(mSectionNamesPtr);
   memoryFreeDram(mSymbolTablePtr);
@@ -607,7 +613,12 @@ bool NanoappLoader::createMappings() {
       size_t memorySpan = last->p_vaddr + last->p_memsz - first->p_vaddr;
       LOGV("Nanoapp image Memory Span: %u", memorySpan);
 
-      mMapping.dataPtr = memoryAllocDramAligned(kBinaryAlignment, memorySpan);
+      if (mIsTcmBinary) {
+        mMapping.dataPtr = memoryAllocAligned(kBinaryAlignment, memorySpan);
+      } else {
+        mMapping.dataPtr = memoryAllocDramAligned(kBinaryAlignment, memorySpan);
+      }
+
       if (mMapping.dataPtr == nullptr) {
         LOG_OOM();
       } else {
