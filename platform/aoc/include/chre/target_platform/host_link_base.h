@@ -89,6 +89,16 @@ class HostLinkBase {
    */
   static void sendTimeSyncRequest();
 
+  /**
+   * Enqueues a log message to be sent to the host.
+   *
+   * @param logMessage Pointer to a buffer that has the log message. Note that
+   * the message might be encoded
+   *
+   * @param logMessageSize length of the log message buffer
+   */
+  void sendLogMessage(const uint8_t *logMessage, size_t logMessageSize);
+
  private:
   //! The last time a time sync request message has been sent.
   static Nanoseconds mLastTimeSyncRequestNanos;

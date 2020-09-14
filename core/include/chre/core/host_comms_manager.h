@@ -162,14 +162,6 @@ class HostCommsManager : public HostLink {
    */
   void onMessageToHostComplete(const MessageToHost *msgToHost);
 
-  /**
-   * @return A reference to the platform's host link implementation giving the
-   *         ability to communicate to the host AP.
-   */
-  HostLink &getHostLink() {
-    return mHostLink;
-  }
-
  private:
   //! The maximum number of messages we can have outstanding at any given time
   static constexpr size_t kMaxOutstandingMessages = 32;
