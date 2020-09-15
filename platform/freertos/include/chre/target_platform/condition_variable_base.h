@@ -56,37 +56,19 @@ class ConditionVariableBase {
   //   concurrently, the CHRE platform implementation is only required
   //   to allow for a single waiting thread.
   // - The calling code has to allow for spurious wakeups
-
   SemaphoreHandle_t mCvSemaphoreHandle;
 
-  /**
-   * Waits on a semaphore for a specified amount of timer ticks,
-   * locking the mutex before returning. If the timer ticks argument is
-   * 0, blocks indefinitely.
-   *
-   * @return true if the semaphore was successfully taken
-   */
-  bool waitWithTimeout(Mutex &mutex, const TickType_t &timeoutTicks) {
-    mutex.unlock();
-    BaseType_t rc = xSemaphoreTake(mCvSemaphoreHandle, timeoutTicks);
-    mutex.lock();
+  //! Buffer used to store state used by the semaphore.
+  StaticSemaphore_t mSemaphoreBuffer;
 
-    return (rc == pdTRUE);
-  }
+  //! The timer used for timed condition variable wait.
+  SystemTimer mTimeoutTimer;
 
-  /**
-   * Initialize a Static FreeRTOS semaphore. This function is called
-   * from the derived class constructor
-   */
-  void initStaticSemaphore() {
-    mCvSemaphoreHandle = xSemaphoreCreateBinaryStatic(&mCvStaticSemaphore);
-    if (mCvSemaphoreHandle == NULL) {
-      FATAL_ERROR("failed to create cv semaphore");
-    }
-  }
+  //! Set to true when the timeout timer is initialized.
+  bool mTimerInitialized = false;
 
- private:
-  StaticSemaphore_t mCvStaticSemaphore;
+  //! Set to true if the timeout timer timed out.
+  bool mTimedOut = false;
 };
 
 }  // namespace chre

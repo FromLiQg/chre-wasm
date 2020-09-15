@@ -22,7 +22,10 @@
 namespace chre {
 
 inline ConditionVariable::ConditionVariable() {
-  initStaticSemaphore();
+  mCvSemaphoreHandle = xSemaphoreCreateBinaryStatic(&mSemaphoreBuffer);
+  if (mCvSemaphoreHandle == NULL) {
+    FATAL_ERROR("failed to create cv semaphore");
+  }
 }
 
 inline ConditionVariable::~ConditionVariable() {
@@ -36,14 +39,37 @@ inline void ConditionVariable::notify_one() {
 }
 
 inline void ConditionVariable::wait(Mutex &mutex) {
-  const TickType_t timeout = portMAX_DELAY;  // block indefinitely
-  waitWithTimeout(mutex, timeout);
+  mutex.unlock();
+  xSemaphoreTake(mCvSemaphoreHandle, portMAX_DELAY /* xBlockTime */);
+  mutex.lock();
 }
 
 inline bool ConditionVariable::wait_for(Mutex &mutex, Nanoseconds timeout) {
-  const TickType_t timeoutTicks = static_cast<TickType_t>(
-      Timer::Instance()->NsToTicks(timeout.toRawNanoseconds()));
-  return waitWithTimeout(mutex, timeoutTicks);
+  if (!mTimerInitialized) {
+    if (!mTimeoutTimer.init()) {
+      FATAL_ERROR("Failed to initialize condition variable timer");
+    } else {
+      mTimerInitialized = true;
+    }
+  }
+
+  mTimedOut = false;
+  auto callback = [](void *data) {
+    auto cbData = static_cast<ConditionVariable *>(data);
+    cbData->mTimedOut = true;
+    cbData->notify_one();
+  };
+  if (!mTimeoutTimer.set(callback, this, timeout)) {
+    LOGE("Failed to set condition variable timer");
+  }
+
+  wait(mutex);
+  if (mTimeoutTimer.isActive()) {
+    if (!mTimeoutTimer.cancel()) {
+      LOGD("Failed to cancel condition variable timer");
+    }
+  }
+  return !mTimedOut;
 }
 
 }  // namespace chre
