@@ -68,8 +68,10 @@ class UartLinkManager : public chre::NonCopyable {
   /**
    * This method must be called before invoking the rest of the public methods
    * in this class.
+   *
+   * @param handle The task handle that this manager will run in.
    */
-  void init();
+  void init(TaskHandle_t handle);
 
   /**
    * Resets the state and disables the UartLinkManager. init() must be called

@@ -25,7 +25,7 @@ using chpp::UartLinkManager;
 void chppPlatformLinkInit(struct ChppPlatformLinkParameters *params) {
   UartLinkManager *manager =
       static_cast<UartLinkManager *>(params->uartLinkManager);
-  manager->init();
+  manager->init(xTaskGetCurrentTaskHandle());
 }
 
 void chppPlatformLinkDeinit(struct ChppPlatformLinkParameters *params) {
@@ -68,5 +68,5 @@ void chppPlatformLinkReset(struct ChppPlatformLinkParameters *params) {
   UartLinkManager *manager =
       static_cast<UartLinkManager *>(params->uartLinkManager);
   manager->deinit();
-  manager->init();
+  manager->init(xTaskGetCurrentTaskHandle());
 }
