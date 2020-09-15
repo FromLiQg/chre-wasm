@@ -9,9 +9,9 @@ $(error "The AoC root source directory needs to be exported as the AOC_TOP_DIR \
          environment variable")
 endif
 
-SUPPORTED_AOC_PLATFORMS_ON_CHRE := fpga_a32 whi_a0_a32 linux
+SUPPORTED_AOC_PLATFORMS_ON_CHRE := fpga_a32 whi_a0_a32
 ifeq ($(AOC_PLATFORM) ,)
-$(error "The platform/simulator we're building for needs to be exported as the \
+$(error "The platform we're building for needs to be exported as the \
          AOC_PLATFORM environment variable. Supported platforms are \
          [${SUPPORTED_AOC_PLATFORMS_ON_CHRE}]")
 endif
@@ -48,9 +48,6 @@ TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/libc/include
 TARGET_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/libc
 
 # add platform specific flags
-ifeq ($(AOC_PLATFORM),linux)
-TARGET_CFLAGS += $(AOC_LINUX_CFLAGS)
-endif
 ifeq ($(AOC_PLATFORM),fpga_a32)
 TARGET_CFLAGS += $(AOC_FPGA_A32_CFLAGS)
 # We need a function stack size of at least 400 bytes, which might not be

@@ -23,21 +23,15 @@
 
 namespace {
 
-// We work with both simulated (linux port of FreeRTOS), and real (a32)
-// target platforms. The timer dispatch thread is notifed from a
+// The timer dispatch thread is notifed from a
 // timer interrupt context, and there are context checks in the FreeRTOS code
 // (i.e. the xxGive and xxGiveFromISR are not interchangeable). Since there
 // are no interrupts in a simulated platform, we end up with two different
 // notification mechanisms that accomplish the same purpose.
 void wakeupDispatchThread(TaskHandle_t &handle) {
-#ifdef CHRE_PLATFORM_IS_SIMULATED
-  // no ISRs in simulated platforms!
-  xTaskNotifyGive(handle);
-#else
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   vTaskNotifyGiveFromISR(handle, &xHigherPriorityTaskWoken);
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-#endif
 }
 
 }  // namespace

@@ -122,7 +122,6 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(sqrtf),
     ADD_EXPORTED_C_SYMBOL(tanhf),
     /* libc overrides and symbols */
-    ADD_EXPORTED_C_SYMBOL(__assert_fail),
     ADD_EXPORTED_C_SYMBOL(__cxa_pure_virtual),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
