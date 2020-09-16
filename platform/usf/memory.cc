@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
+ * Copyright (C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-#include "chre/platform/host_link.h"
+#include "usf/usf_mem.h"
 
 namespace chre {
 
-void HostLink::flushMessagesSentByNanoapp(uint64_t appId) {
-  // TODO: implement
+void *memoryAlloc(size_t size) {
+  return usf::UsfAlloc(usf::kUsfHeapLowPower, size);
 }
 
-bool HostLink::sendMessage(const MessageToHost *message) {
-  // TODO: implement
-  return false;
+void memoryFree(void *pointer) {
+  usf::UsfFree(pointer);
 }
 
 }  // namespace chre

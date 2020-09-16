@@ -85,6 +85,7 @@ SLPI_SRCS += platform/shared/memory_manager.cc
 SLPI_SRCS += platform/shared/nanoapp_load_manager.cc
 SLPI_SRCS += platform/shared/nanoapp/nanoapp_dso_util.cc
 SLPI_SRCS += platform/shared/pal_system_api.cc
+SLPI_SRCS += platform/shared/pw_tokenized_log.cc
 SLPI_SRCS += platform/shared/system_time.cc
 SLPI_SRCS += platform/slpi/chre_api_re.cc
 SLPI_SRCS += platform/slpi/fatal_error.cc
@@ -336,7 +337,7 @@ endif
 
 # Optional WWAN support.
 ifeq ($(CHRE_WWAN_SUPPORT_ENABLED), true)
-SIM_SRCS += platform/shared/pal_wwan_stub.cc
+SIM_SRCS += platform/linux/pal_wwan.cc
 SIM_SRCS += platform/shared/platform_wwan.cc
 endif
 

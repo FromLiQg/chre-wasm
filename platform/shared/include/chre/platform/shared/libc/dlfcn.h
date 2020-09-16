@@ -28,6 +28,10 @@
 #define RTLD_NEXT ((void *)-1L)
 #endif  // RTLD_NEXT
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * This function parses, verifies, and loads a buffer containing an ELF
  * file, and returns an opaque handle for symbol lookup via dlsym.
@@ -57,5 +61,9 @@ void *dlsym(void *handle, const char *symbol);
  * @return 0 on success
  */
 int dlclose(void *handle);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  // CHRE_PLATFORM_SHARED_DLFCN_H_

@@ -37,8 +37,8 @@ void log(enum chreLogLevel level, const char *formatStr, ...) {
 // TODO: b/146164384 - We will need to batch logs rather than send them
 // one at a time to avoid waking the AP.
 void vaLog(enum chreLogLevel level, const char *format, va_list args) {
-  HostLink &hostLink =
-      EventLoopManagerSingleton::get()->getHostCommsManager().getHostLink();
+  auto &hostCommsMgr =
+      chre::EventLoopManagerSingleton::get()->getHostCommsManager();
 
   // See host_messages.fbs for the log message format.
   size_t logBufIndex = 0;
@@ -55,7 +55,8 @@ void vaLog(enum chreLogLevel level, const char *format, va_list args) {
     // msgLen doesn't include the terminating null char.
     logBufIndex += msgLen + 1;
 
-    hostLink.sendLogMessage(logBuffer, logBufIndex);
+    hostCommsMgr.sendLogMessage(reinterpret_cast<uint8_t *>(logBuffer),
+                                logBufIndex);
   }
 }
 

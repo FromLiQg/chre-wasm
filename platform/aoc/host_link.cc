@@ -55,9 +55,8 @@ struct UnloadNanoappCallbackData {
   bool allowSystemNanoappUnload;
 };
 
-/** Helper function used to retrieve the HostLink from a static context. */
-inline HostLink &getHostLink() {
-  return EventLoopManagerSingleton::get()->getHostCommsManager().getHostLink();
+inline HostCommsManager &getHostCommsManager() {
+  return EventLoopManagerSingleton::get()->getHostCommsManager();
 }
 
 void setTimeSyncRequestTimer(Nanoseconds delay) {
@@ -116,7 +115,7 @@ void sendDebugDumpData(uint16_t hostClientId, const char *debugStr,
   HostProtocolChre::encodeDebugDumpData(builder, hostClientId, debugStr,
                                         debugStrSize);
 
-  getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
+  getHostCommsManager().send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void sendDebugDumpResponse(uint16_t hostClientId, bool success,
@@ -125,7 +124,7 @@ void sendDebugDumpResponse(uint16_t hostClientId, bool success,
   ChreFlatBufferBuilder builder(kFixedSizePortion);
   HostProtocolChre::encodeDebugDumpResponse(builder, hostClientId, success,
                                             dataCount);
-  getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
+  getHostCommsManager().send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
@@ -161,7 +160,7 @@ void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
     eventLoop.forEachNanoapp(nanoappAdderCallback, &cbData);
     HostProtocolChre::finishNanoappListResponse(builder, cbData.nanoappEntries,
                                                 clientIdCbData.hostClientId);
-    getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
+    getHostCommsManager().send(builder.GetBufferPointer(), builder.GetSize());
   }
 }
 
@@ -172,7 +171,8 @@ void sendFragmentResponse(uint16_t hostClientId, uint32_t transactionId,
   HostProtocolChre::encodeLoadNanoappResponse(
       builder, hostClientId, transactionId, success, fragmentId);
 
-  if (!getHostLink().send(builder.GetBufferPointer(), builder.GetSize())) {
+  if (!getHostCommsManager().send(builder.GetBufferPointer(),
+                                  builder.GetSize())) {
     LOGE(
         "Failed to send fragment response for HostClientID: %x FragmentID: %x"
         "transactionID: 0x%x",
@@ -214,7 +214,8 @@ void handleUnloadNanoappCallback(uint16_t /*eventType*/, void *data) {
   HostProtocolChre::encodeUnloadNanoappResponse(builder, cbData->hostClientId,
                                                 cbData->transactionId, success);
 
-  if (!getHostLink().send(builder.GetBufferPointer(), builder.GetSize())) {
+  if (!getHostCommsManager().send(builder.GetBufferPointer(),
+                                  builder.GetSize())) {
     LOGE("Failed to send unload response to host: %x transactionID: 0x%x",
          cbData->hostClientId, cbData->transactionId);
   }
@@ -249,21 +250,11 @@ bool HostLink::sendMessage(const MessageToHost *message) {
       message->message.size());
 
   bool success =
-      getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
+      getHostCommsManager().send(builder.GetBufferPointer(), builder.GetSize());
 
-  auto &hostCommsManager =
-      EventLoopManagerSingleton::get()->getHostCommsManager();
-  hostCommsManager.onMessageToHostComplete(message);
+  getHostCommsManager().onMessageToHostComplete(message);
 
   return success;
-}
-
-void HostLink::sendLogMessage(const char *logMessage, size_t logMessageSize) {
-  constexpr size_t kInitialSize = 128;
-  ChreFlatBufferBuilder builder(logMessageSize + kInitialSize);
-  HostProtocolChre::encodeLogMessages(builder, logMessage, logMessageSize);
-
-  getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
 }
 
 HostLinkBase::HostLinkBase() {
@@ -309,7 +300,7 @@ usf::UsfErr HostLinkBase::handleUsfMessage(usf::UsfTransport *transport,
                                            const usf::UsfMsg *msg,
                                            void * /* arg */) {
   usf::UsfErr rc = usf::kErrFailed;
-  getHostLink().init(transport);
+  getHostCommsManager().init(transport);
 
   if (msg == nullptr) {
     rc = usf::kErrInvalid;
@@ -349,8 +340,8 @@ usf::UsfErr HostLinkBase::handleUsfMessage(usf::UsfTransport *transport,
             // USF owns the passed in data pointer and will free it after the
             // callback returns.
           };
-          rc =
-              getHostLink().getWorker()->Enqueue(callback, &data, sizeof(data));
+          rc = getHostCommsManager().getWorker()->Enqueue(callback, &data,
+                                                          sizeof(data));
         }
       }
     } else {
@@ -368,12 +359,21 @@ usf::UsfErr HostLinkBase::handleUsfMessage(usf::UsfTransport *transport,
   return rc;
 }
 
+void HostLinkBase::sendLogMessage(const uint8_t *logMessage,
+                                  size_t logMessageSize) {
+  constexpr size_t kInitialSize = 128;
+  ChreFlatBufferBuilder builder(logMessageSize + kInitialSize);
+  HostProtocolChre::encodeLogMessages(builder, logMessage, logMessageSize);
+
+  getHostCommsManager().send(builder.GetBufferPointer(), builder.GetSize());
+}
+
 void HostLinkBase::sendTimeSyncRequest() {
   constexpr size_t kInitialSize = 52;
   ChreFlatBufferBuilder builder(kInitialSize);
   HostProtocolChre::encodeTimeSyncRequest(builder);
 
-  getHostLink().send(builder.GetBufferPointer(), builder.GetSize());
+  getHostCommsManager().send(builder.GetBufferPointer(), builder.GetSize());
 
   mLastTimeSyncRequestNanos = SystemTime::getMonotonicTime();
 }
@@ -410,7 +410,8 @@ void HostMessageHandlers::handleHubInfoRequest(uint16_t hostClientId) {
       kPeakPower, CHRE_MESSAGE_TO_HOST_MAX_SIZE, chreGetPlatformId(),
       chreGetVersion(), hostClientId);
 
-  if (!getHostLink().send(builder.GetBufferPointer(), builder.GetSize())) {
+  if (!getHostCommsManager().send(builder.GetBufferPointer(),
+                                  builder.GetSize())) {
     LOGE("Failed to send Hub Info Response message");
   }
 }
@@ -493,9 +494,7 @@ void HostMessageHandlers::handleNanoappMessage(uint64_t appId,
        " endpoint 0x%" PRIx16 " msgType %" PRIu32 " payload size %zu",
        appId, hostEndpoint, messageType, messageDataLen);
 
-  HostCommsManager &hostCommsManager =
-      EventLoopManagerSingleton::get()->getHostCommsManager();
-  hostCommsManager.sendMessageToNanoappFromHost(
+  getHostCommsManager().sendMessageToNanoappFromHost(
       appId, messageType, hostEndpoint, messageData, messageDataLen);
 }
 

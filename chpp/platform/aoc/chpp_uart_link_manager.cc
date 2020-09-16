@@ -82,13 +82,13 @@ UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
       mWakeInGpi(wakeInGpiNumber) {
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
-  mTaskHandle = xTaskGetCurrentTaskHandle();
 }
 
-void UartLinkManager::init() {
+void UartLinkManager::init(TaskHandle_t handle) {
   mUart->RegisterRxCallback(onUartRxInterrupt, this);
   mUart->EnableRxInterrupt();
 
+  mTaskHandle = handle;
   mWakeInGpi.SetInterruptHandler(onTransactionRequestInterrupt, this);
   mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_RISING_EDGE);
   InterruptController::Instance()->InterruptEnable(

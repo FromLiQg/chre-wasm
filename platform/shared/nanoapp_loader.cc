@@ -125,7 +125,9 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(__cxa_pure_virtual),
     ADD_EXPORTED_SYMBOL(atexitOverride, "atexit"),
     ADD_EXPORTED_SYMBOL(deleteOverride, "_ZdlPv"),
+    // TODO(b/151847750): Remove export once nanoapps are migrated to C symbol.
     ADD_EXPORTED_SYMBOL(dlsym, "_Z5dlsymPvPKc"),
+    ADD_EXPORTED_C_SYMBOL(dlsym),
     ADD_EXPORTED_C_SYMBOL(memcmp),
     ADD_EXPORTED_C_SYMBOL(memcpy),
     ADD_EXPORTED_C_SYMBOL(memmove),
