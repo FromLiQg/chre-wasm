@@ -17,6 +17,7 @@
 #ifndef CHRE_PLATFORM_FREERTOS_PLATFORM_NANOAPP_BASE_H_
 #define CHRE_PLATFORM_FREERTOS_PLATFORM_NANOAPP_BASE_H_
 
+#include "chre/platform/shared/memory.h"
 #include "chre/platform/shared/nanoapp_support_lib_dso.h"
 
 namespace chre {
@@ -40,9 +41,9 @@ class PlatformNanoappBase {
   bool isLoaded() const;
 
   /**
-   * @return true if this app is loaded into DRAM.
+   * @return true if this app is loaded into TCM.
    */
-  bool isDramApp() const;
+  bool isTcmApp() const;
 
   /**
    * Sets app info that will be used later when the app is loaded into the
@@ -93,7 +94,11 @@ class PlatformNanoappBase {
   //! against) mAppInfo.
   uint32_t mExpectedAppVersion = 0;
 
-  bool mExpectedTcmCapable;
+  //! Whether the nanoapp is expected to be loaded into TCM.
+  bool mExpectedTcmCapable = false;
+
+  //! Whether this nanoapp is loaded into TCM.
+  bool mIsTcmNanoapp = false;
 
   //! Buffer containing the complete DSO binary - only populated if
   //! copyNanoappFragment() was used to load this nanoapp
@@ -152,6 +157,13 @@ class PlatformNanoappBase {
    * @return A char array containing the version string for this nanoapp.
    */
   const char *getAppVersionString(size_t *length) const;
+
+  /** If this app needs to access DRAM to function, enables DRAM access. */
+  inline void enableDramAccessIfRequired() const {
+    if (!isTcmApp()) {
+      forceDramAccess();
+    }
+  }
 };
 
 }  // namespace chre

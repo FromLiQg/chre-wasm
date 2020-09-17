@@ -22,7 +22,6 @@
 #include "chre/platform/assert.h"
 #include "chre/platform/log.h"
 #include "chre/platform/shared/authentication.h"
-#include "chre/platform/shared/memory.h"
 #include "chre/platform/shared/nanoapp_dso_util.h"
 #include "chre/platform/shared/nanoapp_loader.h"
 #include "chre/util/macros.h"
@@ -47,6 +46,7 @@ PlatformNanoapp::~PlatformNanoapp() {
 }
 
 bool PlatformNanoapp::start() {
+  //! Always force DRAM access when starting since nanoapps are loaded via DRAM.
   forceDramAccess();
 
   bool success = false;
@@ -57,45 +57,46 @@ bool PlatformNanoapp::start() {
   } else {
     success = mAppInfo->entryPoints.start();
   }
+
   return success;
 }
 
 void PlatformNanoapp::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
                                   const void *eventData) {
-  forceDramAccess();
+  enableDramAccessIfRequired();
   mAppInfo->entryPoints.handleEvent(senderInstanceId, eventType, eventData);
 }
 
 void PlatformNanoapp::end() {
-  forceDramAccess();
+  enableDramAccessIfRequired();
   mAppInfo->entryPoints.end();
   closeNanoapp();
 }
 
 uint64_t PlatformNanoapp::getAppId() const {
-  // TODO (karthikmb/stange): Ideally, we should store the metadata as SRAM
-  // variables, to avoid bumping into DRAM for basic queries.
-  forceDramAccess();
+  // TODO (karthikmb/stange): Ideally, we should store the metadata as
+  // variables in TCM, to avoid bumping into DRAM for basic queries.
+  enableDramAccessIfRequired();
   return (mAppInfo != nullptr) ? mAppInfo->appId : mExpectedAppId;
 }
 
 uint32_t PlatformNanoapp::getAppVersion() const {
-  forceDramAccess();
+  enableDramAccessIfRequired();
   return (mAppInfo != nullptr) ? mAppInfo->appVersion : mExpectedAppVersion;
 }
 
 const char *PlatformNanoapp::getAppName() const {
-  forceDramAccess();
+  enableDramAccessIfRequired();
   return (mAppInfo != nullptr) ? mAppInfo->name : "Unknown";
 }
 
 uint32_t PlatformNanoapp::getTargetApiVersion() const {
-  forceDramAccess();
+  enableDramAccessIfRequired();
   return (mAppInfo != nullptr) ? mAppInfo->targetApiVersion : 0;
 }
 
 bool PlatformNanoapp::isSystemNanoapp() const {
-  forceDramAccess();
+  enableDramAccessIfRequired();
   return (mAppInfo != nullptr && mAppInfo->isSystemNanoapp);
 }
 
@@ -149,10 +150,8 @@ bool PlatformNanoappBase::isLoaded() const {
           mDsoHandle != nullptr || mAppFilename != nullptr);
 }
 
-bool PlatformNanoappBase::isDramApp() const {
-  // TODO: Determine if an app is in DRAM or not once nanoapps in SRAM
-  // are supported.
-  return true;
+bool PlatformNanoappBase::isTcmApp() const {
+  return mIsTcmNanoapp;
 }
 
 void PlatformNanoappBase::loadStatic(const struct chreNslNanoappInfo *appInfo) {
@@ -277,11 +276,19 @@ bool PlatformNanoappBase::openNanoapp() {
     mAppBinary = nullptr;
   }
 
+  // Save this flag locally since it may be referenced while the system is in
+  // TCM-only mode.
+  if (mAppInfo != nullptr) {
+    mIsTcmNanoapp = mAppInfo->isTcmNanoapp;
+  }
+
   return success;
 }
 
 void PlatformNanoappBase::closeNanoapp() {
   if (mDsoHandle != nullptr) {
+    // Force DRAM access since dl* functions are only safe to call with DRAM
+    // available.
     forceDramAccess();
     mAppInfo = nullptr;
     if (dlclose(mDsoHandle) != 0) {
