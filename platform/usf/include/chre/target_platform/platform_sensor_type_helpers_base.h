@@ -24,11 +24,11 @@ namespace chre {
 /**
  * This SensorSampleType is designed to help classify sensor's data type in
  * event handling.
- * TODO: This is a placeholder for AOC and not fully implemented
  */
 enum class SensorSampleType {
   Byte,
   Float,
+  Uint64,
   Occurrence,
   ThreeAxis,
   Unknown,
