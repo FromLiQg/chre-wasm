@@ -28,7 +28,7 @@ namespace {
 // (i.e. the xxGive and xxGiveFromISR are not interchangeable). Since there
 // are no interrupts in a simulated platform, we end up with two different
 // notification mechanisms that accomplish the same purpose.
-void wakeupDispatchThread(TaskHandle_t &handle) {
+void wakeupDispatchThreadFromIsr(TaskHandle_t &handle) {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   vTaskNotifyGiveFromISR(handle, &xHigherPriorityTaskWoken);
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -38,12 +38,10 @@ void wakeupDispatchThread(TaskHandle_t &handle) {
 
 namespace chre {
 
-TaskHandle_t SystemTimerBase::mTimerCbDispatchThreadHandle = NULL;
-
 bool SystemTimerBase::systemTimerNotifyCallback(void *context) {
   SystemTimer *pTimer = static_cast<SystemTimer *>(context);
   if (pTimer != nullptr) {
-    wakeupDispatchThread(mTimerCbDispatchThreadHandle);
+    wakeupDispatchThreadFromIsr(pTimer->mTimerCbDispatchThreadHandle);
   }
 
   // The EFW timer callback is setup in such a way that returning 'true'
@@ -60,8 +58,11 @@ void SystemTimerBase::timerCallbackDispatch(void *context) {
 
   while (true) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    if ((pTimer != nullptr) && (pTimer->mCallback != nullptr)) {
-      pTimer->mCallback(pTimer->mData);
+    // Obtain pointer to callback before checking its value to avoid race
+    // with cancel().
+    SystemTimerCallback *callback = pTimer->mCallback;
+    if (callback != nullptr) {
+      callback(pTimer->mData);
     }
   }
 }
@@ -72,16 +73,21 @@ SystemTimer::~SystemTimer() {
   // cancel an existing timer if any
   cancel();
   // Delete the timer dispatch thread if it was created
-  if (mTimerCbDispatchThreadHandle != NULL) {
+  if (mTimerCbDispatchThreadHandle != nullptr) {
     vTaskDelete(mTimerCbDispatchThreadHandle);
+    mTimerCbDispatchThreadHandle = nullptr;
   }
 }
 
 bool SystemTimer::init() {
-  BaseType_t rc =
-      xTaskCreate(timerCallbackDispatch, "TimerCbDispatch", 1024, this,
-                  tskIDLE_PRIORITY + 2, &mTimerCbDispatchThreadHandle);
-  if (pdTRUE == rc) {
+  // TODO(b/168526254): Balance this priority with other CHRE tasks.
+  constexpr UBaseType_t kTaskPriority = tskIDLE_PRIORITY + 15;
+  const char *const kTaskName = "ChreTimerCB";
+
+  mTimerCbDispatchThreadHandle =
+      xTaskCreateStatic(timerCallbackDispatch, kTaskName, kStackDepthWords,
+                        this, kTaskPriority, mTaskStack, &mTaskBuffer);
+  if (mTimerCbDispatchThreadHandle != nullptr) {
     mInitialized = true;
   } else {
     LOGE("Failed to create Timer Dispatch Thread");
@@ -95,7 +101,10 @@ bool SystemTimer::set(SystemTimerCallback *callback, void *data,
   bool success = false;
 
   if (mInitialized) {
-    // TODO: b/146374655 - investigate/handle possible race condition here
+    // Cancel the existing timer to avoid a race where the old timer expires
+    // when setting up the new timer.
+    cancel();
+
     mCallback = callback;
     mData = data;
 
@@ -118,6 +127,8 @@ bool SystemTimer::cancel() {
   int rc = -1;
   if (mTimerHandle != nullptr) {
     rc = Timer::Instance()->EventRemove(mTimerHandle);
+    mTimerHandle = nullptr;
+    mCallback = nullptr;
   }
 
   return (rc == 0) ? true : false;

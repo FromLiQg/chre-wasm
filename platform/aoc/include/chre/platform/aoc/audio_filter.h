@@ -146,10 +146,11 @@ class AudioFilter : public Filter {
   static constexpr size_t kSamplesPer2Sec =
       kSupportedSampleRate * kSupportedDurationSeconds;
 
-  int16_t mSampleBuffer[kSamplesPer2Sec];
+  int16_t mSampleBufferSram[kSamplesPer2Sec];
+  int16_t *mSampleBufferDram = nullptr;
   void *mRingBufferHandle = nullptr;
   size_t mSampleCount = 0;
-  bool mBufferInUse = false;
+  bool mDramBufferInUse = false;
 
   struct chreAudioDataEvent mDataEvent = {
       .version = CHRE_AUDIO_DATA_EVENT_VERSION,

@@ -21,18 +21,18 @@
 namespace chre {
 
 void *MemoryManager::doAlloc(Nanoapp *app, uint32_t bytes) {
-  if (app->isDramApp()) {
-    return chre::memoryAllocDram(bytes);
-  } else {
+  if (app->isTcmApp()) {
     return chre::memoryAlloc(bytes);
+  } else {
+    return chre::memoryAllocDram(bytes);
   }
 }
 
 void MemoryManager::doFree(Nanoapp *app, void *ptr) {
-  if (app->isDramApp()) {
-    chre::memoryFreeDram(ptr);
-  } else {
+  if (app->isTcmApp()) {
     chre::memoryFree(ptr);
+  } else {
+    chre::memoryFreeDram(ptr);
   }
 }
 
