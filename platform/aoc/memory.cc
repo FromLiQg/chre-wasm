@@ -208,12 +208,14 @@ void memoryFreeDram(void *pointer) {
   CHRE_ASSERT_LOG(DramVoteClientSingleton::get()->isDramVoteActive(),
                   "DRAM freed when not accessible");
 
-  if (!IsInHeap(ChreHeap::DRAM, pointer)) {
-    printf(
-        "CHRE: Tried to free memory not in DRAM heap or DRAM heap not \
-            initialized\n");
-  } else {
-    HeapFree(GetDramHeap(), pointer);
+  if (pointer != nullptr) {
+    if (!IsInHeap(ChreHeap::DRAM, pointer)) {
+      printf(
+          "CHRE: Tried to free memory not in DRAM heap or DRAM heap not \
+              initialized\n");
+    } else {
+      HeapFree(GetDramHeap(), pointer);
+    }
   }
 }
 
