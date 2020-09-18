@@ -125,28 +125,28 @@ class NanoappLoader {
   static constexpr size_t kBinaryAlignment = 4096;
 
   //! Pointer to the table of all the section names.
-  char *mSectionNamesPtr;
+  char *mSectionNamesPtr = nullptr;
   //! Pointer to the table of symbol names of defined symbols.
-  char *mStringTablePtr;
+  char *mStringTablePtr = nullptr;
   //! Pointer to the table of symbol information for defined symbols.
-  uint8_t *mSymbolTablePtr;
+  uint8_t *mSymbolTablePtr = nullptr;
   //! Pointer to the array of section header entries.
   SectionHeader *mSectionHeadersPtr;
   //! Number of SectionHeaders pointed to by mSectionHeadersPtr.
-  size_t mNumSectionHeaders;
+  size_t mNumSectionHeaders = 0;
   //! Size of the data pointed to by mSymbolTablePtr.
-  size_t mSymbolTableSize;
+  size_t mSymbolTableSize = 0;
 
   // TODO(stange): Store this elsewhere since the location will be invalid after
   // loading is complete.
   //! The ELF that is being mapped into the system. This pointer will be invalid
   //! after open returns.
-  NestedDataPtr<uintptr_t> mBinary;
+  NestedDataPtr<uintptr_t> mBinary = {0};
   //! The starting location of the memory that has been mapped into the system.
-  NestedDataPtr<uintptr_t> mMapping;
+  NestedDataPtr<uintptr_t> mMapping = {0};
   //! The difference between where the first load segment was mapped into
   //! virtual memory and what the virtual load offset was of that segment.
-  ElfAddr mLoadBias;
+  ElfAddr mLoadBias = 0;
   //! Dynamic vector containing functions that should be invoked prior to
   //! unloading this nanoapp. Note that functions are stored in the order they
   //! were added and should be called in reverse.
