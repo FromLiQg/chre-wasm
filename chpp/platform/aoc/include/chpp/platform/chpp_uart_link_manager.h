@@ -21,6 +21,7 @@
 #include "chpp/condition_variable.h"
 #include "chpp/link.h"
 #include "chpp/mutex.h"
+#include "chpp/platform/chpp_task_util.h"
 #include "chpp/transport.h"
 #include "chre/platform/atomic.h"
 #include "chre/util/non_copyable.h"
@@ -187,7 +188,14 @@ class UartLinkManager : public chre::NonCopyable {
   //! (t_end per specifications).
   static constexpr uint64_t kEndTimeoutNs = chre::kOneSecondInNanoseconds;
 
+  //! The minimum amount of time to assert the wake_out GPIO (t_pulse per
+  //! specifications).
+  static constexpr uint64_t kPulseTimeNs =
+      100 * chre::kOneMicrosecondInNanoseconds;
+
   chre::AtomicBool mTransactionPending{false};
+
+  TaskUtil mTaskUtil;
 
   /**
    * @return if a TX packet is pending transmission.

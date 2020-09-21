@@ -20,6 +20,7 @@
 #include "chpp/macros.h"
 #include "chpp/platform/log.h"
 #include "chre/platform/fatal_error.h"
+#include "chre/platform/system_time.h"
 #include "efw/include/interrupt_controller.h"
 #include "efw/include/processor.h"
 #include "efw/include/timer.h"
@@ -28,6 +29,8 @@
 // Define as 0 to disable wake handshaking
 // TODO: Enable once ready
 #define WAKE_HANDSHAKE_ENABLE 0
+
+using chre::SystemTime;
 
 namespace chpp {
 
@@ -175,6 +178,8 @@ bool UartLinkManager::startTransaction() {
   // handled them together).
   if (mTransactionPending.load()) {
     mWakeOutGpio.Set(true /* set */);
+    uint64_t pulseEndTimeNs =
+        SystemTime::getMonotonicTime().toRawNanoseconds() + kPulseTimeNs;
 
 #if WAKE_HANDSHAKE_ENABLE
     mWakeInGpi.SetInterruptHandler(onTransactionHandshakeInterrupt, this);
@@ -194,7 +199,11 @@ bool UartLinkManager::startTransaction() {
         }
 
       } else {
-        // TODO: Wait for pulse width requirement per specifications.
+        uint64_t now = SystemTime::getMonotonicTime().toRawNanoseconds();
+        if (now < pulseEndTimeNs) {
+          mTaskUtil.suspend(pulseEndTimeNs - now);
+        }
+
         mWakeOutGpio.Clear();
       }
 
