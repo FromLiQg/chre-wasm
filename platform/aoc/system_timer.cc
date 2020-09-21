@@ -62,6 +62,7 @@ void SystemTimerBase::timerCallbackDispatch(void *context) {
     // with cancel().
     SystemTimerCallback *callback = pTimer->mCallback;
     if (callback != nullptr) {
+      pTimer->mTimerHandle = nullptr;
       callback(pTimer->mData);
     }
   }
@@ -135,8 +136,7 @@ bool SystemTimer::cancel() {
 }
 
 bool SystemTimer::isActive() {
-  // TODO: stubbed out, Implement this.
-  return false;
+  return mTimerHandle != nullptr;
 }
 
 }  // namespace chre
