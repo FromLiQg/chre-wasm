@@ -25,9 +25,6 @@
 
 #include <cstdlib>
 
-// TODO(b/152442881): Remove printf statements and replace with CHRE_ASSERT
-// when things are considered more stable.
-
 //! Beginning of the CHRE SRAM heap.
 extern uintptr_t __heap_chre_beg__;
 //! End of the CHRE SRAM heap.
@@ -68,7 +65,6 @@ void *GetSramHeap() {
     gSramHeap = HeapInit(heap_base, heap_size);
     CHRE_ASSERT(gSramHeap != nullptr);
     if (gSramHeap == nullptr) {
-      printf("CHRE: Failed to initialize SRAM heap\n");
       return nullptr;
     } else {
       HeapLocking(gSramHeap, &gSramMutex, LockMutex, UnlockMutex);
@@ -85,7 +81,6 @@ void *GetDramHeap() {
     gDramHeap = HeapInit(heap_base, heap_size);
     CHRE_ASSERT(gDramHeap != nullptr);
     if (gDramHeap == nullptr) {
-      printf("CHRE: Failed to initialize DRAM heap\n");
       return nullptr;
     } else {
       HeapLocking(gDramHeap, &gDramMutex, LockMutex, UnlockMutex);
@@ -100,7 +95,7 @@ void *GetHeap(ChreHeap heap) {
   } else if (heap == ChreHeap::DRAM) {
     return GetDramHeap();
   } else {
-    printf("CHRE: GetHeap given invalid heap\n");
+    CHRE_ASSERT(false);
   }
   return nullptr;
 }
@@ -152,9 +147,6 @@ void *memoryAllocAligned(size_t alignment, size_t size) {
     ptr = HeapAlignedAlloc(handle, alignment, size);
     // This method is currently only used for nanoapp loading so don't fall back
     // to DRAM or there can be power implications.
-    if (ptr == nullptr) {
-      printf("CHRE: Failed to allocate memory in SRAM heap\n");
-    }
   }
 
   return ptr;
@@ -169,9 +161,6 @@ void *memoryAllocDramAligned(size_t alignment, size_t size) {
 
   if (handle != nullptr) {
     ptr = HeapAlignedAlloc(handle, alignment, size);
-    if (ptr == nullptr) {
-      printf("CHRE: Failed to allocate memory in DRAM heap\n");
-    }
   }
 
   return ptr;
@@ -185,9 +174,6 @@ void *memoryAllocDram(size_t size) {
   void *handle = GetDramHeap();
   if (handle != nullptr) {
     ptr = HeapMalloc(handle, size);
-    if (ptr == nullptr) {
-      printf("CHRE: Failed to allocate memory in DRAM heap\n");
-    }
   }
 
   return ptr;
@@ -209,11 +195,9 @@ void memoryFreeDram(void *pointer) {
                   "DRAM freed when not accessible");
 
   if (pointer != nullptr) {
-    if (!IsInHeap(ChreHeap::DRAM, pointer)) {
-      printf(
-          "CHRE: Tried to free memory not in DRAM heap or DRAM heap not \
-              initialized\n");
-    } else {
+    bool inDramHeap = !IsInHeap(ChreHeap::DRAM, pointer);
+    CHRE_ASSERT(inDramHeap);
+    if (inDramHeap) {
       HeapFree(GetDramHeap(), pointer);
     }
   }
