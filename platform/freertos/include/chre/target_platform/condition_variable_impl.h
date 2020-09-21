@@ -53,7 +53,11 @@ inline bool ConditionVariable::wait_for(Mutex &mutex, Nanoseconds timeout) {
     }
   }
 
+  // Reset semaphore in case notify_one was invoked twice previously. This can
+  // happen if the timer expires at the same time as the wait condition is met.
+  xQueueReset(mCvSemaphoreHandle);
   mTimedOut = false;
+
   auto callback = [](void *data) {
     auto cbData = static_cast<ConditionVariable *>(data);
     cbData->mTimedOut = true;
