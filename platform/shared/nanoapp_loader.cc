@@ -228,17 +228,20 @@ bool NanoappLoader::open() {
       LOGE("Failed to fix relocations");
     } else if (!resolveGot()) {
       LOGE("Failed to resolve GOT");
-    } else if (!callInitArray()) {
-      LOGE("Failed to perform static init");
     } else {
-      success = true;
+      // Wipe caches before calling init array to ensure initializers are not in
+      // the data cache.
+      wipeSystemCaches();
+      if (!callInitArray()) {
+        LOGE("Failed to perform static init");
+      } else {
+        success = true;
+      }
     }
   }
 
   if (!success) {
     freeAllocatedData();
-  } else {
-    wipeSystemCaches();
   }
 
   return success;
