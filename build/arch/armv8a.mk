@@ -33,4 +33,8 @@ TARGET_CFLAGS += -Wframe-larger-than=7000
 ifeq ($(IS_ARCHIVE_ONLY_BUILD),)
 TARGET_CFLAGS += -fPIC
 TARGET_SO_LDFLAGS += -shared
+
+# Only generate debug symbols for debug dynamic libraries
+TARGET_CFLAGS += -g0
+TARGET_DEBUG_CFLAGS += -g
 endif
