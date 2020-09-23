@@ -24,6 +24,7 @@
 #include "ash.h"
 #include "chre.h"
 #include "chre/platform/assert.h"
+#include "chre/platform/fatal_error.h"
 #include "chre/platform/shared/debug_dump.h"
 #include "chre/platform/shared/memory.h"
 #include "chre/target_platform/platform_cache_management.h"
