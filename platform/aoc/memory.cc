@@ -195,7 +195,7 @@ void memoryFreeDram(void *pointer) {
                   "DRAM freed when not accessible");
 
   if (pointer != nullptr) {
-    bool inDramHeap = !IsInHeap(ChreHeap::DRAM, pointer);
+    bool inDramHeap = IsInHeap(ChreHeap::DRAM, pointer);
     CHRE_ASSERT(inDramHeap);
     if (inDramHeap) {
       HeapFree(GetDramHeap(), pointer);
