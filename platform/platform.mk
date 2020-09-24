@@ -71,6 +71,7 @@ endif
 
 # SLPI-specific Source Files ###################################################
 
+SLPI_SRCS += platform/shared/assert.cc
 SLPI_SRCS += platform/shared/chre_api_audio.cc
 SLPI_SRCS += platform/shared/chre_api_core.cc
 SLPI_SRCS += platform/shared/chre_api_gnss.cc
@@ -206,6 +207,7 @@ AOC_SRCS += platform/aoc/platform_cache_management.cc
 AOC_SRCS += platform/aoc/platform_pal.cc
 AOC_SRCS += platform/aoc/system_time.cc
 AOC_SRCS += platform/aoc/system_timer.cc
+AOC_SRCS += platform/shared/assert.cc
 AOC_SRCS += platform/shared/chre_api_audio.cc
 AOC_SRCS += platform/shared/chre_api_core.cc
 AOC_SRCS += platform/shared/chre_api_gnss.cc
@@ -309,6 +311,7 @@ SIM_SRCS += platform/linux/system_timer.cc
 SIM_SRCS += platform/linux/platform_nanoapp.cc
 SIM_SRCS += platform/linux/platform_sensor.cc
 SIM_SRCS += platform/linux/platform_sensor_type_helpers.cc
+SIM_SRCS += platform/shared/assert.cc
 SIM_SRCS += platform/shared/chre_api_audio.cc
 SIM_SRCS += platform/shared/chre_api_core.cc
 SIM_SRCS += platform/shared/chre_api_gnss.cc
@@ -349,6 +352,7 @@ GOOGLE_X86_LINUX_CFLAGS += -Iplatform/linux/include
 # Linux-specific Source Files ##################################################
 
 GOOGLE_X86_LINUX_SRCS += platform/linux/init.cc
+GOOGLE_X86_LINUX_SRCS += platform/linux/assert.cc
 
 # Optional audio support.
 ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
