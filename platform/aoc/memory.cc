@@ -15,6 +15,7 @@
  */
 
 #include "chre/platform/aoc/memory.h"
+#include "chre/platform/assert.h"
 #include "chre/platform/memory.h"
 #include "chre/platform/mutex.h"
 #include "chre/platform/shared/dram_vote_client.h"

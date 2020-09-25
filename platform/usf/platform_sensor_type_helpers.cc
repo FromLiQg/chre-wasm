@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "chre/platform/platform_sensor_type_helpers.h"
-#include "chre/target_platform/assert.h"
+#include "chre/platform/assert.h"
 #include "chre/util/macros.h"
 
 #ifdef CHREX_SENSOR_SUPPORT

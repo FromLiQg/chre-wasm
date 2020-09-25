@@ -15,7 +15,7 @@
  */
 
 #include "chre/platform/system_timer.h"
-#include "chre/platform/assert.h"
+#include "chre/platform/fatal_error.h"
 #include "chre/platform/log.h"
 #include "chre/util/time.h"
 

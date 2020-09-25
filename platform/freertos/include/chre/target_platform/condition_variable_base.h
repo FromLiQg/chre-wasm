@@ -17,9 +17,9 @@
 #ifndef CHRE_PLATFORM_FREERTOS_CONDITION_VARIABLE_BASE_H_
 #define CHRE_PLATFORM_FREERTOS_CONDITION_VARIABLE_BASE_H_
 
+#include "chre/platform/fatal_error.h"
 #include "chre/platform/mutex.h"
 #include "chre/platform/system_timer.h"
-#include "chre/target_platform/fatal_error.h"
 
 #include "FreeRTOS.h"
 #include "semphr.h"

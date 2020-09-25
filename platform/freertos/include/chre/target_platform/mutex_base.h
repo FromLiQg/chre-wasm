@@ -17,7 +17,7 @@
 #ifndef CHRE_PLATFORM_FREERTOS_MUTEX_BASE_H_
 #define CHRE_PLATFORM_FREERTOS_MUTEX_BASE_H_
 
-#include "chre/platform/assert.h"
+#include "chre/platform/fatal_error.h"
 #include "chre/platform/log.h"
 
 #include "FreeRTOS.h"

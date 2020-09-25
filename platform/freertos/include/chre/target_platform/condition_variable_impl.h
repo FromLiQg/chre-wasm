@@ -19,6 +19,8 @@
 
 #include "chre/platform/condition_variable.h"
 
+#include "chre/platform/fatal_error.h"
+
 namespace chre {
 
 inline ConditionVariable::ConditionVariable() {
