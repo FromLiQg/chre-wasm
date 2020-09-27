@@ -79,9 +79,37 @@ void AudioController::SetUpRemoteCore() {
   }
 }
 
+void AudioController::TearDownRemoteCore() {
+  if (mDspCoreInitDone) {
+    int rc = -1;
+    struct CMD_HDR cmd;
+    // See controller_audio_input.h in EFW for command ID definitions.
+    uint16_t cmdId = ControllerAudioInput::CMD_AUDIO_INPUT_CHRE_TEARDOWN_ID;
+    if ((rc = mControllerIpcAoc.CmdRelay(&cmd, cmdId, sizeof(CMD_HDR),
+                                         portMAX_DELAY)) != 0) {
+      LOGE("Failed to send teardown cmd to DSP rc: %d", rc);
+    } else {
+      mDspCoreInitDone = true;
+    }
+  }
+}
+
+bool AudioController::StopCallback() {
+  mFilter.Stop();
+  mFilter.RingUnbind(AudioFilter::kRingIndex);
+
+  ring_buffer_ipc_[AudioFilter::kRingIndex]->WriteDescrReturn();
+  TearDownRemoteCore();
+
+  mControllerIpcAoc.Stop();
+
+  return true;
+}
+
 void AudioController::TearDown() {
   Controller::TearDown();
 
+  mControllerIpcAoc.Stop();
   mFilter.Stop();
   mFilter.RingUnbind(AudioFilter::kRingIndex);
 }

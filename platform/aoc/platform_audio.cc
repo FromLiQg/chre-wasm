@@ -25,7 +25,9 @@ namespace chre {
 
 PlatformAudio::PlatformAudio() {}
 
-PlatformAudio::~PlatformAudio() {}
+PlatformAudio::~PlatformAudio() {
+  mAudioController.Stop();
+}
 
 void PlatformAudio::init() {
   mAudioController.Start();
