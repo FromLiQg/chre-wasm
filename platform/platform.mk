@@ -236,6 +236,7 @@ AOC_SRCS += platform/usf/usf_helper.cc
 ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
 AOC_SRCS += platform/shared/platform_gnss.cc
 AOC_SRCS += chpp/clients/gnss.c
+AOC_SRCS += chpp/common/gnss_convert.c
 AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_CHRE_GNSS
 endif
 
@@ -243,6 +244,7 @@ endif
 ifeq ($(CHRE_WIFI_SUPPORT_ENABLED), true)
 AOC_SRCS += platform/shared/platform_wifi.cc
 AOC_SRCS += chpp/clients/wifi.c
+AOC_SRCS += chpp/common/wifi_convert.c
 AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_CHRE_WIFI
 endif
 
@@ -250,6 +252,7 @@ endif
 ifeq ($(CHRE_WWAN_SUPPORT_ENABLED), true)
 AOC_SRCS += platform/shared/platform_wwan.cc
 AOC_SRCS += chpp/clients/wwan.c
+AOC_SRCS += chpp/common/wwan_convert.c
 AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_CHRE_WWAN
 endif
 
