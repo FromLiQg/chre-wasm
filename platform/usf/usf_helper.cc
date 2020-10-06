@@ -125,6 +125,8 @@ void *allocateEvent(uint8_t sensorType, size_t numSamples) {
       sampleSize =
           sizeof(chreSensorOccurrenceData::chreSensorOccurrenceSampleData);
       break;
+    case SensorSampleType::Uint64:
+      sampleSize = sizeof(chreSensorUint64Data::chreSensorUint64SampleData);
     default:
       LOGE("Unhandled SensorSampleType for SensorType %" PRIu8,
            static_cast<uint8_t>(sensorType));
@@ -236,6 +238,12 @@ void populateSensorEvent(const usf::UsfSensorSampleReport *sampleReport,
         auto *event =
             reinterpret_cast<chreSensorOccurrenceData *>(sensorSample.get());
         timestampDelta = &event->readings[0].timestampDelta;
+        break;
+      }
+      case SensorSampleType::Uint64: {
+        auto *event =
+            reinterpret_cast<chreSensorUint64Data *>(sensorSample.get());
+        timestampDelta = &event->readings[i].timestampDelta;
         break;
       }
       default:
