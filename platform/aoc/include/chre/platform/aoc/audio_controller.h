@@ -60,11 +60,25 @@ class AudioController : public Controller {
   void SetUp() override;
 
   /**
+   * Callback that's invoked at the beginning of a call to stop the
+   * controller.
+   *
+   * @return true on success
+   */
+  bool StopCallback() override;
+
+  /**
    * Sends a command to the remote core indicating that the A32 Audio
    * Controller is fully up and ready to process data. This prompts
    * the DSP to setup its own CHRE Audio Controller.
    */
   void SetUpRemoteCore();
+
+  /**
+   * Disconnect from the remote DSP core, and initiate a teardown on
+   * the remote CHRE Audio Controller.
+   */
+  void TearDownRemoteCore();
 
   /**
    * Calls the base class TearDown method, and unbinds the shared ring

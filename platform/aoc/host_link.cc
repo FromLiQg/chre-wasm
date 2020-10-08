@@ -270,6 +270,11 @@ HostLinkBase::HostLinkBase() {
 }
 
 HostLinkBase::~HostLinkBase() {
+  // Remove the usf message handler to drop any host messages that we might
+  // receive during a shutdown.
+  usf::UsfTransportMgr::SetMsgHandler(usf::UsfMsgType::UsfMsgType_CHRE,
+                                      nullptr /*handler*/,
+                                      nullptr /*handler arg*/);
   mWorker->Stop();
   mWorker.reset();
 }
