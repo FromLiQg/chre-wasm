@@ -264,6 +264,7 @@ AOC_CFLAGS += -I$(AOC_AUTOGEN_DIR)/regions
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/apps
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/core/arm/generic/include
+AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/core/core_monitor/base/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/gpio/aoc/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/gpio/base/include
 AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/gpi/aoc/include

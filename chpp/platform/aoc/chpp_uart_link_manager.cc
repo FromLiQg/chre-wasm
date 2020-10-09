@@ -21,6 +21,7 @@
 #include "chpp/platform/log.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/system_time.h"
+#include "core_monitor.h"
 #include "efw/include/interrupt_controller.h"
 #include "efw/include/processor.h"
 #include "efw/include/timer.h"
@@ -78,13 +79,19 @@ void onTransactionHandshakeInterrupt(void *context, uint32_t /* interrupt */) {
 
 UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
                                  uint8_t wakeOutPinNumber,
-                                 uint8_t wakeInGpiNumber)
+                                 uint8_t wakeInGpiNumber,
+                                 enum PreventCoreMonitorMask mask)
     : mTransportContext(context),
       mUart(uart),
       mWakeOutGpio(wakeOutPinNumber, IP_LOCK_GPIO),
-      mWakeInGpi(wakeInGpiNumber) {
+      mWakeInGpi(wakeInGpiNumber),
+      mCoreMonitorMask(mask) {
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
+
+  // TODO(arthuri): Use this mask for wake handshaking, i.e. prevent core
+  // monitor mode when peripherals are expected to be in use.
+  UNUSED_VAR(mCoreMonitorMask);
 }
 
 void UartLinkManager::init(TaskHandle_t handle) {
