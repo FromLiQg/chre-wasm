@@ -62,6 +62,9 @@ void chppPlatformLinkDoWork(struct ChppPlatformLinkParameters *params,
   if (signal & CHPP_TRANSPORT_SIGNAL_LINK_RX_PROCESS) {
     manager->processRxSamples();
   }
+  if (signal & CHPP_TRANSPORT_SIGNAL_LINK_CORE_MONITOR) {
+    manager->allowCoreMonitor();
+  }
 }
 
 void chppPlatformLinkReset(struct ChppPlatformLinkParameters *params) {

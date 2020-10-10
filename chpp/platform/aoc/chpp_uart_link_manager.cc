@@ -50,7 +50,7 @@ void onTransactionRequestInterrupt(void *context, uint32_t /* interrupt */) {
   UartLinkManager *manager = static_cast<UartLinkManager *>(context);
   manager->getWakeInGpi()->SetTriggerFunction(GPIAoC::GPI_DISABLE);
   manager->getWakeInGpi()->ClearInterrupt();
-  manager->setTransactionPending();
+  manager->prepareForTransaction();
   chppWorkThreadSignalFromLink(&manager->getTransportContext()->linkParams,
                                CHPP_TRANSPORT_SIGNAL_LINK_WAKE_IN_IRQ);
 }
@@ -69,6 +69,16 @@ void onTransactionHandshakeInterrupt(void *context, uint32_t /* interrupt */) {
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
+bool setTimer(uint64_t timeoutNs, timerCallback callback, void *context,
+              void **timerHandle) {
+  Timer *timer = Timer::Instance();
+  const TickType_t timeoutTicks =
+      static_cast<TickType_t>(timer->NsToTicks(timeoutNs));
+
+  return timer->EventAddAtOffset(timeoutTicks, callback, context,
+                                 timerHandle) == 0;
+}
+
 }  // anonymous namespace
 
 UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
@@ -84,10 +94,6 @@ UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
       mWakeHandshakeEnabled(wakeHandshakeEnable) {
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
-
-  // TODO(arthuri): Use this mask for wake handshaking, i.e. prevent core
-  // monitor mode when peripherals are expected to be in use.
-  UNUSED_VAR(mCoreMonitorMask);
 }
 
 void UartLinkManager::init(TaskHandle_t handle) {
@@ -112,6 +118,9 @@ void UartLinkManager::deinit() {
       IRQ_GPI0 + mWakeInGpi.GetGpiNumber(), Processor::Instance()->CoreID(),
       false /* enable */);
   mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_DISABLE);
+
+  mCoreMonitorRefCount.store(0);
+  allowCoreMonitor();
 }
 
 bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
@@ -121,18 +130,50 @@ bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
   } else {
     mCurrentBuffer = buf;
     mCurrentBufferLen = len;
-    setTransactionPending();
+    prepareForTransaction();
   }
   return success;
+}
+
+void UartLinkManager::prepareForTransaction() {
+  mTransactionPending = true;
+  CoreMonitor::Instance()->Prevent(mCoreMonitorMask);
+}
+
+void UartLinkManager::onCoreMonitorAllowEvent() {
+  if (mCoreMonitorRefCount.load() > 0 &&
+      mCoreMonitorRefCount.fetch_decrement() == 1) {
+    chppWorkThreadSignalFromLink(&getTransportContext()->linkParams,
+                                 CHPP_TRANSPORT_SIGNAL_LINK_CORE_MONITOR);
+  }
+}
+
+void UartLinkManager::completeTransaction() {
+  auto callback = [](void *context) {
+    UartLinkManager *manager = static_cast<UartLinkManager *>(context);
+    manager->onCoreMonitorAllowEvent();
+    return false;  // one-shot
+  };
+
+  // Set a timer to avoid thrashing in and out of core monitor in cases where
+  // transactions occur quickly one after another.
+  void *timerHandle;
+  mCoreMonitorRefCount.fetch_increment();
+  if (!setTimer(kSuspendTimeoutNs, callback, this, &timerHandle)) {
+    CHPP_LOGE("Failed to set core monitor timer");
+    // Enter critical section to avoid race conditions with timer interrupt.
+    taskENTER_CRITICAL();
+    onCoreMonitorAllowEvent();
+    taskEXIT_CRITICAL();
+  }
+
+  mTransactionPending = false;
 }
 
 bool UartLinkManager::waitForHandshakeIrq(uint64_t timeoutNs) {
   bool success = true;
   if (mWakeHandshakeEnabled) {
     success = false;
-    Timer *timer = Timer::Instance();
-    const TickType_t timeoutTicks =
-        static_cast<TickType_t>(timer->NsToTicks(timeoutNs));
 
     // Treat as if the IRQ occurred in the timeout case. We check if the timer
     // was successfully cancelled to determine if we timed out or not.
@@ -142,9 +183,7 @@ bool UartLinkManager::waitForHandshakeIrq(uint64_t timeoutNs) {
     };
 
     void *timerHandle;
-    int rc = timer->EventAddAtOffset(timeoutTicks, timeoutCallback, this,
-                                     &timerHandle);
-    if (rc != 0) {
+    if (!setTimer(timeoutNs, timeoutCallback, this, &timerHandle)) {
       CHPP_LOGE("Failed to set handshake timeout timer");
     } else {
       uint32_t signal = 0;
@@ -162,7 +201,7 @@ bool UartLinkManager::waitForHandshakeIrq(uint64_t timeoutNs) {
       }
 
       // EventRemove() will not return 0 if the timer already fired.
-      success = (timer->EventRemove(timerHandle) == 0);
+      success = (Timer::Instance()->EventRemove(timerHandle) == 0);
     }
   }
 
@@ -222,7 +261,7 @@ bool UartLinkManager::startTransaction() {
       mWakeOutGpio.Clear();
     }
 
-    mTransactionPending = false;
+    completeTransaction();
   }
 
   // Re-enable the interrupt to handle transaction requests.
@@ -251,6 +290,14 @@ void UartLinkManager::processRxSamples() {
   chppRxDataCb(mTransportContext, const_cast<uint8_t *>(mRxBuf), mRxBufIndex);
   mRxBufIndex = 0;
   mUart->EnableRxInterrupt();
+}
+
+void UartLinkManager::allowCoreMonitor() {
+  taskENTER_CRITICAL();
+  if (mCoreMonitorRefCount.load() == 0 && !mTransactionPending.load()) {
+    CoreMonitor::Instance()->Allow(mCoreMonitorMask);
+  }
+  taskEXIT_CRITICAL();
 }
 
 bool UartLinkManager::hasTxPacket() const {
