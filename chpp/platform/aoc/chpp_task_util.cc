@@ -16,7 +16,7 @@
 
 #include "chpp/platform/chpp_task_util.h"
 
-#include "chpp/platform/log.h"
+#include "chpp/log.h"
 #include "chre/platform/fatal_error.h"
 #include "efw/include/timer.h"
 

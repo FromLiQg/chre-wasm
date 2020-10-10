@@ -17,8 +17,8 @@
 #ifndef CHPP_PLATFORM_MUTEX_H_
 #define CHPP_PLATFORM_MUTEX_H_
 
-#include "chpp/platform/log.h"
 #include "FreeRTOS.h"
+#include "chpp/log.h"
 #include "semphr.h"
 
 #ifdef __cplusplus

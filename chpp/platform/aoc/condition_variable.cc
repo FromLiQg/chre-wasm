@@ -16,7 +16,7 @@
 
 #include "chpp/platform/platform_condition_variable.h"
 
-#include "chpp/platform/log.h"
+#include "chpp/log.h"
 #include "chre/platform/fatal_error.h"
 #include "efw/include/interrupt_controller.h"
 #include "efw/include/timer.h"
