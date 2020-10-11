@@ -21,6 +21,7 @@
 #include "chpp/transport.h"
 #include "chre/util/fixed_size_vector.h"
 #include "chre/util/nested_data_ptr.h"
+#include "core_monitor.h"
 #include "environment.h"
 #include "uart_map.h"
 
@@ -118,19 +119,22 @@ void init() {
       &gChppTransportStateList[ChppLinkType::CHPP_LINK_TYPE_WIFI],
       Environment::Instance()->UART(UART_MAP::UART_MAP_WIFI),
       chpp::UartLinkManager::kWifiWakeOutGpioPinNumber,
-      chpp::UartLinkManager::kWifiWakeInGpiNumber);
+      chpp::UartLinkManager::kWifiWakeInGpiNumber,
+      PREVENT_MONITOR_MODE_MASK_UART_2);
 
   gManagerList.emplace_back(
       &gChppTransportStateList[ChppLinkType::CHPP_LINK_TYPE_GNSS],
       Environment::Instance()->UART(UART_MAP::UART_MAP_GNSS),
       chpp::UartLinkManager::kGnssWakeOutGpioPinNumber,
-      chpp::UartLinkManager::kGnssWakeInGpiNumber);
+      chpp::UartLinkManager::kGnssWakeInGpiNumber,
+      PREVENT_MONITOR_MODE_MASK_UART_1);
 
   gManagerList.emplace_back(
       &gChppTransportStateList[ChppLinkType::CHPP_LINK_TYPE_WWAN],
       Environment::Instance()->UART(UART_MAP::UART_MAP_MODEM),
       chpp::UartLinkManager::kWwanWakeOutGpioPinNumber,
-      chpp::UartLinkManager::kWwanWakeInGpiNumber);
+      chpp::UartLinkManager::kWwanWakeInGpiNumber,
+      PREVENT_MONITOR_MODE_MASK_UART_3);
 
   BaseType_t rc =
       startChppWorkThread(ChppLinkType::CHPP_LINK_TYPE_WIFI, "CHPP WIFI");

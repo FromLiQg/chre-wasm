@@ -26,6 +26,7 @@
 #include "chre/platform/atomic.h"
 #include "chre/util/non_copyable.h"
 #include "chre/util/time.h"
+#include "core_monitor.h"
 #include "gpi_aoc.h"
 #include "gpio_aoc.h"
 #include "uart.h"
@@ -62,9 +63,11 @@ class UartLinkManager : public chre::NonCopyable {
    * @param uart The pointer to the UART instance.
    * @param wakeOutPinNumber The pin number of the wake_out GPIO.
    * @param wakeInGpiNumber The GPI number of the wake_in GPIO.
+   * @param mask The mask to use when preventing monitor mode.
    */
   UartLinkManager(struct ChppTransportState *context, UART *uart,
-                  uint8_t wakeOutPinNumber, uint8_t wakeInGpiNumber);
+                  uint8_t wakeOutPinNumber, uint8_t wakeInGpiNumber,
+                  enum PreventCoreMonitorMask mask);
 
   /**
    * This method must be called before invoking the rest of the public methods
@@ -196,6 +199,11 @@ class UartLinkManager : public chre::NonCopyable {
   chre::AtomicBool mTransactionPending{false};
 
   TaskUtil mTaskUtil;
+
+  // The mask to use when allowing or preventing core monitor mode. This should
+  // be used while wake handshaking is in progress to avoid the UART clock
+  // from being turned off.
+  enum PreventCoreMonitorMask mCoreMonitorMask;
 
   /**
    * @return if a TX packet is pending transmission.
