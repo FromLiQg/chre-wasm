@@ -141,9 +141,9 @@ class NanoappLoader {
   // loading is complete.
   //! The ELF that is being mapped into the system. This pointer will be invalid
   //! after open returns.
-  NestedDataPtr<uintptr_t> mBinary = {0};
+  NestedDataPtr<uintptr_t> mBinary = {};
   //! The starting location of the memory that has been mapped into the system.
-  NestedDataPtr<uintptr_t> mMapping = {0};
+  NestedDataPtr<uintptr_t> mMapping = {};
   //! The difference between where the first load segment was mapped into
   //! virtual memory and what the virtual load offset was of that segment.
   ElfAddr mLoadBias = 0;
