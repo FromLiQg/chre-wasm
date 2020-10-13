@@ -17,7 +17,7 @@
 #define LOG_TAG "ContextHubHal"
 #define LOG_NDEBUG 0
 
-#include "generic_context_hub_v1_1.h"
+#include "generic_context_hub_v1_2.h"
 
 #include "context_hub_settings_util.h"
 
@@ -31,7 +31,7 @@
 namespace android {
 namespace hardware {
 namespace contexthub {
-namespace V1_1 {
+namespace V1_2 {
 namespace implementation {
 
 using ::android::chre::HostProtocolHost;
@@ -41,12 +41,15 @@ using ::android::hardware::contexthub::common::implementation::
     getFbsSettingValue;
 using ::flatbuffers::FlatBufferBuilder;
 
+using V1_1::SettingValue;
+
 // Aliased for consistency with the way these symbols are referenced in
 // CHRE-side code
 namespace fbs = ::chre::fbs;
 
-Return<void> GenericContextHubV1_1::onSettingChanged(Setting setting,
+Return<void> GenericContextHubV1_2::onSettingChanged(V1_1::Setting setting,
                                                      SettingValue newValue) {
+  // TODO(arthuri): Share implementation with onSettingsChanged_1_2.
   fbs::Setting fbsSetting;
   fbs::SettingState fbsState;
   if (getFbsSetting(setting, &fbsSetting) &&
@@ -60,8 +63,15 @@ Return<void> GenericContextHubV1_1::onSettingChanged(Setting setting,
   return Void();
 }
 
+Return<void> GenericContextHubV1_2::onSettingChanged_1_2(
+    Setting /* setting */, SettingValue /* newValue */) {
+  // TODO(arthuri): Implement this
+
+  return Void();
+}
+
 }  // namespace implementation
-}  // namespace V1_1
+}  // namespace V1_2
 }  // namespace contexthub
 }  // namespace hardware
 }  // namespace android
