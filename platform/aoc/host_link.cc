@@ -24,6 +24,7 @@
 #include "chre/platform/shared/nanoapp_load_manager.h"
 #include "chre/util/fixed_size_blocking_queue.h"
 #include "chre/util/flatbuffers/helpers.h"
+#include "chre/util/nested_data_ptr.h"
 #include "chre_api/chre/version.h"
 
 namespace chre {
@@ -31,14 +32,6 @@ namespace chre {
 Nanoseconds HostLinkBase::mLastTimeSyncRequestNanos(0);
 
 namespace {
-
-//! Used to pass the client ID through the user data pointer in deferCallback
-union HostClientIdCallbackData {
-  uint16_t hostClientId;
-  void *ptr;
-};
-static_assert(sizeof(uint16_t) <= sizeof(void *),
-              "Pointer must at least fit a u16 for passing the host client ID");
 
 struct LoadNanoappCallbackData {
   uint64_t appId;
@@ -94,10 +87,9 @@ void sendDebugDumpResponse(uint16_t hostClientId, bool success,
   getHostCommsManager().send(builder.GetBufferPointer(), builder.GetSize());
 }
 
-void constructNanoappListCallback(uint16_t /*type*/, void *deferCbData,
+void constructNanoappListCallback(uint16_t /*type*/, void *data,
                                   void * /*extraData*/) {
-  HostClientIdCallbackData clientIdCbData;
-  clientIdCbData.ptr = deferCbData;
+  uint16_t hostClientId = NestedDataPtr<uint16_t>(data);
 
   struct NanoappListData {
     ChreFlatBufferBuilder *builder;
@@ -127,7 +119,7 @@ void constructNanoappListCallback(uint16_t /*type*/, void *deferCbData,
     };
     eventLoop.forEachNanoapp(nanoappAdderCallback, &cbData);
     HostProtocolChre::finishNanoappListResponse(builder, cbData.nanoappEntries,
-                                                clientIdCbData.hostClientId);
+                                                hostClientId);
     getHostCommsManager().send(builder.GetBufferPointer(), builder.GetSize());
   }
 }
@@ -148,10 +140,8 @@ void sendFragmentResponse(uint16_t hostClientId, uint32_t transactionId,
   }
 }
 
-void finishLoadingNanoappCallback(uint16_t /*type*/, void *data,
-                                  void * /*extraData*/) {
-  UniquePtr<LoadNanoappCallbackData> cbData(
-      static_cast<LoadNanoappCallbackData *>(data));
+void finishLoadingNanoappCallback(SystemCallbackType /*type*/,
+                                  UniquePtr<LoadNanoappCallbackData> &&cbData) {
   constexpr size_t kInitialBufferSize = 48;
   ChreFlatBufferBuilder builder(kInitialBufferSize);
 
@@ -442,7 +432,7 @@ void HostMessageHandlers::handleLoadNanoappRequest(
       // Note that if this fails, we'll generate the error response in
       // the normal deferred callback
       EventLoopManagerSingleton::get()->deferCallback(
-          SystemCallbackType::FinishLoadingNanoapp, cbData.release(),
+          SystemCallbackType::FinishLoadingNanoapp, std::move(cbData),
           finishLoadingNanoappCallback);
     }
   } else {
@@ -453,11 +443,9 @@ void HostMessageHandlers::handleLoadNanoappRequest(
 
 void HostMessageHandlers::handleNanoappListRequest(uint16_t hostClientId) {
   LOGD("Nanoapp list request from client ID %" PRIu16, hostClientId);
-  HostClientIdCallbackData cbData = {};
-  cbData.hostClientId = hostClientId;
   EventLoopManagerSingleton::get()->deferCallback(
-      SystemCallbackType::NanoappListResponse, cbData.ptr,
-      constructNanoappListCallback);
+      SystemCallbackType::NanoappListResponse,
+      NestedDataPtr<uint16_t>(hostClientId), constructNanoappListCallback);
 }
 
 void HostMessageHandlers::handleNanoappMessage(uint64_t appId,
