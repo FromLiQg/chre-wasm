@@ -17,8 +17,8 @@
 #include "chpp/platform/chpp_uart_link_manager.h"
 
 #include "aoc.h"
+#include "chpp/log.h"
 #include "chpp/macros.h"
-#include "chpp/platform/log.h"
 #include "chre/platform/fatal_error.h"
 #include "chre/platform/system_time.h"
 #include "core_monitor.h"

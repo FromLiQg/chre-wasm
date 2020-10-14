@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CHPP_LOG_H_
-#define CHPP_LOG_H_
+#ifndef CHPP_PLATFORM_LOG_H_
+#define CHPP_PLATFORM_LOG_H_
 
 #include <chre.h>
 #include <inttypes.h>
@@ -36,7 +36,4 @@
 #define CHPP_LOGI(fmt, ...) CHPP_AOC_LOG(CHRE_LOG_INFO, fmt, ##__VA_ARGS__)
 #define CHPP_LOGD(fmt, ...) CHPP_AOC_LOG(CHRE_LOG_DEBUG, fmt, ##__VA_ARGS__)
 
-#define CHPP_LOG_OOM(fmt, ...) \
-  CHPP_AOC_LOG(CHRE_LOG_ERROR, "(OOM) " fmt, ##__VA_ARGS__)
-
-#endif  // CHPP_LOG_H_
+#endif  // CHPP_PLATFORM_LOG_H_
