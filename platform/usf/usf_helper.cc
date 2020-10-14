@@ -661,10 +661,9 @@ UniquePtr<struct chreSensorThreeAxisData> UsfHelper::convertUsfBiasUpdateToData(
   if (index < kNumUsfCalSensors &&
       update->GetLevel() == usf::kUsfSensorTransformRunTimeCalibration) {
     UsfCalData &data = mCalData[index];
-    UsfErr err = usf::UsfTimeMgr::GetAndroidTimeNs(&data.timestamp);
-    if (err != kErrNone) {
-      LOG_USF_ERR(err);
-    }
+    // Bias updates are sent as soon as they occur so the current timestamp
+    // can be used for the timestamp of the event.
+    data.timestamp = chreGetTime();
     data.hasBias = (update->GetOffset() != nullptr);
     for (size_t i = 0; i < ARRAY_SIZE(data.bias); i++) {
       data.bias[i] = data.hasBias ? update->GetOffset()[i] : 0;
