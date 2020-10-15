@@ -64,10 +64,12 @@ class UartLinkManager : public chre::NonCopyable {
    * @param wakeOutPinNumber The pin number of the wake_out GPIO.
    * @param wakeInGpiNumber The GPI number of the wake_in GPIO.
    * @param mask The mask to use when preventing monitor mode.
+   * @param wakeHandshakeEnable true to enable wake handshaking.
    */
   UartLinkManager(struct ChppTransportState *context, UART *uart,
                   uint8_t wakeOutPinNumber, uint8_t wakeInGpiNumber,
-                  enum PreventCoreMonitorMask mask);
+                  enum PreventCoreMonitorMask mask,
+                  bool wakeHandshakeEnable = false);
 
   /**
    * This method must be called before invoking the rest of the public methods
@@ -200,10 +202,13 @@ class UartLinkManager : public chre::NonCopyable {
 
   TaskUtil mTaskUtil;
 
-  // The mask to use when allowing or preventing core monitor mode. This should
-  // be used while wake handshaking is in progress to avoid the UART clock
-  // from being turned off.
+  //! The mask to use when allowing or preventing core monitor mode. This should
+  //! be used while wake handshaking is in progress to avoid the UART clock
+  //! from being turned off.
   enum PreventCoreMonitorMask mCoreMonitorMask;
+
+  //! true to enable wake handshake algorithm.
+  const bool mWakeHandshakeEnabled;
 
   /**
    * @return if a TX packet is pending transmission.

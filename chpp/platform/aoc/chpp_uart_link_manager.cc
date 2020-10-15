@@ -27,10 +27,6 @@
 #include "efw/include/timer.h"
 #include "ipc-regions.h"
 
-// Define as 0 to disable wake handshaking
-// TODO: Enable once ready
-#define WAKE_HANDSHAKE_ENABLE 0
-
 using chre::SystemTime;
 
 namespace chpp {
@@ -59,7 +55,6 @@ void onTransactionRequestInterrupt(void *context, uint32_t /* interrupt */) {
                                CHPP_TRANSPORT_SIGNAL_LINK_WAKE_IN_IRQ);
 }
 
-#if WAKE_HANDSHAKE_ENABLE
 //! This is the interrupt to use when handling signal handshaking during
 //! an on-going transaction.
 void onTransactionHandshakeInterrupt(void *context, uint32_t /* interrupt */) {
@@ -73,19 +68,20 @@ void onTransactionHandshakeInterrupt(void *context, uint32_t /* interrupt */) {
                      &xHigherPriorityTaskWoken);
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
-#endif  // WAKE_HANDSHAKE_ENABLE
 
 }  // anonymous namespace
 
 UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
                                  uint8_t wakeOutPinNumber,
                                  uint8_t wakeInGpiNumber,
-                                 enum PreventCoreMonitorMask mask)
+                                 enum PreventCoreMonitorMask mask,
+                                 bool wakeHandshakeEnable)
     : mTransportContext(context),
       mUart(uart),
       mWakeOutGpio(wakeOutPinNumber, IP_LOCK_GPIO),
       mWakeInGpi(wakeInGpiNumber),
-      mCoreMonitorMask(mask) {
+      mCoreMonitorMask(mask),
+      mWakeHandshakeEnabled(wakeHandshakeEnable) {
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
 
@@ -131,47 +127,46 @@ bool UartLinkManager::prepareTxPacket(uint8_t *buf, size_t len) {
 }
 
 bool UartLinkManager::waitForHandshakeIrq(uint64_t timeoutNs) {
-#if WAKE_HANDSHAKE_ENABLE
-  bool success = false;
-  Timer *timer = Timer::Instance();
-  const TickType_t timeoutTicks =
-      static_cast<TickType_t>(timer->NsToTicks(timeoutNs));
+  bool success = true;
+  if (mWakeHandshakeEnabled) {
+    success = false;
+    Timer *timer = Timer::Instance();
+    const TickType_t timeoutTicks =
+        static_cast<TickType_t>(timer->NsToTicks(timeoutNs));
 
-  // Treat as if the IRQ occurred in the timeout case. We check if the timer
-  // was successfully cancelled to determine if we timed out or not.
-  auto timeoutCallback = [](void *context) -> bool {
-    onTransactionHandshakeInterrupt(context, 0);
-    return false;  // one-shot
-  };
+    // Treat as if the IRQ occurred in the timeout case. We check if the timer
+    // was successfully cancelled to determine if we timed out or not.
+    auto timeoutCallback = [](void *context) -> bool {
+      onTransactionHandshakeInterrupt(context, 0);
+      return false;  // one-shot
+    };
 
-  void *timerHandle;
-  int rc = timer->EventAddAtOffset(timeoutTicks, timeoutCallback, this,
-                                   &timerHandle);
-  if (rc != 0) {
-    CHPP_LOGE("Failed to set handshake timeout timer");
-  } else {
-    uint32_t signal = 0;
-    while ((signal & CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ) == 0) {
-      xTaskNotifyWait(
-          0 /* ulBitsToClearOnEntry */,
-          CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ /* ulBitsToClearOnExit */,
-          &signal, portMAX_DELAY /* xTicksToWait */);
+    void *timerHandle;
+    int rc = timer->EventAddAtOffset(timeoutTicks, timeoutCallback, this,
+                                     &timerHandle);
+    if (rc != 0) {
+      CHPP_LOGE("Failed to set handshake timeout timer");
+    } else {
+      uint32_t signal = 0;
+      while ((signal & CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ) == 0) {
+        xTaskNotifyWait(
+            0 /* ulBitsToClearOnEntry */,
+            CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ /* ulBitsToClearOnExit */,
+            &signal, portMAX_DELAY /* xTicksToWait */);
+      }
+
+      // If we cleared the notification while another one is in progress,
+      // re-notify the task so it doesn't get lost.
+      if ((signal & ~(CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ)) != 0) {
+        xTaskNotify(mTaskHandle, 0, eNoAction);
+      }
+
+      // EventRemove() will not return 0 if the timer already fired.
+      success = (timer->EventRemove(timerHandle) == 0);
     }
-
-    // If we cleared the notification while another one is in progress,
-    // re-notify the task so it doesn't get lost.
-    if ((signal & ~(CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ)) != 0) {
-      xTaskNotify(mTaskHandle, 0, eNoAction);
-    }
-
-    // EventRemove() will not return 0 if the timer already fired.
-    success = (timer->EventRemove(timerHandle) == 0);
   }
 
   return success;
-#else
-  return true;
-#endif  // WAKE_HANDSHAKE_ENABLE
 }
 
 bool UartLinkManager::startTransaction() {
@@ -188,10 +183,10 @@ bool UartLinkManager::startTransaction() {
     uint64_t pulseEndTimeNs =
         SystemTime::getMonotonicTime().toRawNanoseconds() + kPulseTimeNs;
 
-#if WAKE_HANDSHAKE_ENABLE
-    mWakeInGpi.SetInterruptHandler(onTransactionHandshakeInterrupt, this);
-    mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
-#endif  // WAKE_HANDSHAKE_ENABLE
+    if (mWakeHandshakeEnabled) {
+      mWakeInGpi.SetInterruptHandler(onTransactionHandshakeInterrupt, this);
+      mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_HIGH);
+    }
 
     if (waitForHandshakeIrq(kStartTimeoutNs)) {
       if (hasTxPacket()) {
@@ -214,13 +209,13 @@ bool UartLinkManager::startTransaction() {
         mWakeOutGpio.Clear();
       }
 
-#if WAKE_HANDSHAKE_ENABLE
-      mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_LOW);
-      if (!waitForHandshakeIrq(kEndTimeoutNs)) {
-        CHPP_LOGE("Wake handshaking end timed out");
-        success = false;
+      if (mWakeHandshakeEnabled) {
+        mWakeInGpi.SetTriggerFunction(GPIAoC::GPI_LEVEL_ACTIVE_LOW);
+        if (!waitForHandshakeIrq(kEndTimeoutNs)) {
+          CHPP_LOGE("Wake handshaking end timed out");
+          success = false;
+        }
       }
-#endif  // WAKE_HANDSHAKE_ENABLE
     } else {
       CHPP_LOGE("Wake handshaking start timed out");
       success = false;
