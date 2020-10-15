@@ -231,9 +231,6 @@ bool UartLinkManager::startTransaction() {
       if (hasTxPacket()) {
         int bytesTransmitted = mUart->Tx(mCurrentBuffer, mCurrentBufferLen);
 
-        // Deassert wake_out as soon as data is transmitted, per specifications.
-        mWakeOutGpio.Clear();
-
         if (static_cast<size_t>(bytesTransmitted) != mCurrentBufferLen) {
           CHPP_LOGE("Failed to transmit data");
           success = false;
@@ -244,8 +241,6 @@ bool UartLinkManager::startTransaction() {
         if (now < pulseEndTimeNs) {
           mTaskUtil.suspend(pulseEndTimeNs - now);
         }
-
-        mWakeOutGpio.Clear();
       }
 
       if (mWakeHandshakeEnabled) {
@@ -258,10 +253,10 @@ bool UartLinkManager::startTransaction() {
     } else {
       CHPP_LOGE("Wake handshaking start timed out");
       success = false;
-      mWakeOutGpio.Clear();
     }
 
     completeTransaction();
+    mWakeOutGpio.Clear();
   }
 
   // Re-enable the interrupt to handle transaction requests.
