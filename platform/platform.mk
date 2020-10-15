@@ -50,6 +50,10 @@ SLPI_SEE_CFLAGS += -Iplatform/slpi/see/include
 
 SLPI_SEE_CFLAGS += -DCHRE_SLPI_SEE
 
+# Needed to define __SIZEOF_ATTR_THREAD in sns_osa_thread.h, included in
+# sns_memmgr.h.
+SLPI_SEE_CFLAGS += -DSSC_TARGET_HEXAGON
+
 # Defined in slpi_proc/ssc/build/ssc.scons
 SLPI_SEE_CFLAGS += -DPB_FIELD_16BIT
 
