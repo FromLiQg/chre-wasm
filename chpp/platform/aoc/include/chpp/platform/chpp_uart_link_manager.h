@@ -125,9 +125,17 @@ class UartLinkManager : public chre::NonCopyable {
     return &mWakeInGpi;
   }
 
-  void setTransactionPending() {
-    mTransactionPending = true;
-  }
+  /**
+   * Functions that should be called before/after a transaction, respectively.
+   *
+   * Note that prepareForTransaction() may be called by either a wake IRQ or
+   * from the CHPP thread indicating that TX data is ready. On the contrary,
+   * completeTransction() is always called from within the CHPP work thread,
+   * since the above two events are handled together if occurring
+   * simultaneously.
+   */
+  void prepareForTransaction();
+  void completeTransaction();
 
   TaskHandle_t getTaskHandle() const {
     return mTaskHandle;
@@ -145,6 +153,17 @@ class UartLinkManager : public chre::NonCopyable {
   bool isRxBufferFull() const {
     return mRxBufIndex == kRxBufSize;
   }
+
+  /**
+   * Allow core monitor for this UART.
+   */
+  void allowCoreMonitor();
+
+  /**
+   * This function should be used to trigger allowing core monitor at the end of
+   * a transaction.
+   */
+  void onCoreMonitorAllowEvent();
 
   /**
    * GPIO pin numbers to be used in the argument of UartLinkManager, which
@@ -198,6 +217,9 @@ class UartLinkManager : public chre::NonCopyable {
   static constexpr uint64_t kPulseTimeNs =
       100 * chre::kOneMicrosecondInNanoseconds;
 
+  static constexpr uint64_t kSuspendTimeoutNs =
+      100 * chre::kOneMillisecondInNanoseconds;
+
   chre::AtomicBool mTransactionPending{false};
 
   TaskUtil mTaskUtil;
@@ -209,6 +231,17 @@ class UartLinkManager : public chre::NonCopyable {
 
   //! true to enable wake handshake algorithm.
   const bool mWakeHandshakeEnabled;
+
+  //! The refcount to use when allowing core monitor mode. This value should
+  //! be incremented to "vote" to prevent, decremented to "vote" to allow. The
+  //! module should allow core monitor once the count has reached zero. The
+  //! refcount scheme may be helpful in avoiding allowing core monitor too
+  //! early.
+  chre::AtomicUint32 mCoreMonitorRefCount{0};
+
+  //! A temporary hack to make GNSS link work.
+  //! TODO(arthuri): Remove this once GNSS link works by default.
+  bool mGnssLinkHack = false;
 
   /**
    * @return if a TX packet is pending transmission.

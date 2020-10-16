@@ -31,6 +31,9 @@ extern "C" {
 //! This signal is reserved for use internally in the chpp::UartLinkManager.
 #define CHPP_TRANSPORT_SIGNAL_LINK_HANDSHAKE_IRQ UINT32_C(1 << 18)
 
+//! A signal to use for core monitor handling.
+#define CHPP_TRANSPORT_SIGNAL_LINK_CORE_MONITOR UINT32_C(1 << 19)
+
 #define CHPP_PLATFORM_LINK_TX_MTU_BYTES 1280
 #define CHPP_PLATFORM_LINK_RX_MTU_BYTES 1280
 
