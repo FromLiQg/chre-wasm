@@ -74,18 +74,19 @@ bool AudioFilter::SignalProcessor(int index) {
 void AudioFilter::InputProcessor(int /*pin*/, void *message, size_t size) {
   CHRE_ASSERT(message != nullptr);
 
-  // TODO resync and synchronization, check metadata format etc.
+  // TODO check metadata format etc.
   auto *metadata = static_cast<struct AudioInputMetadata *>(message);
-
-  if (metadata->need_resync) {
-    LOGW("Resync request received, logic not implemented yet");
-  }
 
   constexpr size_t kBytesPerAocSample = sizeof(uint32_t);
   constexpr size_t kNumSamplesAoc = 160;
   constexpr size_t kRingSize = kNumSamplesAoc * kBytesPerAocSample *
                                1;  // 1 channel of u32 samples per 10 ms
   uint32_t buffer[kNumSamplesAoc];
+
+  if (metadata->need_resync) {
+    ring_[kRingIndex]->ReaderSyncOffset(mRingBufferHandle, kBytesPerAocSample);
+  }
+
   uint32_t nBytes =
       ring_[kRingIndex]->Read(mRingBufferHandle, &buffer, kRingSize);
   CHRE_ASSERT_LOG(nBytes != 0, "Got data pipe notif, but no data in ring");
