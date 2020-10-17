@@ -357,6 +357,8 @@ struct ChppTransportState {
   struct ChppTxStatus txStatus;                // Tx state
   struct ChppTxDatagramQueue txDatagramQueue;  // Queue of datagrams to be Tx
   struct PendingTxPacket pendingTxPacket;      // Outgoing packet to Link Layer
+  struct ChppDatagram transportLoopbackData;   // Transport-layer loopback
+                                               // request data, if any
 
   struct ChppMutex mutex;          // Lock for transport state (i.e. context)
   struct ChppNotifier notifier;    // Notifier for main thread
@@ -545,7 +547,7 @@ static inline void chppWorkThreadSignalFromLink(
  */
 void chppWorkThreadStop(struct ChppTransportState *context);
 
-/*
+/**
  * Notifies the transport layer that the link layer is done sending the previous
  * payload (as provided to platformLinkSend() through buf and len) and can
  * accept more data.
@@ -561,7 +563,7 @@ void chppWorkThreadStop(struct ChppTransportState *context);
 void chppLinkSendDoneCb(struct ChppPlatformLinkParameters *params,
                         enum ChppLinkErrorCode error);
 
-/*
+/**
  * Notifies the transport layer that the app layer is done with the previous
  * payload (as provided to chppProcessRxDatagram() through buf and len), so it
  * is freed appropriately etc.
@@ -574,7 +576,7 @@ void chppLinkSendDoneCb(struct ChppPlatformLinkParameters *params,
  */
 void chppAppProcessDoneCb(struct ChppTransportState *context, uint8_t *buf);
 
-/*
+/**
  * Sends out transport-layer loopback data. Note that in most situations, an
  * application-layer loopback test is pprefrable as it is more thorough and
  * provides statistics regarding the correctness of the loopbacked data.
@@ -585,9 +587,13 @@ void chppAppProcessDoneCb(struct ChppTransportState *context, uint8_t *buf);
  * @param context Maintains status for each transport layer instance.
  * @param buf Pointer to the loopback data to be sent. Cannot be null.
  * @param len Length of the loopback data.
+ *
+ * @return A ChppLinkErrorCode enum indicating if the transport-layer-loopback
+ * request was accepted. Note that the actual test result will be available
+ * later, asynchronously, in context->loopbackResult.
  */
-void chppRunTransportLoopback(struct ChppTransportState *context, uint8_t *buf,
-                              size_t len);
+uint8_t chppRunTransportLoopback(struct ChppTransportState *context,
+                                 uint8_t *buf, size_t len);
 /**
  * Sends a reset or reset-ack packet over the link in order to reset the remote
  * side or inform the counterpart of a reset, respectively. The transport
