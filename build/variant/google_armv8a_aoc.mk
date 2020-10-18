@@ -30,10 +30,19 @@ endif
 include $(AOC_TOP_DIR)/AOC/build/$(AOC_PLATFORM)/toolchain.mk
 include $(AOC_TOP_DIR)/AOC/targets/aoc.$(AOC_PLATFORM)/local.mk
 
+# These are defined prior to kicking off the CHRE build. CHRE should use them to
+# ensure it's compiled with the same flags, but it must be done prior to
+# "TARGET_CFLAGS += $(AOC_CFLAGS)" below or nanoapps can't override certain
+# warnings
+TARGET_CFLAGS += $(DEFINES)
+TARGET_CFLAGS += $(CPPFLAGS)
+COMMON_CXX_CFLAGS += $(CXXFLAGS)
+COMMON_C_CFLAGS += $(CFLAGS)
+
 # Sized based on the buffer allocated in the host daemon (4096 bytes), minus
 # FlatBuffer overhead (max 80 bytes), minus some extra space to make a nice
 # round number and allow for addition of new fields to the FlatBuffer
-TARGET_CFLAGS = -DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000
+TARGET_CFLAGS += -DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000
 TARGET_CFLAGS += $(AOC_CFLAGS)
 TARGET_CFLAGS += $(FREERTOS_CFLAGS)
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/basic/include
@@ -50,15 +59,9 @@ TARGET_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include/chre/platform/shared/l
 # add platform specific flags
 ifeq ($(AOC_PLATFORM),fpga_a32)
 TARGET_CFLAGS += $(AOC_FPGA_A32_CFLAGS)
-# We need a function stack size of at least 400 bytes, which might not be
-# the case by default
-TARGET_CFLAGS += -Wframe-larger-than=420
 endif
 ifeq ($(AOC_PLATFORM),whi_a0_a32)
 TARGET_CFLAGS += $(AOC_WHI_A0_A32_CFLAGS)
-# We need a function stack size of at least 400 bytes, which might not be
-# the case by default
-TARGET_CFLAGS += -Wframe-larger-than=420
 endif
 
 TARGET_VARIANT_SRCS += $(AOC_SRCS)

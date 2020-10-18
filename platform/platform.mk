@@ -61,6 +61,8 @@ ifeq ($(IMPORT_CHRE_UTILS), true)
 SLPI_SEE_CFLAGS += -DIMPORT_CHRE_UTILS
 endif
 
+# Enable accel calibration and ASH debug dump by default unless overridden
+# explicitly by the environment.
 ifneq ($(CHRE_ENABLE_ACCEL_CAL), false)
 SLPI_SEE_CFLAGS += -DCHRE_ENABLE_ACCEL_CAL
 endif
@@ -72,6 +74,7 @@ endif
 # SLPI/QSH-specific Compiler Flags #############################################
 
 # Include paths.
+SLPI_QSH_CFLAGS += -I$(SLPI_PREFIX)/qsh/qsh_nanoapp/inc
 SLPI_QSH_CFLAGS += -Iplatform/slpi/see/include
 
 # Define CHRE_SLPI_SEE for the few components that are still shared between QSH
