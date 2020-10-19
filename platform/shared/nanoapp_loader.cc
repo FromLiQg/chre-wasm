@@ -88,6 +88,10 @@ double asinOverride(double val) {
   return asin(val);
 }
 
+double atan2Override(double y, double x) {
+  return atan2(y, x);
+}
+
 double cosOverride(double rad) {
   return cos(rad);
 }
@@ -113,13 +117,17 @@ void __cxa_pure_virtual(void) {
 const ExportedData gExportedData[] = {
     /* libmath overrrides and symbols */
     ADD_EXPORTED_SYMBOL(asinOverride, "asin"),
+    ADD_EXPORTED_SYMBOL(atan2Override, "atan2"),
     ADD_EXPORTED_SYMBOL(cosOverride, "cos"),
     ADD_EXPORTED_SYMBOL(frexpOverride, "frexp"),
     ADD_EXPORTED_SYMBOL(sinOverride, "sin"),
     ADD_EXPORTED_SYMBOL(sqrtOverride, "sqrt"),
+    ADD_EXPORTED_C_SYMBOL(acosf),
     ADD_EXPORTED_C_SYMBOL(atan2f),
     ADD_EXPORTED_C_SYMBOL(expf),
     ADD_EXPORTED_C_SYMBOL(fmodf),
+    ADD_EXPORTED_C_SYMBOL(log10f),
+    ADD_EXPORTED_C_SYMBOL(lroundf),
     ADD_EXPORTED_C_SYMBOL(sqrtf),
     ADD_EXPORTED_C_SYMBOL(tanhf),
     /* libc overrides and symbols */
@@ -131,6 +139,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(memcpy),
     ADD_EXPORTED_C_SYMBOL(memmove),
     ADD_EXPORTED_C_SYMBOL(memset),
+    ADD_EXPORTED_C_SYMBOL(snprintf),
     ADD_EXPORTED_C_SYMBOL(strcmp),
     ADD_EXPORTED_C_SYMBOL(strlen),
     ADD_EXPORTED_C_SYMBOL(strncmp),

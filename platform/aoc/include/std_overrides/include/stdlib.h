@@ -27,3 +27,10 @@ void *realloc(void *ptr, size_t newSize);
 #ifdef __cplusplus
 }  // extern "C"
 #endif
+
+// C++ code must also be able to refer to realloc using the std namespace.
+#ifdef __cplusplus
+namespace std {
+using ::realloc;
+}  // namespace std
+#endif  // __cplusplus
