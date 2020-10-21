@@ -134,7 +134,7 @@ void init() {
       Environment::Instance()->UART(UART_MAP::UART_MAP_MODEM),
       chpp::UartLinkManager::kWwanWakeOutGpioPinNumber,
       chpp::UartLinkManager::kWwanWakeInGpiNumber,
-      PREVENT_MONITOR_MODE_MASK_UART_3);
+      PREVENT_MONITOR_MODE_MASK_UART_3, true /* wakeHandshake */);
 
   BaseType_t rc =
       startChppWorkThread(ChppLinkType::CHPP_LINK_TYPE_WIFI, "CHPP WIFI");
