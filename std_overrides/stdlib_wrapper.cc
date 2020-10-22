@@ -36,7 +36,12 @@
 FILE *stderr = NULL;
 
 void *malloc(size_t size) {
-  return chreHeapAlloc(size);
+  // On platforms where size(size_t) might be 8 bytes, we need a cast to
+  // maintain adherence to CHRE's heap alloc API. The size check to reject
+  // requests of size > 4Gb could be used for debugging, though any requests
+  // that even remotely approach this limit is bound to fail anyway.
+  return size > UINT32_MAX ? nullptr
+                           : chreHeapAlloc(static_cast<uint32_t>(size));
 }
 
 void free(void *ptr) {
@@ -50,7 +55,12 @@ void *realloc(void * /*ptr*/, size_t /*newSize*/) {
 }
 
 void exit(int exitCode) {
-  chreAbort(exitCode);
+  chreAbort(static_cast<uint32_t>(exitCode));
+  // Add an explicit forever-loop to bypass compilation warnings on platforms
+  // that might have defined exit with a noreturn tag. The loop shouldn't ever
+  // execute, since abort terminates the program.
+  while (42)
+    ;
 }
 
 int fprintf(FILE * /*stream*/, const char * /*fmt*/, ...) {
