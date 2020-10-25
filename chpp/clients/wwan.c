@@ -28,6 +28,7 @@
 #include "chpp/common/wwan_types.h"
 #include "chpp/log.h"
 #include "chpp/macros.h"
+#include "chpp/memory.h"
 #include "chre/pal/wwan.h"
 
 #ifndef CHPP_WWAN_DISCOVERY_TIMEOUT_MS
@@ -425,8 +426,9 @@ static bool chppWwanClientGetCellInfoAsync(void) {
  */
 static void chppWwanClientReleaseCellInfoResult(
     struct chreWwanCellInfoResult *result) {
-  // TODO
-  UNUSED_VAR(result);
+  void *cells = CHPP_CONST_CAST_POINTER(result->cells);
+  CHPP_FREE_AND_NULLIFY(cells);
+  CHPP_FREE_AND_NULLIFY(result);
 }
 
 /************************************************

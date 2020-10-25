@@ -75,6 +75,8 @@ void AudioController::SetUpRemoteCore() {
     if ((rc = mControllerIpcAoc.CmdRelay(&cmd, cmdId, sizeof(CMD_HDR),
                                          portMAX_DELAY)) != 0) {
       LOGE("Failed to send setup cmd to DSP rc: %d", rc);
+    } else {
+      mDspCoreInitDone = true;
     }
   }
 }
@@ -88,9 +90,8 @@ void AudioController::TearDownRemoteCore() {
     if ((rc = mControllerIpcAoc.CmdRelay(&cmd, cmdId, sizeof(CMD_HDR),
                                          portMAX_DELAY)) != 0) {
       LOGE("Failed to send teardown cmd to DSP rc: %d", rc);
-    } else {
-      mDspCoreInitDone = true;
     }
+    mDspCoreInitDone = false;
   }
 }
 
@@ -163,7 +164,7 @@ void AudioController::SetEnabled(uint32_t /*handle*/, bool enabled) {
 bool AudioController::UpdateStream(uint32_t /*handle*/, bool start) {
   bool success = false;
   // TODO: handle and other params
-  if (mDspCoreInitDone && mSourceStatus.enabled) {
+  if (mDspCoreInitDone) {
     if (mRequestStarted != start) {
       mRequestStarted = start;
       CMD_HDR cmd;
@@ -172,10 +173,9 @@ bool AudioController::UpdateStream(uint32_t /*handle*/, bool start) {
       uint16_t cmdId =
           start ? ControllerAudioInput::CMD_AUDIO_INPUT_MIC_CHRE_START_ID
                 : ControllerAudioInput::CMD_AUDIO_INPUT_MIC_CHRE_STOP_ID;
-
       int rc = mControllerIpcAoc.CmdRelay(&cmd, cmdId, sizeof(CMD_HDR),
                                           portMAX_DELAY);
-      LOGV("request audio send: %d", rc);
+      LOGD("request audio send: %d", rc);
       success = (rc == 0);
     } else {
       // streaming already in the correct state for this handle

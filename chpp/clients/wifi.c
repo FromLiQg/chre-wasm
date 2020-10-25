@@ -545,10 +545,26 @@ static bool chppWifiClientConfigureScanMonitor(bool enable) {
  * @return True indicates the request was sent off to the service.
  */
 static bool chppWifiClientRequestScan(const struct chreWifiScanParams *params) {
-  // TODO using parser, i.e. chppWifiScanParamsFromChre()
-  UNUSED_VAR(params);
+  struct ChppWifiScanParamsWithHeader *request;
+  size_t requestLen;
 
-  return false;
+  bool result = chppWifiScanParamsFromChre(params, &request, &requestLen);
+
+  if (!result) {
+    CHPP_LOG_OOM();
+  } else {
+    request->header.handle = gWifiClientContext.client.handle;
+    request->header.type = CHPP_MESSAGE_TYPE_CLIENT_REQUEST;
+    request->header.transaction = gWifiClientContext.client.transaction++;
+    request->header.error = CHPP_APP_ERROR_NONE;
+    request->header.command = CHPP_WIFI_REQUEST_SCAN_ASYNC;
+
+    result = chppSendTimestampedRequestOrFail(&gWifiClientContext.client,
+                                              &gWifiClientContext.requestScan,
+                                              request, requestLen);
+  }
+
+  return result;
 }
 
 /**
@@ -557,8 +573,11 @@ static bool chppWifiClientRequestScan(const struct chreWifiScanParams *params) {
  * @param event Location event to be released.
  */
 static void chppWifiClientReleaseScanEvent(struct chreWifiScanEvent *event) {
-  // TODO
-  UNUSED_VAR(event);
+  void *scannedFreqList = CHPP_CONST_CAST_POINTER(event->scannedFreqList);
+  CHPP_FREE_AND_NULLIFY(scannedFreqList);
+  void *results = CHPP_CONST_CAST_POINTER(event->results);
+  CHPP_FREE_AND_NULLIFY(results);
+  CHPP_FREE_AND_NULLIFY(event);
 }
 
 /**
@@ -583,8 +602,9 @@ static bool chppWifiClientRequestRanging(
  */
 static void chppWifiClientReleaseRangingEvent(
     struct chreWifiRangingEvent *event) {
-  // TODO
-  UNUSED_VAR(event);
+  void *results = CHPP_CONST_CAST_POINTER(event->results);
+  CHPP_FREE_AND_NULLIFY(results);
+  CHPP_FREE_AND_NULLIFY(event);
 }
 
 /************************************************

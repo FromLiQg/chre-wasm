@@ -17,6 +17,7 @@
 #include "chre/target_platform/log.h"
 
 #include "chre/core/event_loop_manager.h"
+#include "chre/platform/mutex.h"
 #include "chre/platform/system_time.h"
 
 #include <endian.h>
@@ -25,6 +26,7 @@ namespace chre {
 namespace {
 constexpr size_t kChreLogBufferSize = CHRE_MESSAGE_TO_HOST_MAX_SIZE;
 char logBuffer[kChreLogBufferSize];
+Mutex logMutex;
 }  // namespace
 
 void log(enum chreLogLevel level, const char *formatStr, ...) {
@@ -37,6 +39,8 @@ void log(enum chreLogLevel level, const char *formatStr, ...) {
 // TODO: b/146164384 - We will need to batch logs rather than send them
 // one at a time to avoid waking the AP.
 void vaLog(enum chreLogLevel level, const char *format, va_list args) {
+  LockGuard<Mutex> lockGuard(logMutex);
+
   auto &hostCommsMgr =
       chre::EventLoopManagerSingleton::get()->getHostCommsManager();
 
@@ -49,11 +53,18 @@ void vaLog(enum chreLogLevel level, const char *format, va_list args) {
   memcpy(&logBuffer[logBufIndex], &currentTimeNs, sizeof(uint64_t));
   logBufIndex += sizeof(uint64_t);
 
-  int msgLen = vsnprintf(&logBuffer[logBufIndex],
-                         kChreLogBufferSize - logBufIndex, format, args);
+  int remainingBytes = kChreLogBufferSize - logBufIndex;
+  int msgLen = vsnprintf(&logBuffer[logBufIndex], remainingBytes, format, args);
   if (msgLen >= 0) {
-    // msgLen doesn't include the terminating null char.
-    logBufIndex += msgLen + 1;
+    // vsnprintf will truncate the log and add a terminating null if it's over
+    // the buffer size which is preferred.
+    if (msgLen >= remainingBytes) {
+      msgLen = remainingBytes;
+    } else {
+      // msgLen doesn't include the terminating null char.
+      msgLen++;
+    }
+    logBufIndex += msgLen;
 
     hostCommsMgr.sendLogMessage(reinterpret_cast<uint8_t *>(logBuffer),
                                 logBufIndex);

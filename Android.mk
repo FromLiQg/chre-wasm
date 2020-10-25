@@ -83,7 +83,7 @@ LOCAL_C_INCLUDES := \
     system/chre/host/common/include \
     system/chre/platform/shared/include \
     system/chre/util/include \
-    system/core/base/include \
+    system/libbase/include \
     system/core/libcutils/include \
     system/core/liblog/include \
     system/core/libutils/include
