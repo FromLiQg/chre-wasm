@@ -177,6 +177,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreSendMessageToHostEndpoint),
     ADD_EXPORTED_C_SYMBOL(chreSensorConfigure),
     ADD_EXPORTED_C_SYMBOL(chreSensorFindDefault),
+    ADD_EXPORTED_C_SYMBOL(chreSensorFlushAsync),
     ADD_EXPORTED_C_SYMBOL(chreTimerCancel),
     ADD_EXPORTED_C_SYMBOL(chreTimerSet),
     ADD_EXPORTED_C_SYMBOL(chreWifiConfigureScanMonitorAsync),
