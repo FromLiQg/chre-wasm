@@ -85,7 +85,7 @@ LOCAL_C_INCLUDES := \
     system/chre/util/include \
     system/libbase/include \
     system/core/libcutils/include \
-    system/core/liblog/include \
+    system/logging/liblog/include \
     system/core/libutils/include
 
 MSM_DAEMON_INCLUDES := \
