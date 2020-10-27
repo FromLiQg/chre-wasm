@@ -28,6 +28,9 @@ TARGET_CFLAGS += -Wframe-larger-than=7000
 ifeq ($(IS_ARCHIVE_ONLY_BUILD),)
 TARGET_CFLAGS += -fPIC
 TARGET_SO_LDFLAGS += -shared
+TARGET_SO_LDFLAGS += -z norelro
+TARGET_SO_LDFLAGS += -z rodynamic
+TARGET_SO_LDFLAGS += --no-rosegment
 
 # Only generate debug symbols for debug dynamic libraries
 TARGET_CFLAGS += -g0

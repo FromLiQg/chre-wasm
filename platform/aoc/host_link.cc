@@ -67,12 +67,11 @@ void setTimeSyncRequestTimer(Nanoseconds delay) {
     EventLoopManagerSingleton::get()->cancelDelayedCallback(sHandle);
   }
 
-  auto callback = [](uint16_t /* eventType */, void * /* data */) {
+  auto callback = [](uint16_t /*type*/, void * /*data*/, void * /*extraData*/) {
     HostLinkBase::sendTimeSyncRequest();
   };
   sHandle = EventLoopManagerSingleton::get()->setDelayedCallback(
-      SystemCallbackType::TimerSyncRequest, nullptr /* data */, callback,
-      delay);
+      SystemCallbackType::TimerSyncRequest, nullptr /*data*/, callback, delay);
   sHandleInitialized = true;
 }
 
@@ -95,7 +94,8 @@ void sendDebugDumpResponse(uint16_t hostClientId, bool success,
   getHostCommsManager().send(builder.GetBufferPointer(), builder.GetSize());
 }
 
-void constructNanoappListCallback(uint16_t /*eventType*/, void *deferCbData) {
+void constructNanoappListCallback(uint16_t /*type*/, void *deferCbData,
+                                  void * /*extraData*/) {
   HostClientIdCallbackData clientIdCbData;
   clientIdCbData.ptr = deferCbData;
 
@@ -148,7 +148,8 @@ void sendFragmentResponse(uint16_t hostClientId, uint32_t transactionId,
   }
 }
 
-void finishLoadingNanoappCallback(uint16_t /*eventType*/, void *data) {
+void finishLoadingNanoappCallback(uint16_t /*type*/, void *data,
+                                  void * /*extraData*/) {
   UniquePtr<LoadNanoappCallbackData> cbData(
       static_cast<LoadNanoappCallbackData *>(data));
   constexpr size_t kInitialBufferSize = 48;
@@ -165,7 +166,8 @@ void finishLoadingNanoappCallback(uint16_t /*eventType*/, void *data) {
                        cbData->fragmentId, success);
 }
 
-void handleUnloadNanoappCallback(uint16_t /*eventType*/, void *data) {
+void handleUnloadNanoappCallback(uint16_t /*type*/, void *data,
+                                 void * /*extraData*/) {
   auto *cbData = static_cast<UnloadNanoappCallbackData *>(data);
   bool success = false;
   uint32_t instanceId;
