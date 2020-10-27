@@ -228,7 +228,7 @@ void *NanoappLoader::findExportedSymbol(const char *name) {
 
 bool NanoappLoader::open() {
   bool success = false;
-  if (mBinary.dataPtr != nullptr) {
+  if (mBinary != nullptr) {
     if (!copyAndVerifyHeaders()) {
       LOGE("Failed to verify headers");
     } else if (!createMappings()) {
@@ -270,7 +270,7 @@ void *NanoappLoader::findSymbolByName(const char *name) {
     const char *symbolName = &mStringTablePtr[currSym->st_name];
 
     if (strncmp(symbolName, name, strlen(name)) == 0) {
-      symbol = reinterpret_cast<void *>(mMapping.data + currSym->st_value);
+      symbol = mMapping + currSym->st_value;
       break;
     }
 
@@ -343,9 +343,9 @@ uintptr_t NanoappLoader::roundDownToAlign(uintptr_t virtualAddr) {
 
 void NanoappLoader::freeAllocatedData() {
   if (mIsTcmBinary) {
-    memoryFree(mMapping.dataPtr);
+    memoryFree(mMapping);
   } else {
-    memoryFreeDram(mMapping.dataPtr);
+    memoryFreeDram(mMapping);
   }
   memoryFreeDram(mSectionHeadersPtr);
   memoryFreeDram(mSectionNamesPtr);
@@ -407,7 +407,7 @@ NanoappLoader::SectionHeader *NanoappLoader::getSectionHeader(
 }
 
 ElfHeader *NanoappLoader::getElfHeader() {
-  return reinterpret_cast<ElfHeader *>(mBinary.data);
+  return reinterpret_cast<ElfHeader *>(mBinary);
 }
 
 ProgramHeader *NanoappLoader::getProgramHeaderArray() {
@@ -415,7 +415,7 @@ ProgramHeader *NanoappLoader::getProgramHeaderArray() {
   ProgramHeader *programHeader = nullptr;
   if (elfHeader != nullptr) {
     programHeader =
-        reinterpret_cast<ProgramHeader *>(mBinary.data + elfHeader->e_phoff);
+        reinterpret_cast<ProgramHeader *>(mBinary + elfHeader->e_phoff);
   }
 
   return programHeader;
@@ -436,9 +436,9 @@ char *NanoappLoader::getDynamicStringTable() {
 
   SectionHeader *dynamicStringTablePtr = getSectionHeader(".dynstr");
   CHRE_ASSERT(dynamicStringTablePtr != nullptr);
-  if (dynamicStringTablePtr != nullptr && mBinary.dataPtr != nullptr) {
-    table = reinterpret_cast<char *>(mBinary.data +
-                                     dynamicStringTablePtr->sh_offset);
+  if (dynamicStringTablePtr != nullptr && mBinary != nullptr) {
+    table =
+        reinterpret_cast<char *>(mBinary + dynamicStringTablePtr->sh_offset);
   }
 
   return table;
@@ -449,9 +449,8 @@ uint8_t *NanoappLoader::getDynamicSymbolTable() {
 
   SectionHeader *dynamicSymbolTablePtr = getSectionHeader(".dynsym");
   CHRE_ASSERT(dynamicSymbolTablePtr != nullptr);
-  if (dynamicSymbolTablePtr != nullptr && mBinary.dataPtr != nullptr) {
-    table = reinterpret_cast<uint8_t *>(mBinary.data +
-                                        dynamicSymbolTablePtr->sh_offset);
+  if (dynamicSymbolTablePtr != nullptr && mBinary != nullptr) {
+    table = (mBinary + dynamicSymbolTablePtr->sh_offset);
   }
 
   return table;
@@ -489,7 +488,7 @@ bool NanoappLoader::verifySectionHeaders() {
 bool NanoappLoader::copyAndVerifyHeaders() {
   size_t offset = 0;
   bool success = false;
-  uint8_t *pDataBytes = static_cast<uint8_t *>(mBinary.dataPtr);
+  uint8_t *pDataBytes = mBinary;
 
   // Verify the ELF Header
   ElfHeader *elfHeader = getElfHeader();
@@ -530,9 +529,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
       LOG_OOM();
       success = false;
     } else {
-      memcpy(mSectionNamesPtr,
-             reinterpret_cast<void *>(mBinary.data + stringSection.sh_offset),
-             sectionSize);
+      memcpy(mSectionNamesPtr, mBinary + stringSection.sh_offset, sectionSize);
     }
   }
 
@@ -555,9 +552,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
         LOG_OOM();
         success = false;
       } else {
-        memcpy(mSymbolTablePtr,
-               reinterpret_cast<void *>(mBinary.data +
-                                        symbolTableHeader->sh_offset),
+        memcpy(mSymbolTablePtr, mBinary + symbolTableHeader->sh_offset,
                mSymbolTableSize);
       }
     }
@@ -578,9 +573,7 @@ bool NanoappLoader::copyAndVerifyHeaders() {
         LOG_OOM();
         success = false;
       } else {
-        memcpy(mStringTablePtr,
-               reinterpret_cast<void *>(mBinary.data +
-                                        stringTableHeader->sh_offset),
+        memcpy(mStringTablePtr, mBinary + stringTableHeader->sh_offset,
                stringTableSize);
       }
     }
@@ -627,19 +620,22 @@ bool NanoappLoader::createMappings() {
       LOGV("Nanoapp image Memory Span: %u", memorySpan);
 
       if (mIsTcmBinary) {
-        mMapping.dataPtr = memoryAllocAligned(kBinaryAlignment, memorySpan);
+        mMapping = static_cast<uint8_t *>(
+            memoryAllocAligned(kBinaryAlignment, memorySpan));
       } else {
-        mMapping.dataPtr = memoryAllocDramAligned(kBinaryAlignment, memorySpan);
+        mMapping = static_cast<uint8_t *>(
+            memoryAllocDramAligned(kBinaryAlignment, memorySpan));
       }
 
-      if (mMapping.dataPtr == nullptr) {
+      if (mMapping == nullptr) {
         LOG_OOM();
       } else {
-        LOGV("Starting location of mappings %p", mMapping.dataPtr);
+        LOGV("Starting location of mappings %p", mMapping);
 
         // Calculate the load bias using the first load segment.
         uintptr_t adjustedFirstLoadSegAddr = roundDownToAlign(first->p_vaddr);
-        mLoadBias = mMapping.data - adjustedFirstLoadSegAddr;
+        mLoadBias =
+            reinterpret_cast<uintptr_t>(mMapping) - adjustedFirstLoadSegAddr;
         LOGV("Load bias is %" PRIu32, mLoadBias);
 
         success = true;
@@ -654,8 +650,7 @@ bool NanoappLoader::createMappings() {
         ElfAddr segStart = ph->p_vaddr + mLoadBias;
         void *startPage = reinterpret_cast<void *>(roundDownToAlign(segStart));
         ElfAddr phOffsetPage = roundDownToAlign(ph->p_offset);
-        void *binaryStartPage =
-            reinterpret_cast<void *>(mBinary.data + phOffsetPage);
+        void *binaryStartPage = mBinary + phOffsetPage;
         size_t segmentLen = ph->p_filesz;
 
         LOGV("Mapping start page %p from %p with length %zu", startPage,
@@ -751,7 +746,7 @@ bool NanoappLoader::fixRelocations() {
     LOGE("Elf binaries with a DT_RELA dynamic entry are unsupported");
   } else {
     ElfRel *reloc =
-        reinterpret_cast<ElfRel *>(getDynEntry(dyn, DT_REL) + mBinary.data);
+        reinterpret_cast<ElfRel *>(mBinary + getDynEntry(dyn, DT_REL));
     size_t relocSize = getDynEntry(dyn, DT_RELSZ);
     size_t nRelocs = relocSize / sizeof(ElfRel);
     LOGV("Relocation %zu entries in DT_REL table", nRelocs);
@@ -763,18 +758,18 @@ bool NanoappLoader::fixRelocations() {
       switch (relocType) {
         case R_ARM_RELATIVE:
           LOGV("Resolving ARM_RELATIVE at offset %" PRIx32, curr->r_offset);
-          addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
+          addr = reinterpret_cast<ElfAddr *>(mMapping + curr->r_offset);
           // TODO: When we move to DRAM allocations, we need to check if the
           // above address is in a Read-Only section of memory, and give it
           // temporary write permission if that is the case.
-          *addr += mMapping.data;
+          *addr += reinterpret_cast<uintptr_t>(mMapping);
           break;
 
         case R_ARM_ABS32:
         case R_ARM_GLOB_DAT: {
           LOGV("Resolving type %d at offset %" PRIx32, relocType,
                curr->r_offset);
-          addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
+          addr = reinterpret_cast<ElfAddr *>(mMapping + curr->r_offset);
           size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
           void *resolved = resolveData(posInSymbolTable);
           if (resolved == nullptr) {
@@ -811,7 +806,7 @@ bool NanoappLoader::fixRelocations() {
 bool NanoappLoader::resolveGot() {
   ElfAddr *addr;
   ElfRel *reloc = reinterpret_cast<ElfRel *>(
-      getDynEntry(getDynamicHeader(), DT_JMPREL) + mMapping.data);
+      mMapping + getDynEntry(getDynamicHeader(), DT_JMPREL));
   size_t relocSize = getDynEntry(getDynamicHeader(), DT_PLTRELSZ);
   size_t nRelocs = relocSize / sizeof(ElfRel);
   LOGV("Resolving GOT with %zu relocations", nRelocs);
@@ -823,7 +818,7 @@ bool NanoappLoader::resolveGot() {
     switch (relocType) {
       case R_ARM_JUMP_SLOT: {
         LOGV("Resolving ARM_JUMP_SLOT at offset %" PRIx32, curr->r_offset);
-        addr = reinterpret_cast<ElfAddr *>(curr->r_offset + mMapping.data);
+        addr = reinterpret_cast<ElfAddr *>(mMapping + curr->r_offset);
         size_t posInSymbolTable = ELFW_R_SYM(curr->r_info);
         void *resolved = resolveData(posInSymbolTable);
         if (resolved == nullptr) {
