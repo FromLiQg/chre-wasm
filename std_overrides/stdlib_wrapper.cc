@@ -33,7 +33,9 @@
 #include <chre.h>
 #include "chre/util/nanoapp/assert.h"
 
+#ifndef stderr
 FILE *stderr = NULL;
+#endif
 
 void *malloc(size_t size) {
   // On platforms where size(size_t) might be 8 bytes, we need a cast to
