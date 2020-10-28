@@ -256,7 +256,7 @@ bool PlatformNanoappBase::openNanoapp() {
     // TODO(158770259): Enforce this and make the log message and error once all
     // nanoapp binaries are signed.
     if (!authenticateBinary(mAppBinary, &binaryStart)) {
-      LOGV("Unable to authenticate 0x%" PRIx32 " not stopping loading for now",
+      LOGV("Unable to authenticate 0x%" PRIx64 " not stopping loading for now",
            mExpectedAppId);
     }
     if (mDsoHandle == nullptr) {

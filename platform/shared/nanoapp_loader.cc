@@ -295,7 +295,7 @@ void NanoappLoader::mapBss(const ProgramHeader *hdr) {
     ElfAddr endOfMem = hdr->p_vaddr + hdr->p_memsz + mLoadBias;
     if (endOfMem > endOfFile) {
       auto deltaMem = endOfMem - endOfFile;
-      LOGV("Zeroing out %zu from page %p", deltaMem, endOfFile);
+      LOGV("Zeroing out %zu from page %x", deltaMem, endOfFile);
       memset(reinterpret_cast<void *>(endOfFile), 0, deltaMem);
     }
   }
