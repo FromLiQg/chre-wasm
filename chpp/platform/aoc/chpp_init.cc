@@ -76,16 +76,14 @@ struct ChppClientServiceSet getClientServiceSet(ChppLinkType type) {
 
 // Initializes the CHPP instance and runs the work thread.
 void chppThreadEntry(void *context) {
-  NestedDataPtr<ChppLinkType> type;
-  type.dataPtr = context;
+  ChppLinkType type = NestedDataPtr<ChppLinkType>(context);
 
-  struct ChppTransportState *transportState =
-      &gChppTransportStateList[type.data];
-  struct ChppAppState *appState = &gChppAppStateList[type.data];
+  struct ChppTransportState *transportState = &gChppTransportStateList[type];
+  struct ChppAppState *appState = &gChppAppStateList[type];
 
   chppTransportInit(transportState, appState);
   chppAppInitWithClientServiceSet(appState, transportState,
-                                  getClientServiceSet(type.data));
+                                  getClientServiceSet(type));
 
   chppWorkThreadStart(transportState);
 
@@ -93,17 +91,16 @@ void chppThreadEntry(void *context) {
   chppTransportDeinit(transportState);
 
   vTaskDelete(nullptr);
-  gChppTaskHandleList[type.data] = nullptr;
+  gChppTaskHandleList[type] = nullptr;
 }
 
 BaseType_t startChppWorkThread(ChppLinkType type, const char *taskName) {
   struct ChppTransportState *transportState = &gChppTransportStateList[type];
   transportState->linkParams.uartLinkManager = &gManagerList[type];
 
-  NestedDataPtr<ChppLinkType> linkType(type);
   return xTaskCreate(chppThreadEntry, taskName, kChppTaskStackDepthWords,
-                     linkType.dataPtr /* args */, kChppTaskPriority,
-                     &gChppTaskHandleList[type]);
+                     NestedDataPtr<ChppLinkType>(type) /* args */,
+                     kChppTaskPriority, &gChppTaskHandleList[type]);
 }
 
 void stopChppWorkThread(ChppLinkType type) {

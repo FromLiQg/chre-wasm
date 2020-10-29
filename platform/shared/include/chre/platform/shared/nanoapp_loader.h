@@ -23,7 +23,6 @@
 #include "chre/platform/shared/loader_util.h"
 
 #include "chre/util/dynamic_vector.h"
-#include "chre/util/nested_data_ptr.h"
 
 namespace chre {
 
@@ -38,7 +37,7 @@ class NanoappLoader {
   NanoappLoader() = delete;
 
   explicit NanoappLoader(void *elfInput, bool mapIntoTcm) {
-    mBinary.dataPtr = elfInput;
+    mBinary = static_cast<uint8_t *>(elfInput);
     mIsTcmBinary = mapIntoTcm;
   }
 
@@ -141,9 +140,9 @@ class NanoappLoader {
   // loading is complete.
   //! The ELF that is being mapped into the system. This pointer will be invalid
   //! after open returns.
-  NestedDataPtr<uintptr_t> mBinary = {};
+  uint8_t *mBinary = nullptr;
   //! The starting location of the memory that has been mapped into the system.
-  NestedDataPtr<uintptr_t> mMapping = {};
+  uint8_t *mMapping = nullptr;
   //! The difference between where the first load segment was mapped into
   //! virtual memory and what the virtual load offset was of that segment.
   ElfAddr mLoadBias = 0;

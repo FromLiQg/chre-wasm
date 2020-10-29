@@ -186,9 +186,10 @@ bool PlatformSensorManager::getThreeAxisBias(
 
 bool PlatformSensorManager::flush(const Sensor &sensor,
                                   uint32_t *flushRequestId) {
-  NestedDataPtr<uint32_t> cookie(sensor.getSensorType());
-  return mHelper.flushAsync(sensor.getServerHandle(), cookie.dataPtr,
-                            flushRequestId);
+  return mHelper.flushAsync(
+      sensor.getServerHandle(),
+      NestedDataPtr<uint32_t>(sensor.getSensorType()) /* cookie */,
+      flushRequestId);
 }
 
 void PlatformSensorManager::releaseSamplingStatusUpdate(
@@ -260,12 +261,9 @@ void PlatformSensorManagerBase::onSensorDataEvent(
 void PlatformSensorManagerBase::onFlushComplete(usf::UsfErr err,
                                                 uint32_t requestId,
                                                 void *cookie) {
-  NestedDataPtr<uint32_t> nestedSensorType;
-  nestedSensorType.dataPtr = cookie;
-
+  uint32_t sensorType = NestedDataPtr<uint32_t>(cookie);
   uint32_t sensorHandle;
-  if (getSensorRequestManager().getSensorHandle(nestedSensorType.data,
-                                                &sensorHandle)) {
+  if (getSensorRequestManager().getSensorHandle(sensorType, &sensorHandle)) {
     getSensorRequestManager().handleFlushCompleteEvent(
         sensorHandle, requestId, UsfHelper::usfErrorToChreError(err));
   }

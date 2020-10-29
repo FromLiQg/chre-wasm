@@ -28,10 +28,6 @@
 #endif  // __BASE_FILE__
 #endif  // __FILE_NAME__
 
-#ifndef CHRE_DL_VERBOSE
-#define CHRE_DL_VERBOSE false
-#endif  // CHRE_DL_VERBOSE
-
 // TODO(b/149317051): The printf in the below macro is needed until CHRE can log
 // to the AP before the daemon has connected to AoC.
 #define CHRE_AOC_LOG(level, fmt, ...)                               \
@@ -47,12 +43,7 @@
 #define LOGW(fmt, ...) CHRE_AOC_LOG(CHRE_LOG_WARN, fmt, ##__VA_ARGS__)
 #define LOGI(fmt, ...) CHRE_AOC_LOG(CHRE_LOG_INFO, fmt, ##__VA_ARGS__)
 #define LOGD(fmt, ...) CHRE_AOC_LOG(CHRE_LOG_DEBUG, fmt, ##__VA_ARGS__)
-
-#if CHRE_DL_VERBOSE
-#define LOGV(fmt, ...) LOGD(fmt, ##__VA_ARGS__)
-#else
-#define LOGV(fmt, ...)
-#endif  // CHRE_DL_VERBOSE
+#define LOGV(fmt, ...) CHRE_AOC_LOG(CHRE_LOG_VERBOSE, fmt, ##__VA_ARGS__)
 
 namespace chre {
 
