@@ -92,15 +92,6 @@ void AudioFilter::InputProcessor(int /*pin*/, void *message, size_t size) {
   CHRE_ASSERT_LOG(nBytes != 0, "Got data pipe notif, but no data in ring");
   size_t nSamples = nBytes / kBytesPerAocSample;
 
-  if (mSampleCount == 0) {
-    // TODO: Get a better estimate of the timestamp of the first sample in
-    // the frame. Since the pipe notification arrives every 10ms, we could
-    // subtract 10ms from now(), and maybe even keep track of the embedded
-    // timestamp of the first sample of the current frame, and the last
-    // sample of the previous frame.
-    mDataEvent.timestamp = SystemTime::getMonotonicTime().toRawNanoseconds();
-  }
-
   // TODO: For the initial implementation/testing, we assume that the
   // frame might not fit to a T in our current buffer, but that is the
   // expectation. With the current logic, we could end up dropping a frame,
@@ -113,6 +104,7 @@ void AudioFilter::InputProcessor(int /*pin*/, void *message, size_t size) {
       memcpy(mSampleBufferDram, mSampleBufferSram, sizeof(mSampleBufferSram));
       mDataEvent.sampleCount = mSampleCount;
       mDataEvent.samplesS16 = mSampleBufferDram;
+      mDataEvent.timestamp = mFrameStartTimestamp;
       mDramBufferInUse = true;
 
       EventLoopManagerSingleton::get()
@@ -123,6 +115,16 @@ void AudioFilter::InputProcessor(int /*pin*/, void *message, size_t size) {
     }
     mSampleCount = 0;
   }
+
+  if (mSampleCount == 0) {
+    // TODO: Get a better estimate of the timestamp of the first sample in
+    // the frame. Since the pipe notification arrives every 10ms, we could
+    // subtract 10ms from now(), and maybe even keep track of the embedded
+    // timestamp of the first sample of the current frame, and the last
+    // sample of the previous frame.
+    mFrameStartTimestamp = SystemTime::getMonotonicTime().toRawNanoseconds();
+  }
+
   for (size_t i = 0; i < nSamples; ++i, ++mSampleCount) {
     // The zeroth byte of the received sample is a timestamp, which we
     // strip out.
