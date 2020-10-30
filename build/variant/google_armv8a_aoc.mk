@@ -43,6 +43,8 @@ COMMON_C_CFLAGS += $(CFLAGS)
 # FlatBuffer overhead (max 80 bytes), minus some extra space to make a nice
 # round number and allow for addition of new fields to the FlatBuffer
 TARGET_CFLAGS += -DCHRE_MESSAGE_TO_HOST_MAX_SIZE=4000
+# Compile against the thumb ISA due to its smaller size.
+TARGET_CFLAGS += -mthumb
 TARGET_CFLAGS += $(AOC_CFLAGS)
 TARGET_CFLAGS += $(FREERTOS_CFLAGS)
 TARGET_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/basic/include
