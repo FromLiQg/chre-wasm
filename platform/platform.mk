@@ -199,6 +199,7 @@ AOC_SRCS += chpp/services.c
 AOC_SRCS += chpp/services/discovery.c
 AOC_SRCS += chpp/services/loopback.c
 AOC_SRCS += chpp/services/nonhandle.c
+AOC_SRCS += chpp/services/timesync.c
 AOC_SRCS += chpp/clients.c
 AOC_SRCS += chpp/clients/discovery.c
 AOC_SRCS += chpp/clients/loopback.c
