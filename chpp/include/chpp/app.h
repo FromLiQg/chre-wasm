@@ -284,9 +284,9 @@ struct ChppClient {
  * client or service (one per every every request/response functionality).
  */
 struct ChppRequestResponseState {
-  uint64_t requestTime;   // Time of the last request
-  uint64_t responseTime;  // Time of the last response
-  uint8_t transaction;    // Transaction ID for the last request/response
+  uint64_t requestTimeNs;   // Time of the last request
+  uint64_t responseTimeNs;  // Time of the last response
+  uint8_t transaction;      // Transaction ID for the last request/response
 };
 
 /**
@@ -303,6 +303,7 @@ struct ChppClientServiceSet {
   bool timesyncClient : 1;
 };
 
+struct ChppLoopbackClientState;
 struct ChppTimesyncClientState;
 
 struct ChppAppState {
@@ -329,6 +330,7 @@ struct ChppAppState {
 
   // Pointers to the contexts of basic clients, which are allocated if and when
   // they are initialized
+  struct ChppLoopbackClientState *loopbackClientContext;
   struct ChppTimesyncClientState *timesyncClientContext;
 
   // For discovery clients
