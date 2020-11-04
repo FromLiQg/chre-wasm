@@ -94,8 +94,6 @@ UartLinkManager::UartLinkManager(struct ChppTransportState *context, UART *uart,
       mWakeHandshakeEnabled(wakeHandshakeEnable) {
   mWakeOutGpio.SetDirection(GPIO::DIRECTION::OUTPUT);
   mWakeOutGpio.Clear();
-
-  mGnssLinkHack = (wakeOutPinNumber == kGnssWakeOutGpioPinNumber);
 }
 
 void UartLinkManager::init(TaskHandle_t handle) {
@@ -161,8 +159,7 @@ void UartLinkManager::completeTransaction() {
   // transactions occur quickly one after another.
   void *timerHandle;
   mCoreMonitorRefCount.fetch_increment();
-  uint64_t suspendTimeoutNs =
-      mGnssLinkHack ? 100 * kSuspendTimeoutNs : kSuspendTimeoutNs;
+  uint64_t suspendTimeoutNs = kSuspendTimeoutNs;
   if (!setTimer(suspendTimeoutNs, callback, this, &timerHandle)) {
     CHPP_LOGE("Failed to set core monitor timer");
     // Enter critical section to avoid race conditions with timer interrupt.
@@ -260,9 +257,7 @@ bool UartLinkManager::startTransaction() {
     }
 
     completeTransaction();
-    if (!mGnssLinkHack) {
-      mWakeOutGpio.Clear();
-    }
+    mWakeOutGpio.Clear();
   }
 
   // Re-enable the interrupt to handle transaction requests.
@@ -297,9 +292,6 @@ void UartLinkManager::allowCoreMonitor() {
   taskENTER_CRITICAL();
   if (mCoreMonitorRefCount.load() == 0 && !mTransactionPending.load()) {
     CoreMonitor::Instance()->Allow(mCoreMonitorMask);
-    if (mGnssLinkHack) {
-      mWakeOutGpio.Clear();
-    }
   }
   taskEXIT_CRITICAL();
 }

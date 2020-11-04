@@ -124,7 +124,7 @@ void init() {
       Environment::Instance()->UART(UART_MAP::UART_MAP_GNSS),
       chpp::UartLinkManager::kGnssWakeOutGpioPinNumber,
       chpp::UartLinkManager::kGnssWakeInGpiNumber,
-      PREVENT_MONITOR_MODE_MASK_UART_1);
+      PREVENT_MONITOR_MODE_MASK_UART_1, true /* wakeHandshake */);
 
   gManagerList.emplace_back(
       &gChppTransportStateList[ChppLinkType::CHPP_LINK_TYPE_WWAN],

@@ -239,10 +239,6 @@ class UartLinkManager : public chre::NonCopyable {
   //! early.
   chre::AtomicUint32 mCoreMonitorRefCount{0};
 
-  //! A temporary hack to make GNSS link work.
-  //! TODO(arthuri): Remove this once GNSS link works by default.
-  bool mGnssLinkHack = false;
-
   /**
    * @return if a TX packet is pending transmission.
    */

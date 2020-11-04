@@ -148,6 +148,7 @@ class AudioFilter : public Filter {
 
   int16_t mSampleBufferSram[kSamplesPer2Sec];
   int16_t *mSampleBufferDram = nullptr;
+  uint64_t mFrameStartTimestamp = 0;
   void *mRingBufferHandle = nullptr;
   size_t mSampleCount = 0;
   bool mDramBufferInUse = false;
