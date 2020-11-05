@@ -132,7 +132,7 @@ bool FastRpcChreDaemon::sendMessageToChre(uint16_t clientId, void *data,
 // TODO: Consider moving platform independent parts of this function
 // to the base class, revisit when implementing the daemon for
 // another platform.
-void FastRpcChreDaemon::onMessageReceived(unsigned char *messageBuffer,
+void FastRpcChreDaemon::onMessageReceived(const unsigned char *messageBuffer,
                                           size_t messageLen) {
   mLogger.dump(messageBuffer, messageLen);
 

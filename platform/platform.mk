@@ -26,9 +26,6 @@ SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc/HAP
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc/a1std
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/inc/stddef
 SLPI_CFLAGS += -I$(SLPI_PREFIX)/platform/rtld/inc
-SLPI_CFLAGS += -I$(SLPI_PREFIX)/ssc/goog/api
-SLPI_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc
-SLPI_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc/internal
 
 SLPI_CFLAGS += -Iplatform/shared/include
 SLPI_CFLAGS += -Iplatform/slpi/include
@@ -44,6 +41,9 @@ SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/core/api/kernel/libstd/stringl
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/qmimsgs/common/api
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc_api/pb
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/framework/cm/inc
+SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/goog/api
+SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc
+SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc/internal
 SLPI_SEE_CFLAGS += -I$(SLPI_PREFIX)/ssc/inc/utils/nanopb
 
 SLPI_SEE_CFLAGS += -Iplatform/slpi/see/include
@@ -171,147 +171,6 @@ endif
 SLPI_QSH_SRCS += platform/slpi/see/island_vote_client.cc
 SLPI_QSH_SRCS += platform/slpi/see/power_control_manager.cc
 SLPI_QSH_SRCS += platform/slpi/qsh/qsh_shim.cc
-
-# FreeRTOS-specific Source Files ###############################################
-
-FREERTOS_SRCS += platform/freertos/context.cc
-FREERTOS_SRCS += platform/freertos/init.cc
-FREERTOS_SRCS += platform/freertos/memory_manager.cc
-FREERTOS_SRCS += platform/freertos/platform_debug_dump_manager.cc
-FREERTOS_SRCS += platform/freertos/platform_nanoapp.cc
-
-# Optional FreeRTOS-specific Source Files ######################################
-
-# memory.cc is only needed if the given platform doesn't have its own memory
-# allocation setup.
-FREERTOS_OPTIONAL_SRCS += platform/freertos/memory.cc
-
-# FreeRTOS-specific Compiler Flags #############################################
-FREERTOS_CFLAGS += -I$(AOC_TOP_DIR)/external/FreeRTOS/FreeRTOS/Source/include
-FREERTOS_CFLAGS += -Iplatform/freertos/include
-FREERTOS_CFLAGS += -Iplatform/shared/include
-
-# AoC-specific Source Files ####################################################
-
-AOC_SRCS += chpp/transport.c
-AOC_SRCS += chpp/app.c
-AOC_SRCS += chpp/services.c
-AOC_SRCS += chpp/services/discovery.c
-AOC_SRCS += chpp/services/loopback.c
-AOC_SRCS += chpp/services/nonhandle.c
-AOC_SRCS += chpp/services/timesync.c
-AOC_SRCS += chpp/clients.c
-AOC_SRCS += chpp/clients/discovery.c
-AOC_SRCS += chpp/clients/loopback.c
-AOC_SRCS += chpp/platform/pal_api.c
-AOC_SRCS += chpp/platform/aoc/condition_variable.cc
-AOC_SRCS += chpp/platform/aoc/link.cc
-AOC_SRCS += chpp/platform/aoc/chpp_init.cc
-AOC_SRCS += chpp/platform/aoc/chpp_task_util.cc
-AOC_SRCS += chpp/platform/aoc/chpp_uart_link_manager.cc
-AOC_SRCS += chpp/platform/aoc/memory.cc
-AOC_SRCS += chpp/platform/aoc/notifier.cc
-AOC_SRCS += chpp/platform/aoc/time.cc
-AOC_SRCS += platform/aoc/audio_controller.cc
-AOC_SRCS += platform/aoc/audio_filter.cc
-AOC_SRCS += platform/aoc/chre_api_re.cc
-AOC_SRCS += platform/aoc/dram_vote_client.cc
-AOC_SRCS += platform/aoc/fatal_error.cc
-AOC_SRCS += platform/aoc/host_link.cc
-AOC_SRCS += platform/aoc/log.cc
-AOC_SRCS += platform/aoc/memory.cc
-AOC_SRCS += platform/aoc/power_control_manager.cc
-AOC_SRCS += platform/aoc/platform_audio.cc
-AOC_SRCS += platform/aoc/platform_cache_management.cc
-AOC_SRCS += platform/aoc/platform_pal.cc
-AOC_SRCS += platform/aoc/system_time.cc
-AOC_SRCS += platform/aoc/system_timer.cc
-AOC_SRCS += platform/shared/assert.cc
-AOC_SRCS += platform/shared/chre_api_audio.cc
-AOC_SRCS += platform/shared/chre_api_core.cc
-AOC_SRCS += platform/shared/chre_api_gnss.cc
-AOC_SRCS += platform/shared/chre_api_re.cc
-AOC_SRCS += platform/shared/chre_api_sensor.cc
-AOC_SRCS += platform/shared/chre_api_version.cc
-AOC_SRCS += platform/shared/chre_api_wifi.cc
-AOC_SRCS += platform/shared/chre_api_wwan.cc
-AOC_SRCS += platform/shared/dlfcn.cc
-AOC_SRCS += platform/shared/dram_vote_client.cc
-AOC_SRCS += platform/shared/host_protocol_chre.cc
-AOC_SRCS += platform/shared/host_protocol_common.cc
-AOC_SRCS += platform/shared/memory_manager.cc
-AOC_SRCS += platform/shared/nanoapp_loader.cc
-AOC_SRCS += platform/shared/nanoapp_load_manager.cc
-AOC_SRCS += platform/shared/log_buffer.cc
-AOC_SRCS += platform/shared/pal_system_api.cc
-AOC_SRCS += platform/shared/pal_sensor_stub.cc
-AOC_SRCS += platform/shared/system_time.cc
-AOC_SRCS += platform/shared/nanoapp/nanoapp_dso_util.cc
-AOC_SRCS += platform/usf/platform_sensor.cc
-AOC_SRCS += platform/usf/platform_sensor_manager.cc
-AOC_SRCS += platform/usf/platform_sensor_type_helpers.cc
-AOC_SRCS += platform/usf/usf_helper.cc
-
-# Optional GNSS support.
-ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
-AOC_SRCS += platform/shared/platform_gnss.cc
-AOC_SRCS += chpp/clients/gnss.c
-AOC_SRCS += chpp/common/gnss_convert.c
-AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_CHRE_GNSS
-endif
-
-# Optional Wi-Fi support.
-ifeq ($(CHRE_WIFI_SUPPORT_ENABLED), true)
-AOC_SRCS += platform/shared/platform_wifi.cc
-AOC_SRCS += chpp/clients/wifi.c
-AOC_SRCS += chpp/common/wifi_convert.c
-AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_CHRE_WIFI
-endif
-
-# Optional WWAN support.
-ifeq ($(CHRE_WWAN_SUPPORT_ENABLED), true)
-AOC_SRCS += platform/shared/platform_wwan.cc
-AOC_SRCS += chpp/clients/wwan.c
-AOC_SRCS += chpp/common/wwan_convert.c
-AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_CHRE_WWAN
-endif
-
-# AoC-specific Compiler Flags ##################################################
-AOC_CFLAGS += -Iplatform/aoc/include
-AOC_CFLAGS += -Iplatform/usf/include
-AOC_CFLAGS += -I$(AOC_AUTOGEN_DIR)/regions
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/apps
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/core/arm/generic/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/core/core_monitor/base/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/gpio/aoc/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/gpio/base/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/gpi/aoc/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/gpi/base/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/processor
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/processor/aoc/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/drivers/sys_mem/base/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/efw/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/filters/audio/common/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/libs/common/heap/common/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/os/common/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/platform/common/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/AOC/product/$(AOC_PRODUCT_FAMILY)/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/core/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/core/fbs
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/pal/include
-AOC_CFLAGS += -I$(AOC_TOP_DIR)/usf/pal/efw/include
-
-AOC_CFLAGS += -Ichpp/include
-AOC_CFLAGS += -Ichpp/platform/aoc/include
-AOC_CFLAGS += -DCHPP_CLIENT_ENABLED_DISCOVERY
-
-# We use FlatBuffers in the AOC platform layer
-AOC_CFLAGS += $(FLATBUFFERS_CFLAGS)
-
-# Ensure USF uses its own flatbuffers header. This is needed while USF migrates
-# away from CHRE's header.
-AOC_CFLAGS += -DFLATBUFFERS_USF
 
 # Simulator-specific Compiler Flags ############################################
 

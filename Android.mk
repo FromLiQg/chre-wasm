@@ -16,14 +16,6 @@
 
 LOCAL_PATH := $(call my-dir)
 
-# If the daemon is using USF, but USF isn't enabled, disable the daemon.
-# TODO (b/157659611): Remove when USF is available on partner with a prebuilt.
-ifeq ($(CHRE_DAEMON_USES_USF),true)
-  ifneq ($(USF_ENABLED),true)
-    CHRE_DAEMON_ENABLED := false
-  endif
-endif
-
 # Don't build the daemon for targets that don't contain a vendor image as
 # libsdsprpc and libadsprpc are provided by vendor code
 ifeq ($(BUILDING_VENDOR_IMAGE),true)
@@ -64,41 +56,23 @@ LOCAL_SRC_FILES := \
     host/common/log_message_parser_base.cc \
     host/common/socket_server.cc \
     host/common/st_hal_lpma_handler.cc \
-    platform/shared/host_protocol_common.cc
-
-MSM_DAEMON_SRC_FILES := \
     host/msm/daemon/fastrpc_daemon.cc \
     host/msm/daemon/main.cc \
-    host/msm/daemon/generated/chre_slpi_stub.c
-
-USF_DAEMON_SRC_FILES := \
-    host/usf_daemon/usf_daemon.cc \
-    host/usf_daemon/main.cc
-
-USF_DAEMON_CFLAGS := \
-    -DFLATBUFFERS_USF
+    host/msm/daemon/generated/chre_slpi_stub.c \
+    platform/shared/host_protocol_common.cc
 
 LOCAL_C_INCLUDES := \
+    external/fastrpc/inc \
     system/chre/external/flatbuffers/include \
     system/chre/host/common/include \
+    system/chre/host/msm/daemon \
     system/chre/platform/shared/include \
+    system/chre/platform/slpi/include \
     system/chre/util/include \
     system/libbase/include \
     system/core/libcutils/include \
     system/logging/liblog/include \
-    system/core/libutils/include
-
-MSM_DAEMON_INCLUDES := \
-    external/fastrpc/inc \
-    system/chre/platform/slpi/include \
-    system/chre/host/msm/daemon
-
-USF_DAEMON_INCLUDES := \
-    system/chre/host/usf_daemon \
-    vendor/google/sensors/usf/core/include \
-    vendor/google/sensors/usf/pal/android/include \
-    vendor/google/sensors/usf/pal/include \
-    vendor/google/sensors/usf/core/fbs
+    system/core/libutils/include \
 
 LOCAL_SHARED_LIBRARIES := \
     libjsoncpp \
@@ -109,23 +83,6 @@ LOCAL_SHARED_LIBRARIES := \
     libbase \
     android.hardware.soundtrigger@2.0 \
     libpower
-
-USF_DAEMON_SHARED_LIBRARIES := libusf
-
-ifeq ($(CHRE_DAEMON_USES_USF),true)
-LOCAL_C_INCLUDES += $(USF_DAEMON_INCLUDES)
-LOCAL_SRC_FILES += $(USF_DAEMON_SRC_FILES)
-LOCAL_CFLAGS += $(USF_DAEMON_CFLAGS)
-LOCAL_SHARED_LIBRARIES += $(USF_DAEMON_SHARED_LIBRARIES)
-else
-LOCAL_SRC_FILES += $(MSM_DAEMON_SRC_FILES)
-LOCAL_C_INCLUDES += $(MSM_DAEMON_INCLUDES)
-ifeq ($(CHRE_DAEMON_USE_SDSPRPC),true)
-LOCAL_SHARED_LIBRARIES += libsdsprpc
-else
-LOCAL_SHARED_LIBRARIES += libadsprpc
-endif
-endif
 
 # Enable tokenized logging
 ifeq ($(CHRE_USE_TOKENIZED_LOGGING),true)
@@ -145,9 +102,10 @@ LOCAL_SRC_FILES += $(PIGWEED_TOKENIZER_DIR_RELPATH)/pw_tokenizer/decode.cc
 LOCAL_SRC_FILES += $(PIGWEED_TOKENIZER_DIR_RELPATH)/pw_varint/varint.cc
 endif
 
-ifeq ($(CHRE_DAEMON_LPMA_ENABLED),true)
-LOCAL_SHARED_LIBRARIES += android.hardware.soundtrigger@2.0
-LOCAL_SHARED_LIBRARIES += libpower
+ifeq ($(CHRE_DAEMON_USE_SDSPRPC),true)
+LOCAL_SHARED_LIBRARIES += libsdsprpc
+else
+LOCAL_SHARED_LIBRARIES += libadsprpc
 endif
 
 include $(BUILD_EXECUTABLE)

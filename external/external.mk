@@ -29,7 +29,7 @@ GOOGLE_X86_GOOGLETEST_SRCS += $(GOOGLEMOCK_PATH)/src/gmock-all.cc
 #
 # Kiss FFT
 #
-ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
+
 # Common Compiler Flags ########################################################
 
 # Include paths.
@@ -42,4 +42,3 @@ COMMON_CFLAGS += -DFIXED_POINT
 
 COMMON_SRCS += external/kiss_fft/kiss_fft.c
 COMMON_SRCS += external/kiss_fft/kiss_fftr.c
-endif

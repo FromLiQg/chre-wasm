@@ -113,15 +113,11 @@ GOOGLE_HEXAGONV66_SLPI-SEE_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 GOOGLE_HEXAGONV66_SLPI-SEE-UIMG_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 GOOGLE_HEXAGONV66_SLPI-QSH_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 GOOGLE_ARM64_ANDROID_SRCS += $(DSO_SUPPORT_LIB_SRCS)
-GOOGLE_AOC_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 GOOGLE_X86_LINUX_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 QCOM_HEXAGONV60_NANOHUB_SRCS += $(APP_SUPPORT_PATH)/qcom_nanohub/app_support.cc
 QCOM_HEXAGONV60_NANOHUB-UIMG_SRCS += $(APP_SUPPORT_PATH)/qcom_nanohub/app_support_uimg.cc
 
 # Makefile Includes ############################################################
-
-# Standard library overrides include
-include $(CHRE_PREFIX)/std_overrides/std_overrides.mk
 
 # Common includes
 include $(CHRE_PREFIX)/build/defs.mk
@@ -132,7 +128,6 @@ include $(CHRE_PREFIX)/chre_api/chre_api_version.mk
 
 # Supported variants includes
 include $(CHRE_PREFIX)/build/variant/google_arm64_android.mk
-include $(CHRE_PREFIX)/build/variant/google_armv8a_aoc.mk
 include $(CHRE_PREFIX)/build/variant/google_cm4_nanohub.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv55_slpi-see.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv60_slpi.mk
