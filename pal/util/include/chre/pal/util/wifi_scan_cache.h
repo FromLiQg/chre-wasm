@@ -60,7 +60,7 @@ bool chreWifiScanCacheInit(const struct chrePalSystemApi *systemApi,
 /**
  * This method must be invoked as a result of a chrePalWifiApi->close() call.
  */
-void chreWifiScanCacheDeinit();
+void chreWifiScanCacheDeinit(void);
 
 /**
  * Begins the caching of results from a single WiFi scan.
@@ -101,8 +101,12 @@ void chreWifiScanCacheScanEventBegin(enum chreWifiScanType scanType,
  *
  * The function does not obtain ownership of the provided pointer.
  *
- * @param result A non-null pointer to a WiFi scan result.
+ * This function must be invoked as soon as the scan result is available (i.e
+ * the access point is detected). The chreWifiScanResult.ageMs field is
+ * ignored by the scan cache library, and will be populated internally when
+ * chreWifiScanCacheScanEventEnd() is invoked.
  *
+ * @param result A non-null pointer to a WiFi scan result.
  *
  * @see chreWifiScanCacheScanEventBegin for the expected flow.
  */
