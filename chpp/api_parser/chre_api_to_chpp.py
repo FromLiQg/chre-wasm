@@ -711,8 +711,11 @@ class CodeGenerator:
         else:
             chre_type = chpp_type
 
-        out.append("  if (in->{}.length != 0) {{\n".format(variable_name))
-
+        out.append("\n")
+        out.append("  if (in->{}.length == 0) {{\n".format(variable_name))
+        out.append("    out->{} = NULL;\n".format(variable_name))
+        out.append("  }\n")
+        out.append("  else {\n")
         out.append("    if (in->{}.offset + in->{}.length > inSize ||\n".format(
             variable_name, variable_name))
         out.append("        in->{}.length != in->{} * sizeof({})) {{\n".format(
@@ -723,7 +726,7 @@ class CodeGenerator:
 
         if member_info['is_nested_type']:
             out.append("    const {} *{}In =\n".format(chpp_type, variable_name))
-            out.append("        (const {} *) &((const uint8_t *)in)[in->{}.offset];\n".format(
+            out.append("        (const {} *) &((const uint8_t *)in)[in->{}.offset];\n\n".format(
                 chpp_type, variable_name))
 
         out.append("    {} *{}Out = chppMalloc(in->{} * sizeof({}));\n".format(
