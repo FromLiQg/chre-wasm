@@ -66,16 +66,16 @@ static const struct ChppClient kGnssClientConfig = {
     .descriptor.version.minor = 0,
     .descriptor.version.patch = 0,
 
-    // Server response dispatch function pointer
+    // Service response dispatch function pointer
     .responseDispatchFunctionPtr = &chppDispatchGnssResponse,
 
-    // Server notification dispatch function pointer
+    // Service notification dispatch function pointer
     .notificationDispatchFunctionPtr = &chppDispatchGnssNotification,
 
-    // Server response dispatch function pointer
+    // Service response dispatch function pointer
     .initFunctionPtr = &chppGnssClientInit,
 
-    // Server notification dispatch function pointer
+    // Service notification dispatch function pointer
     .deinitFunctionPtr = &chppGnssClientDeinit,
 
     // Min length is the entire header
@@ -151,7 +151,7 @@ static void chppGnssMeasurementResultNotification(
  ***********************************************/
 
 /**
- * Dispatches a server response from the transport layer that is determined to
+ * Dispatches a service response from the transport layer that is determined to
  * be for the GNSS client.
  *
  * This function is called from the app layer using its function pointer given
@@ -215,7 +215,7 @@ static enum ChppAppErrorCode chppDispatchGnssResponse(void *clientContext,
 }
 
 /**
- * Dispatches a server notification from the transport layer that is determined
+ * Dispatches a service notification from the transport layer that is determined
  * to be for the GNSS client.
  *
  * This function is called from the app layer using its function pointer given
@@ -294,7 +294,7 @@ static void chppGnssClientDeinit(void *clientContext) {
 }
 
 /**
- * Handles the server response for the open client request.
+ * Handles the service response for the open client request.
  *
  * This function is called from chppDispatchGnssResponse().
  *
@@ -311,7 +311,7 @@ static void chppGnssOpenResult(struct ChppGnssClientState *clientContext,
 }
 
 /**
- * Handles the server response for the close client request.
+ * Handles the service response for the close client request.
  *
  * This function is called from chppDispatchGnssResponse().
  *
@@ -328,7 +328,7 @@ static void chppGnssCloseResult(struct ChppGnssClientState *clientContext,
 }
 
 /**
- * Handles the server response for the get capabilities client request.
+ * Handles the service response for the get capabilities client request.
  *
  * This function is called from chppDispatchGnssResponse().
  *
@@ -339,7 +339,9 @@ static void chppGnssCloseResult(struct ChppGnssClientState *clientContext,
 static void chppGnssGetCapabilitiesResult(
     struct ChppGnssClientState *clientContext, uint8_t *buf, size_t len) {
   if (len < sizeof(struct ChppGnssGetCapabilitiesResponse)) {
-    CHPP_LOGE("GNSS GetCapabilities result too short");
+    struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
+    CHPP_LOGE("GNSS GetCapabilities request failed at service. error=%" PRIu8,
+              rxHeader->error);
 
   } else {
     struct ChppGnssGetCapabilitiesParameters *result =
@@ -353,8 +355,7 @@ static void chppGnssGetCapabilitiesResult(
 }
 
 /**
- * Handles the server response for the Control Location Session client
- * request.
+ * Handles the service response for the Control Location Session client request.
  *
  * This function is called from chppDispatchGnssResponse().
  *
@@ -367,7 +368,10 @@ static void chppGnssControlLocationSessionResult(
   UNUSED_VAR(clientContext);
 
   if (len < sizeof(struct ChppGnssControlLocationSessionResponse)) {
-    CHPP_LOGE("GNSS ControlLocationSession result too short");
+    struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
+    CHPP_LOGE(
+        "GNSS ControlLocationSession request failed at service. error=%" PRIu8,
+        rxHeader->error);
 
   } else {
     struct ChppGnssControlLocationSessionResponse *result =
@@ -384,7 +388,7 @@ static void chppGnssControlLocationSessionResult(
 }
 
 /**
- * Handles the server response for the Control Measurement Session client
+ * Handles the service response for the Control Measurement Session client
  * request.
  *
  * This function is called from chppDispatchGnssResponse().
@@ -398,7 +402,11 @@ static void chppGnssControlMeasurementSessionResult(
   UNUSED_VAR(clientContext);
 
   if (len < sizeof(struct ChppGnssControlMeasurementSessionResponse)) {
-    CHPP_LOGE("GNSS ControlMeasurementSession result too short");
+    struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
+    CHPP_LOGE(
+        "GNSS ControlMeasurementSession request failed at service. "
+        "error=%" PRIu8,
+        rxHeader->error);
 
   } else {
     struct ChppGnssControlMeasurementSessionResponse *result =
@@ -415,7 +423,7 @@ static void chppGnssControlMeasurementSessionResult(
 }
 
 /**
- * Handles the State Resync server notification.
+ * Handles the State Resync service notification.
  *
  * This function is called from chppDispatchGnssNotification().
  *
@@ -433,7 +441,7 @@ static void chppGnssStateResyncNotification(
 }
 
 /**
- * Handles the Location Result server notification.
+ * Handles the Location Result service notification.
  *
  * This function is called from chppDispatchGnssNotification().
  *
@@ -464,7 +472,7 @@ static void chppGnssLocationResultNotification(
 }
 
 /**
- * Handles the Measurement Result server notification.
+ * Handles the Measurement Result service notification.
  *
  * This function is called from chppDispatchGnssNotification().
  *

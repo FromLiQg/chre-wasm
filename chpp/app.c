@@ -172,7 +172,7 @@ static bool chppProcessPredefinedServiceResponse(struct ChppAppState *context,
 
   if (dispatchResult == false) {
     CHPP_LOGE("Handle=%" PRIu8
-              " received unknown server response. command=%#x, transaction ID="
+              " received unknown service response. command=%#x, transaction ID="
               "%" PRIu8 ", len=%" PRIuSIZE,
               rxHeader->handle, rxHeader->command, rxHeader->transaction, len);
   }
@@ -365,8 +365,9 @@ static inline const struct ChppService *chppServiceOfHandle(
  */
 static inline const struct ChppClient *chppClientOfHandle(
     struct ChppAppState *context, uint8_t handle) {
-  CHPP_DEBUG_ASSERT(CHPP_SERVICE_INDEX_OF_HANDLE(handle) <
-                    context->registeredClientCount);
+  CHPP_DEBUG_ASSERT(
+      context->clientIndexOfServiceIndex[CHPP_SERVICE_INDEX_OF_HANDLE(handle)] <
+      context->registeredClientCount);
   return context->registeredClients[context->clientIndexOfServiceIndex
                                         [CHPP_SERVICE_INDEX_OF_HANDLE(handle)]];
 }
@@ -640,12 +641,12 @@ void chppAppDeinitTransient(struct ChppAppState *appContext) {
   chppPalSystemApiDeinit(appContext);
 }
 
-void chppProcessRxDatagram(struct ChppAppState *context, uint8_t *buf,
-                           size_t len) {
+void chppAppProcessRxDatagram(struct ChppAppState *context, uint8_t *buf,
+                              size_t len) {
   struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
 
   if (len == 0) {
-    CHPP_LOGE("chppProcessRxDatagram called with payload length of 0");
+    CHPP_LOGE("chppAppProcessRxDatagram called with payload length of 0");
     CHPP_DEBUG_ASSERT(false);
 
   } else if (len < sizeof(struct ChppAppHeader)) {
@@ -673,7 +674,7 @@ void chppProcessRxDatagram(struct ChppAppState *context, uint8_t *buf,
     }
   }
 
-  chppAppProcessDoneCb(context->transportContext, buf);
+  chppDatagramProcessDoneCb(context->transportContext, buf);
 }
 
 void chppUuidToStr(const uint8_t uuid[CHPP_SERVICE_UUID_LEN],
