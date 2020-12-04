@@ -16,6 +16,11 @@
 
 #include "chre/platform/shared/platform_log.h"
 #include "chre/core/event_loop_manager.h"
+#include "chre/util/lock_guard.h"
+
+// TODO(b/174676445): Move functionality that is shared between platforms that
+// use buffered logging into the shared/ directory in its own implementation
+// file.
 
 void chrePlatformSlpiLogToBuffer(chreLogLevel chreLogLevel, const char *format,
                                  ...) {
@@ -29,8 +34,62 @@ void chrePlatformSlpiLogToBuffer(chreLogLevel chreLogLevel, const char *format,
 
 namespace chre {
 
+void sendBufferedLogMessageCallback(uint16_t eventType, void *data,
+                                    void * /* extraData */) {
+  if (EventLoopManagerSingleton::get()
+          ->getEventLoop()
+          .getPowerControlManager()
+          .hostIsAwake()) {
+    PlatformLog *platformLog = PlatformLogSingleton::get();
+    LogBuffer *logBuffer = platformLog->getLogBuffer();
+    uint8_t *tempLogBufferData =
+        reinterpret_cast<uint8_t *>(platformLog->getTempLogBufferData());
+    size_t bytesCopied =
+        logBuffer->copyLogs(tempLogBufferData, CHRE_MESSAGE_TO_HOST_MAX_SIZE);
+    auto &hostCommsMgr =
+        EventLoopManagerSingleton::get()->getHostCommsManager();
+    hostCommsMgr.sendLogMessageV2(tempLogBufferData, bytesCopied);
+  }
+}
+
 PlatformLogBase::PlatformLogBase()
     : mLogBuffer(this, mLogBufferData, CHRE_MESSAGE_TO_HOST_MAX_SIZE) {}
+
+void PlatformLogBase::onLogsReady(LogBuffer *logBuffer) {
+  // TODO(b/174676964): Have the PlatformLog class also send logs to host if the
+  // AP just awoke.
+  LockGuard<Mutex> lockGuard(mFlushLogsMutex);
+  if (!mLogFlushToHostPending) {
+    if (EventLoopManagerSingleton::isInitialized() &&
+        EventLoopManagerSingleton::get()
+            ->getEventLoop()
+            .getPowerControlManager()
+            .hostIsAwake()) {
+      EventLoopManagerSingleton::get()->deferCallback(
+          SystemCallbackType::SendBufferedLogMessage, nullptr,
+          sendBufferedLogMessageCallback);
+      mLogFlushToHostPending = true;
+    }
+  } else {
+    mLogsBecameReadyWhileFlushPending = true;
+  }
+}
+
+void PlatformLogBase::onLogsSentToHost() {
+  bool shouldPostCallback = false;
+  {
+    LockGuard<Mutex> lockGuard(mFlushLogsMutex);
+    shouldPostCallback = mLogsBecameReadyWhileFlushPending;
+    mLogsBecameReadyWhileFlushPending = false;
+    mLogFlushToHostPending = shouldPostCallback;
+  }
+  if (shouldPostCallback) {
+    Nanoseconds delay(Milliseconds(10).toRawNanoseconds());
+    EventLoopManagerSingleton::get()->setDelayedCallback(
+        SystemCallbackType::SendBufferedLogMessage, nullptr,
+        sendBufferedLogMessageCallback, delay);
+  }
+}
 
 PlatformLog::PlatformLog() {}
 
