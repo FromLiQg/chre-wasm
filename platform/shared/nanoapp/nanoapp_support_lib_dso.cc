@@ -20,6 +20,7 @@
 
 #include "chre/platform/shared/debug_dump.h"
 #include "chre/util/macros.h"
+#include "chre/util/system/wifi_util.h"
 
 /**
  * @file
@@ -183,9 +184,26 @@ bool chreIsHostAwake(void) {
 }
 
 WEAK_SYMBOL
-bool chreGnssConfigureLocationMonitor(bool enable) {
-  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreGnssConfigureLocationMonitor);
+bool chreGnssConfigurePassiveLocationListener(bool enable) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreGnssConfigurePassiveLocationListener);
   return (fptr != nullptr) ? fptr(enable) : false;
+}
+
+WEAK_SYMBOL
+bool chreWifiRequestScanAsync(const struct chreWifiScanParams *params,
+                              const void *cookie) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreWifiRequestScanAsync);
+
+  if (fptr == nullptr) {
+    // Should never happen
+    return false;
+  } else if (chreGetApiVersion() < CHRE_API_VERSION_1_5) {
+    const struct chreWifiScanParams legacyParams =
+        chre::translateToLegacyWifiScanParams(params);
+    return fptr(&legacyParams, cookie);
+  } else {
+    return fptr(params, cookie);
+  }
 }
 
 WEAK_SYMBOL
