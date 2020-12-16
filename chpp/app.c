@@ -59,6 +59,10 @@ static bool chppDatagramLenIsOk(struct ChppAppState *context,
 ChppDispatchFunction *chppGetDispatchFunction(struct ChppAppState *context,
                                               uint8_t handle,
                                               enum ChppMessageType type);
+ChppResetNotifierFunction *chppGetClientResetNotifierFunction(
+    struct ChppAppState *context, uint8_t index);
+ChppResetNotifierFunction *chppGetServiceResetNotifierFunction(
+    struct ChppAppState *context, uint8_t index);
 static inline const struct ChppService *chppServiceOfHandle(
     struct ChppAppState *appContext, uint8_t handle);
 static inline const struct ChppClient *chppClientOfHandle(
@@ -339,6 +343,36 @@ ChppDispatchFunction *chppGetDispatchFunction(struct ChppAppState *context,
 }
 
 /**
+ * Returns the reset function pointer of a particular negotiated client. The
+ * function pointer will be set to null by clients that do not need or support
+ * a reset notification.
+ *
+ * @param context Maintains status for each app layer instance.
+ * @param index Index of the registered client.
+ *
+ * @return Pointer to the reset function.
+ */
+ChppResetNotifierFunction *chppGetClientResetNotifierFunction(
+    struct ChppAppState *context, uint8_t index) {
+  return context->registeredClients[index]->resetNotifierFunctionPtr;
+}
+
+/**
+ * Returns the reset function pointer of a particular registered service. The
+ * function pointer will be set to null by services that do not need or support
+ * a reset notification.
+ *
+ * @param context Maintains status for each app layer instance.
+ * @param index Index of the registered service.
+ *
+ * @return Pointer to the reset function.
+ */
+ChppResetNotifierFunction *chppGetServiceResetNotifierFunction(
+    struct ChppAppState *context, uint8_t index) {
+  return context->registeredServices[index]->resetNotifierFunctionPtr;
+}
+
+/**
  * Returns a pointer to the ChppService struct of a particular negotiated
  * service handle.
  *
@@ -582,6 +616,15 @@ void chppAppInitWithClientServiceSet(
     struct ChppTransportState *transportContext,
     struct ChppClientServiceSet clientServiceSet) {
   CHPP_NOT_NULL(appContext);
+
+  memset(appContext, 0, sizeof(*appContext));
+  chppAppInitTransient(appContext, transportContext, clientServiceSet);
+}
+
+void chppAppInitTransient(struct ChppAppState *appContext,
+                          struct ChppTransportState *transportContext,
+                          struct ChppClientServiceSet clientServiceSet) {
+  CHPP_NOT_NULL(appContext);
   CHPP_NOT_NULL(transportContext);
 
   CHPP_LOGI("Initializing the CHPP app layer");
@@ -604,11 +647,11 @@ void chppAppInitWithClientServiceSet(
   appContext->clientServiceSet = clientServiceSet;
   appContext->transportContext = transportContext;
 
+  chppPalSystemApiInit(appContext);
+
 #ifdef CHPP_CLIENT_ENABLED_DISCOVERY
   chppDiscoveryInit(appContext);
-#endif  // CHPP_CLIENT_ENABLED_DISCOVERY
-
-  chppPalSystemApiInit(appContext);
+#endif
 #ifdef CHPP_SERVICE_ENABLED
   chppRegisterCommonServices(appContext);
 #endif
@@ -618,19 +661,6 @@ void chppAppInitWithClientServiceSet(
 }
 
 void chppAppDeinit(struct ChppAppState *appContext) {
-  chppAppDeinitTransient(appContext);
-
-#ifdef CHPP_CLIENT_ENABLED_DISCOVERY
-  // Discovery should only be deinitialized on true CHPP app deinit
-  // (shutdown), since a client may be waiting on discovery completion
-  // during a transient deinit (reset).
-  chppDiscoveryDeinit(appContext);
-#endif  // CHPP_CLIENT_ENABLED_DISCOVERY
-}
-
-void chppAppDeinitTransient(struct ChppAppState *appContext) {
-  CHPP_NOT_NULL(appContext);
-
   CHPP_LOGI("Deinitializing the CHPP app layer");
 
 #ifdef CHPP_CLIENT_ENABLED
@@ -639,6 +669,10 @@ void chppAppDeinitTransient(struct ChppAppState *appContext) {
 #ifdef CHPP_SERVICE_ENABLED
   chppDeregisterCommonServices(appContext);
 #endif
+#ifdef CHPP_CLIENT_ENABLED_DISCOVERY
+  chppDiscoveryDeinit(appContext);
+#endif
+
   chppPalSystemApiDeinit(appContext);
 }
 
@@ -676,6 +710,47 @@ void chppAppProcessRxDatagram(struct ChppAppState *context, uint8_t *buf,
   }
 
   chppDatagramProcessDoneCb(context->transportContext, buf);
+}
+
+void chppAppProcessRxReset(struct ChppAppState *context) {
+#ifdef CHPP_CLIENT_ENABLED_DISCOVERY
+  if (!context->isDiscoveryComplete) {
+    chppInitiateDiscovery(context);
+
+  } else {
+    for (uint8_t i = 0; i < context->discoveredServiceCount; i++) {
+      if (context->clientIndexOfServiceIndex[i] != CHPP_CLIENT_INDEX_NONE) {
+        // Discovered service has a matched client
+        ChppResetNotifierFunction *ResetNotifierFunction =
+            chppGetClientResetNotifierFunction(
+                context, context->clientIndexOfServiceIndex[i]);
+
+        CHPP_LOGD(
+            "Client # %" PRIu8 "(handle=%d) reset notifier %s",
+            context->clientIndexOfServiceIndex[i],
+            CHPP_SERVICE_HANDLE_OF_INDEX(i),
+            (ResetNotifierFunction == NULL) ? "is unsupported" : "starting");
+
+        if (ResetNotifierFunction != NULL) {
+          ResetNotifierFunction(context);
+        }
+      }
+    }
+  }
+#endif  // CHPP_CLIENT_ENABLED_DISCOVERY
+
+  for (uint8_t i = 0; i < context->registeredServiceCount; i++) {
+    ChppResetNotifierFunction *ResetNotifierFunction =
+        chppGetServiceResetNotifierFunction(context, i);
+
+    CHPP_LOGD("Service # %" PRIu8 "(handle=%d) reset notifier %s", i,
+              CHPP_SERVICE_HANDLE_OF_INDEX(i),
+              (ResetNotifierFunction == NULL) ? "is unsupported" : "starting");
+
+    if (ResetNotifierFunction != NULL) {
+      ResetNotifierFunction(context);
+    }
+  }
 }
 
 void chppUuidToStr(const uint8_t uuid[CHPP_SERVICE_UUID_LEN],

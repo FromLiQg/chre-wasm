@@ -139,6 +139,8 @@ enum ChppAppErrorCode {
   CHPP_APP_ERROR_INVALID_LENGTH = 10,
   //! CHPP Not Ready
   CHPP_APP_ERROR_NOT_READY = 11,
+  //! Error outside of CHPP (e.g. PAL API)
+  CHPP_APP_ERROR_BEYOND_CHPP = 12,
   //! Unspecified failure
   CHPP_APP_ERROR_UNSPECIFIED = 255
 };
@@ -188,6 +190,11 @@ typedef bool(ChppClientInitFunction)(void *context, uint8_t handle,
 typedef void(ChppClientDeinitFunction)(void *context);
 
 /**
+ * Function type that dispatches a reset notification to any client or service
+ */
+typedef void(ChppResetNotifierFunction)(void *context);
+
+/**
  * Length of a service UUID and its human-readable printed form in bytes
  */
 #define CHPP_SERVICE_UUID_LEN 16
@@ -229,6 +236,10 @@ struct ChppService {
   //! Service Descriptor as sent over the wire.
   struct ChppServiceDescriptor descriptor;
 
+  //! Pointer to the function that is used to notify the service if CHPP is
+  //! reset.
+  ChppResetNotifierFunction *resetNotifierFunctionPtr;
+
   //! Pointer to the function that dispatches incoming client requests for the
   //! service.
   ChppDispatchFunction *requestDispatchFunctionPtr;
@@ -259,6 +270,10 @@ struct ChppClientDescriptor {
 struct ChppClient {
   //! Client descriptor.
   struct ChppClientDescriptor descriptor;
+
+  //! Pointer to the function that is used to notify the client if CHPP is
+  //! reset.
+  ChppResetNotifierFunction *resetNotifierFunctionPtr;
 
   //! Pointer to the function that dispatches incoming service responses for the
   //! client.
@@ -342,6 +357,9 @@ struct ChppAppState {
   // The number of clients that matched a service during discovery.
   uint8_t matchedClientCount;
 
+  // The number of services that were found during discovery.
+  uint8_t discoveredServiceCount;
+
   struct ChppMutex discoveryMutex;
   struct ChppConditionVariable discoveryCv;
 };
@@ -371,11 +389,33 @@ void chppAppInit(struct ChppAppState *appContext,
 /**
  * Same as chppAppInit(), but specifies the client/service endpoints to be
  * enabled.
+ *
+ * @param appContext Maintains status for each app layer instance.
+ * @param transportContext The transport layer status struct associated with
+ * this app layer instance.
+ * @param clientServiceSet Bitmap specifying the client/service endpoints to be
+ * enabled.
  */
 void chppAppInitWithClientServiceSet(
     struct ChppAppState *appContext,
     struct ChppTransportState *transportContext,
     struct ChppClientServiceSet clientServiceSet);
+
+/**
+ * Similar to chppAppInitWithClientServiceSet(), but to be invoked during
+ * execution of CHPP when only part of the appContext needs to be initialized.
+ * In contrast, chppAppInitWithClientServiceSet resets all fields of appContext
+ * to zero
+ *
+ * @param appContext Maintains status for each app layer instance.
+ * @param transportContext The transport layer status struct associated with
+ * this app layer instance.
+ * @param clientServiceSet Bitmap specifying the client/service endpoints to be
+ * enabled.
+ */
+void chppAppInitTransient(struct ChppAppState *appContext,
+                          struct ChppTransportState *transportContext,
+                          struct ChppClientServiceSet clientServiceSet);
 
 /**
  * Deinitializes the CHPP app layer for e.g. clean shutdown.
@@ -386,13 +426,6 @@ void chppAppInitWithClientServiceSet(
 void chppAppDeinit(struct ChppAppState *appContext);
 
 /**
- * Same as chppAppDeinit(), but to be invoked when the deinitialization is
- * temporary (e.g. during a CHPP reset), distinguishing complete vs temporary
- * shutdown.
- */
-void chppAppDeinitTransient(struct ChppAppState *appContext);
-
-/**
  * Processes an Rx Datagram from the transport layer.
  *
  * @param context Maintains status for each app layer instance.
@@ -401,6 +434,17 @@ void chppAppDeinitTransient(struct ChppAppState *appContext);
  */
 void chppAppProcessRxDatagram(struct ChppAppState *context, uint8_t *buf,
                               size_t len);
+
+/**
+ * Used by the transport layer to notify the app layer of a received reset. In
+ * turn, this function notifies clients and services to allow them to reset or
+ * recover state as necessary.
+ *
+ * @param context Maintains status for each app layer instance.
+ * @param buf Input data. Cannot be null.
+ * @param len Length of input data in bytes.
+ */
+void chppAppProcessRxReset(struct ChppAppState *context);
 
 /**
  * Convert UUID to a human-readable, null-terminated string.
