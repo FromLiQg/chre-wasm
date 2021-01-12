@@ -279,6 +279,13 @@ static void chppWwanGetCapabilitiesResult(
 
     CHPP_LOGI("chppWwanGetCapabilitiesResult received capabilities=0x%" PRIx32,
               result->capabilities);
+#ifdef CHPP_WWAN_DEFAULT_CAPABILITIES
+    if (result->capabilities != CHPP_WWAN_DEFAULT_CAPABILITIES) {
+      CHPP_LOGE("Unexpected capability: expected 0x%" PRIx32,
+                CHPP_WWAN_DEFAULT_CAPABILITIES);
+      CHPP_PROD_ASSERT(false);
+    }
+#endif
 
     clientContext->capabilities = result->capabilities;
   }
@@ -355,7 +362,11 @@ static bool chppWwanClientOpen(const struct chrePalSystemApi *systemApi,
     }
   }
 
+#ifdef CHPP_WWAN_CLIENT_OPEN_ALWAYS_SUCCESS
+  return true;
+#else
   return gWwanClientContext.opened;
+#endif
 }
 
 /**
@@ -383,7 +394,11 @@ static void chppWwanClientClose(void) {
  * @return Capabilities flags.
  */
 static uint32_t chppWwanClientGetCapabilities(void) {
+#ifdef CHPP_WWAN_DEFAULT_CAPABILITIES
+  uint32_t capabilities = CHPP_WWAN_DEFAULT_CAPABILITIES;
+#else
   uint32_t capabilities = CHRE_WWAN_CAPABILITIES_NONE;
+#endif
 
   if (gWwanClientContext.capabilities != CHRE_WWAN_CAPABILITIES_NONE) {
     // Result already cached
