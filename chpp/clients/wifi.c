@@ -346,6 +346,13 @@ static void chppWifiGetCapabilitiesResult(
 
     CHPP_LOGI("chppWifiGetCapabilitiesResult received capabilities=0x%" PRIx32,
               result->capabilities);
+#ifdef CHPP_WIFI_DEFAULT_CAPABILITIES
+    if (result->capabilities != CHPP_WIFI_DEFAULT_CAPABILITIES) {
+      CHPP_LOGE("Unexpected capability: expected 0x%" PRIx32,
+                CHPP_WIFI_DEFAULT_CAPABILITIES);
+      CHPP_PROD_ASSERT(false);
+    }
+#endif
 
     clientContext->capabilities = result->capabilities;
   }
@@ -517,7 +524,11 @@ static bool chppWifiClientOpen(const struct chrePalSystemApi *systemApi,
     }
   }
 
+#ifdef CHPP_WIFI_CLIENT_OPEN_ALWAYS_SUCCESS
+  return true;
+#else
   return gWifiClientContext.opened;
+#endif
 }
 
 /**
@@ -545,7 +556,11 @@ static void chppWifiClientClose(void) {
  * @return Capabilities flags.
  */
 static uint32_t chppWifiClientGetCapabilities(void) {
+#ifdef CHPP_WIFI_DEFAULT_CAPABILITIES
+  uint32_t capabilities = CHPP_WIFI_DEFAULT_CAPABILITIES;
+#else
   uint32_t capabilities = CHRE_WIFI_CAPABILITIES_NONE;
+#endif
 
   if (gWifiClientContext.capabilities != CHRE_WIFI_CAPABILITIES_NONE) {
     // Result already cached

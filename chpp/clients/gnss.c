@@ -359,6 +359,13 @@ static void chppGnssGetCapabilitiesResult(
 
     CHPP_LOGI("chppGnssGetCapabilitiesResult received capabilities=0x%" PRIx32,
               result->capabilities);
+#ifdef CHPP_GNSS_DEFAULT_CAPABILITIES
+    if (result->capabilities != CHPP_GNSS_DEFAULT_CAPABILITIES) {
+      CHPP_LOGE("Unexpected capability: expected 0x%" PRIx32,
+                CHPP_GNSS_DEFAULT_CAPABILITIES);
+      CHPP_PROD_ASSERT(false);
+    }
+#endif
 
     clientContext->capabilities = result->capabilities;
   }
@@ -553,7 +560,11 @@ static bool chppGnssClientOpen(const struct chrePalSystemApi *systemApi,
     }
   }
 
+#ifdef CHPP_GNSS_CLIENT_OPEN_ALWAYS_SUCCESS
+  return true;
+#else
   return gGnssClientContext.opened;
+#endif
 }
 
 /**
@@ -581,7 +592,11 @@ static void chppGnssClientClose(void) {
  * @return Capabilities flags.
  */
 static uint32_t chppGnssClientGetCapabilities(void) {
+#ifdef CHPP_GNSS_DEFAULT_CAPABILITIES
+  uint32_t capabilities = CHPP_GNSS_DEFAULT_CAPABILITIES;
+#else
   uint32_t capabilities = CHRE_GNSS_CAPABILITIES_NONE;
+#endif
 
   if (gGnssClientContext.capabilities != CHRE_GNSS_CAPABILITIES_NONE) {
     // Result already cached
