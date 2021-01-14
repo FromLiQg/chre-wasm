@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
+ * Copyright (C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-#include "chre/target_platform/fatal_error.h"
-
-#include "chre/platform/linux/platform_log.h"
+#ifndef CHRE_TEST_COMMON_UNIT_TEST_H_
+#define CHRE_TEST_COMMON_UNIT_TEST_H_
 
 namespace chre {
 
-void preFatalError() {
-  // Flush logs before fatally quitting.
-  chre::PlatformLogSingleton::deinit();
-}
+void runAllTests();
 
 }  // namespace chre
+
+#endif  // CHRE_TEST_COMMON_UNIT_TEST_H_

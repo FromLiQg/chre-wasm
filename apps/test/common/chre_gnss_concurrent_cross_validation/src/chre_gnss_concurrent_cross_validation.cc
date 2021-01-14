@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
+ * Copyright (C) 2021 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-#include "chre/target_platform/fatal_error.h"
-
-#include "chre/platform/linux/platform_log.h"
+#include <chre.h>
+#include <cinttypes>
 
 namespace chre {
 
-void preFatalError() {
-  // Flush logs before fatally quitting.
-  chre::PlatformLogSingleton::deinit();
+extern "C" void nanoappHandleEvent(uint32_t senderInstanceId,
+                                   uint16_t eventType, const void *eventData) {}
+
+extern "C" bool nanoappStart(void) {
+  return true;
 }
+
+extern "C" void nanoappEnd(void) {}
 
 }  // namespace chre
