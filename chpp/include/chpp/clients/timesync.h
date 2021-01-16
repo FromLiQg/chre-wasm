@@ -23,6 +23,8 @@
 
 #include "chpp/app.h"
 #include "chpp/clients.h"
+#include "chpp/common/timesync.h"
+#include "chpp/macros.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,12 +38,20 @@ extern "C" {
 #endif
 
 /**
+ * Default maximum age of a time offset measurement
+ */
+#ifndef CHPP_TIMESYNC_DEFAULT_MAX_AGE_NS
+#define CHPP_TIMESYNC_DEFAULT_MAX_AGE_NS (24 * CHPP_NSEC_PER_HOUR)
+#endif
+
+/**
  * Timesync Results.
  */
 struct ChppTimesyncResult {
   enum ChppAppErrorCode error;  // Indicates success or error type
-  int64_t offsetNs;             // Time offset between client and service
+  int64_t offsetNs;             // Time offset of service (service - client)
   uint64_t rttNs;               // RTT
+  uint64_t measurementTimeNs;   // Time of last measurement
 };
 
 /************************************************
@@ -75,11 +85,25 @@ bool chppDispatchTimesyncServiceResponse(struct ChppAppState *context,
 
 /**
  * Initiates a CHPP timesync to measure time offset of the service.
- * Note that only one GetTimesync may be run at any time.
+ * Note that only one measurement may be run at any time.
  *
  * @param context Maintains status for each app layer instance.
  */
-struct ChppTimesyncResult chppGetTimesync(struct ChppAppState *context);
+struct ChppTimesyncResult chppTimesyncMeasureOffset(
+    struct ChppAppState *context);
+
+/**
+ * Provides the time offset of the service. If the latest measurement is within
+ * maxTimesyncAgeNs, this function reuses the last measurement. Otherwise, it
+ * will initiate a new measurement.
+ *
+ * @param context Maintains status for each app layer instance.
+ * @param maxTimesyncAgeNs Maximum acceptable age of measuement.
+ *
+ * @return Time offset of service vs client (service - client)
+ */
+int64_t chppTimesyncGetOffset(struct ChppAppState *context,
+                              uint64_t maxTimesyncAgeNs);
 
 #ifdef __cplusplus
 }
