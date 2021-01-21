@@ -53,6 +53,15 @@ static bool chppIsClientApiReady(struct ChppClientState *clientState);
  *  Private Functions
  ***********************************************/
 
+/**
+ * Determines whether a client is ready to accept commands via its API (i.e. is
+ * initialized and opened). If the client is in the process of reopening, it
+ * will wait for the client to reopen.
+ *
+ * @param clientState State of the client sending the client request.
+ *
+ * @return Indicates whetherthe client is ready.
+ */
 static bool chppIsClientApiReady(struct ChppClientState *clientState) {
   const uint64_t timeoutNs = DEFAULT_CLIENT_REQUEST_TIMEOUT_NS;
   bool result = false;
@@ -61,13 +70,7 @@ static bool chppIsClientApiReady(struct ChppClientState *clientState) {
       clientState->openState != CHPP_OPEN_STATE_CLOSED) {
     result = true;
 
-    if (clientState->openState == CHPP_OPEN_STATE_OPENING ||
-        clientState->openState == CHPP_OPEN_STATE_REOPENING) {
-      // Return true to allow an open request from chppClientSendOpenRequest()
-      // to pass through and (re)open the service
-      clientState->openState = CHPP_OPEN_STATE_CLOSED;
-
-    } else if (clientState->openState == CHPP_OPEN_STATE_WAITING_TO_REOPEN) {
+    if (clientState->openState == CHPP_OPEN_STATE_WAITING_TO_REOPEN) {
       // Wait for service to be reopened
       chppMutexLock(&clientState->responseMutex);
 
@@ -313,11 +316,12 @@ bool chppSendTimestampedRequestAndWaitTimeout(
     struct ChppClientState *clientState,
     struct ChppRequestResponseState *rRState, void *buf, size_t len,
     uint64_t timeoutNs) {
-  chppMutexLock(&clientState->responseMutex);
-
   bool result =
       chppSendTimestampedRequestOrFail(clientState, rRState, buf, len);
+
   if (result) {
+    chppMutexLock(&clientState->responseMutex);
+
     while (result && !clientState->responseReady) {
       result = chppConditionVariableTimedWait(&clientState->responseCondVar,
                                               &clientState->responseMutex,
@@ -328,16 +332,16 @@ bool chppSendTimestampedRequestAndWaitTimeout(
                 timeoutNs / CHPP_NSEC_PER_MSEC);
       result = false;
     }
-  }
 
-  chppMutexUnlock(&clientState->responseMutex);
+    chppMutexUnlock(&clientState->responseMutex);
+  }
 
   return result;
 }
 
 bool chppClientSendOpenRequest(struct ChppClientState *clientState,
                                struct ChppRequestResponseState *openRRState,
-                               uint16_t openCommand) {
+                               uint16_t openCommand, bool reopen) {
   bool result = false;
 
   struct ChppAppHeader *request =
@@ -346,10 +350,15 @@ bool chppClientSendOpenRequest(struct ChppClientState *clientState,
   if (request == NULL) {
     CHPP_LOG_OOM();
 
-  } else if (clientState->openState == CHPP_OPEN_STATE_REOPENING) {
+  } else if (reopen) {
     CHPP_LOGW("Reopening service after reset");
-    if (chppSendTimestampedRequestOrFail(clientState, openRRState, request,
-                                         sizeof(*request))) {
+    clientState->openState = CHPP_OPEN_STATE_REOPENING;
+    if (!chppSendTimestampedRequestOrFail(clientState, openRRState, request,
+                                          sizeof(*request))) {
+      clientState->openState = CHPP_OPEN_STATE_CLOSED;
+      CHPP_LOGE("Failed to reopen service");
+      CHPP_PROD_ASSERT(false);
+    } else {
       clientState->openState = CHPP_OPEN_STATE_WAITING_TO_REOPEN;
       result = true;
     }
@@ -359,19 +368,10 @@ bool chppClientSendOpenRequest(struct ChppClientState *clientState,
     clientState->openState = CHPP_OPEN_STATE_OPENING;
     if (!chppSendTimestampedRequestAndWait(clientState, openRRState, request,
                                            sizeof(*request))) {
+      clientState->openState = CHPP_OPEN_STATE_CLOSED;
+      CHPP_LOGE("Failed to open service");
     }
     result = (clientState->openState == CHPP_OPEN_STATE_OPENED);
-  }
-
-  if (!result) {
-    CHPP_LOGE("Unable to %sopen service",
-              (clientState->openState == CHPP_OPEN_STATE_WAITING_TO_REOPEN)
-                  ? "re"
-                  : "");
-    if (clientState->openState == CHPP_OPEN_STATE_WAITING_TO_REOPEN) {
-      clientState->openState = CHPP_OPEN_STATE_CLOSED;
-      CHPP_PROD_ASSERT(false);
-    }
   }
 
   return result;
