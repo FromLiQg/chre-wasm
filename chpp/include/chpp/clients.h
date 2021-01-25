@@ -63,16 +63,18 @@ extern "C" {
 
 /**
  * Maintains the basic state of a client.
- * This is expected to be included once in the (context) status variable of each
- * client.
+ * This is expected to be included once in the (context) status variable of
+ * each client.
  */
 struct ChppClientState {
   struct ChppAppState *appContext;  // Pointer to app layer context
   uint8_t handle;                   // Handle number for this client
   uint8_t transaction;              // Next Transaction ID to be used
-  bool initialized;                 // Client has been initialized
 
-  bool responseReady;  // For sync. request/responses
+  uint8_t openState;     // As defined in enum ChppOpenState
+  bool initialized : 1;  // Has been initialized
+
+  bool responseReady : 1;  // For sync. request/responses
   struct ChppMutex responseMutex;
   struct ChppConditionVariable responseCondVar;
 };
@@ -280,6 +282,31 @@ bool chppSendTimestampedRequestAndWaitTimeout(
     struct ChppRequestResponseState *rRState, void *buf, size_t len,
     uint64_t timeoutNs);
 
+/**
+ * Sends a client request for the open command. Setting reopen to true indicates
+ * that the service is being reopened.
+ *
+ * The command will be sent non-blocking if reopening after a reset, and
+ * blocking otherwise.
+ *
+ * @param clientState State of the client receiving the response.
+ * @param openRRState Request/response state for the open command.
+ * @param openCommand Open command to be sent.
+ * @param reopen Indicates that this is a reopen (vs. initial open) request.
+ *
+ * @return Indicates success or failure.
+ */
+bool chppClientSendOpenRequest(struct ChppClientState *clientState,
+                               struct ChppRequestResponseState *openRRState,
+                               uint16_t openCommand, bool reopen);
+
+/**
+ * Processes a service response for the open command.
+ *
+ * @param clientState State of the client receiving the response.
+ */
+void chppClientProcessOpenResponse(struct ChppClientState *clientState,
+                                   uint8_t *buf, size_t len);
 #ifdef __cplusplus
 }
 #endif

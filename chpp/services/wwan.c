@@ -36,6 +36,7 @@
 
 static enum ChppAppErrorCode chppDispatchWwanRequest(void *serviceContext,
                                                      uint8_t *buf, size_t len);
+static void chppWwanServiceNotifyReset(void *serviceContext);
 
 /************************************************
  *  Private Definitions
@@ -56,7 +57,7 @@ static const struct ChppService kWwanServiceConfig = {
     .descriptor.version.patch = 0,
 
     // Notifies service if CHPP is reset
-    .resetNotifierFunctionPtr = NULL,
+    .resetNotifierFunctionPtr = &chppWwanServiceNotifyReset,
 
     // Client request dispatch function pointer
     .requestDispatchFunctionPtr = &chppDispatchWwanRequest,
@@ -214,20 +215,19 @@ static enum ChppAppErrorCode chppWwanServiceOpen(
 
   } else {
     CHPP_LOGI("CHPP WWAN service initialized");
-  }
 
-  struct ChppAppHeader *response =
-      chppAllocServiceResponseFixed(requestHeader, struct ChppAppHeader);
-  size_t responseLen = sizeof(*response);
+    struct ChppAppHeader *response =
+        chppAllocServiceResponseFixed(requestHeader, struct ChppAppHeader);
+    size_t responseLen = sizeof(*response);
 
-  if (response == NULL) {
-    CHPP_LOG_OOM();
-    error = CHPP_APP_ERROR_OOM;
-  } else {
-    response->error = (uint8_t)error;
-    chppSendTimestampedResponseOrFail(&wwanServiceContext->service,
-                                      &wwanServiceContext->open, response,
-                                      responseLen);
+    if (response == NULL) {
+      CHPP_LOG_OOM();
+      error = CHPP_APP_ERROR_OOM;
+    } else {
+      chppSendTimestampedResponseOrFail(&wwanServiceContext->service,
+                                        &wwanServiceContext->open, response,
+                                        responseLen);
+    }
   }
 
   return error;
@@ -263,6 +263,24 @@ static enum ChppAppErrorCode chppWwanServiceClose(
   }
 
   return error;
+}
+
+/**
+ * Notifies the service of an incoming reset.
+ *
+ * @param serviceContext Maintains status for each service instance.
+ */
+static void chppWwanServiceNotifyReset(void *serviceContext) {
+  struct ChppWwanServiceState *wwanServiceContext =
+      (struct ChppWwanServiceState *)serviceContext;
+
+  if (wwanServiceContext->service.openState != CHPP_OPEN_STATE_OPENED) {
+    CHPP_LOGW("WWAN service reset but wasn't open");
+  } else {
+    CHPP_LOGI("WWAN service reset. Closing");
+    wwanServiceContext->service.openState = CHPP_OPEN_STATE_CLOSED;
+    wwanServiceContext->api->close();
+  }
 }
 
 /**

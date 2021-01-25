@@ -50,6 +50,7 @@ static enum ChppAppErrorCode chppDispatchGnssNotification(void *clientContext,
 static bool chppGnssClientInit(void *clientContext, uint8_t handle,
                                struct ChppVersion serviceVersion);
 static void chppGnssClientDeinit(void *clientContext);
+static void chppGnssClientNotifyReset(void *clientContext);
 
 /************************************************
  *  Private Definitions
@@ -67,7 +68,7 @@ static const struct ChppClient kGnssClientConfig = {
     .descriptor.version.patch = 0,
 
     // Notifies client if CHPP is reset
-    .resetNotifierFunctionPtr = NULL,
+    .resetNotifierFunctionPtr = &chppGnssClientNotifyReset,
 
     // Service response dispatch function pointer
     .responseDispatchFunctionPtr = &chppDispatchGnssResponse,
@@ -104,8 +105,6 @@ struct ChppGnssClientState {
       passiveLocationListener;  // PassiveLocationListener state
 
   uint32_t capabilities;  // Cached GetCapabilities result
-
-  bool opened;  // GNSS has been successfully opened
 };
 
 // Note: This global definition of gGnssClientContext supports only one
@@ -133,8 +132,6 @@ static void chppGnssClientReleaseMeasurementDataEvent(
     struct chreGnssDataEvent *event);
 static bool chppGnssClientConfigurePassiveLocationListener(bool enable);
 
-static void chppGnssOpenResult(struct ChppGnssClientState *clientContext,
-                               uint8_t *buf, size_t len);
 static void chppGnssCloseResult(struct ChppGnssClientState *clientContext,
                                 uint8_t *buf, size_t len);
 static void chppGnssGetCapabilitiesResult(
@@ -142,6 +139,8 @@ static void chppGnssGetCapabilitiesResult(
 static void chppGnssControlLocationSessionResult(
     struct ChppGnssClientState *clientContext, uint8_t *buf, size_t len);
 static void chppGnssControlMeasurementSessionResult(
+    struct ChppGnssClientState *clientContext, uint8_t *buf, size_t len);
+static void chppGnssConfigurePassiveLocationListenerResult(
     struct ChppGnssClientState *clientContext, uint8_t *buf, size_t len);
 
 static void chppGnssStateResyncNotification(
@@ -179,7 +178,7 @@ static enum ChppAppErrorCode chppDispatchGnssResponse(void *clientContext,
   switch (rxHeader->command) {
     case CHPP_GNSS_OPEN: {
       chppClientTimestampResponse(&gnssClientContext->open, rxHeader);
-      chppGnssOpenResult(gnssClientContext, buf, len);
+      chppClientProcessOpenResponse(&gnssClientContext->client, buf, len);
       break;
     }
 
@@ -207,6 +206,14 @@ static enum ChppAppErrorCode chppDispatchGnssResponse(void *clientContext,
       chppClientTimestampResponse(&gnssClientContext->controlMeasurementSession,
                                   rxHeader);
       chppGnssControlMeasurementSessionResult(gnssClientContext, buf, len);
+      break;
+    }
+
+    case CHPP_GNSS_CONFIGURE_PASSIVE_LOCATION_LISTENER: {
+      chppClientTimestampResponse(&gnssClientContext->passiveLocationListener,
+                                  rxHeader);
+      chppGnssConfigurePassiveLocationListenerResult(gnssClientContext, buf,
+                                                     len);
       break;
     }
 
@@ -299,24 +306,21 @@ static void chppGnssClientDeinit(void *clientContext) {
 }
 
 /**
- * Handles the service response for the open client request.
- *
- * This function is called from chppDispatchGnssResponse().
+ * Notifies the client of an incoming reset.
  *
  * @param clientContext Maintains status for each client instance.
- * @param buf Input data. Cannot be null.
- * @param len Length of input data in bytes.
  */
-static void chppGnssOpenResult(struct ChppGnssClientState *clientContext,
-                               uint8_t *buf, size_t len) {
-  UNUSED_VAR(len);
+static void chppGnssClientNotifyReset(void *clientContext) {
+  struct ChppGnssClientState *gnssClientContext =
+      (struct ChppGnssClientState *)clientContext;
 
-  struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
-  clientContext->opened = (rxHeader->error == CHPP_APP_ERROR_NONE);
-  if (!clientContext->opened) {
-    CHPP_LOGE("GNSS open failed at service");
+  if (gnssClientContext->client.openState != CHPP_OPEN_STATE_OPENED) {
+    CHPP_LOGW("GNSS client reset but client wasn't open");
   } else {
-    CHPP_LOGI("GNSS open succeeded at service");
+    CHPP_LOGI("GNSS client reopening");
+    chppClientSendOpenRequest(&gGnssClientContext.client,
+                              &gGnssClientContext.open, CHPP_GNSS_OPEN,
+                              /*reopen=*/true);
   }
 }
 
@@ -352,6 +356,7 @@ static void chppGnssGetCapabilitiesResult(
     struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
     CHPP_LOGE("GNSS GetCapabilities request failed at service. error=%" PRIu8,
               rxHeader->error);
+    CHPP_ASSERT(rxHeader->error != CHPP_APP_ERROR_NONE);
 
   } else {
     struct ChppGnssGetCapabilitiesParameters *result =
@@ -359,6 +364,13 @@ static void chppGnssGetCapabilitiesResult(
 
     CHPP_LOGI("chppGnssGetCapabilitiesResult received capabilities=0x%" PRIx32,
               result->capabilities);
+#ifdef CHPP_GNSS_DEFAULT_CAPABILITIES
+    if (result->capabilities != CHPP_GNSS_DEFAULT_CAPABILITIES) {
+      CHPP_LOGE("Unexpected capability: expected 0x%" PRIx32,
+                CHPP_GNSS_DEFAULT_CAPABILITIES);
+      CHPP_PROD_ASSERT(false);
+    }
+#endif
 
     clientContext->capabilities = result->capabilities;
   }
@@ -378,10 +390,19 @@ static void chppGnssControlLocationSessionResult(
   UNUSED_VAR(clientContext);
 
   if (len < sizeof(struct ChppGnssControlLocationSessionResponse)) {
+    // Short response length indicates an error
+
     struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
-    CHPP_LOGE(
-        "GNSS ControlLocationSession request failed at service. error=%" PRIu8,
-        rxHeader->error);
+    if (rxHeader->error == CHPP_APP_ERROR_NONE) {
+      // But no error reported
+      CHPP_PROD_ASSERT(false);
+    } else {
+      CHPP_LOGE(
+          "GNSS ControlLocationSession request failed at service. "
+          "error=%" PRIu8,
+          rxHeader->error);
+      gCallbacks->locationStatusChangeCallback(false, CHRE_ERROR);
+    }
 
   } else {
     struct ChppGnssControlLocationSessionResponse *result =
@@ -412,11 +433,19 @@ static void chppGnssControlMeasurementSessionResult(
   UNUSED_VAR(clientContext);
 
   if (len < sizeof(struct ChppGnssControlMeasurementSessionResponse)) {
+    // Short response length indicates an error
+
     struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
-    CHPP_LOGE(
-        "GNSS ControlMeasurementSession request failed at service. "
-        "error=%" PRIu8,
-        rxHeader->error);
+    if (rxHeader->error == CHPP_APP_ERROR_NONE) {
+      // But no error reported
+      CHPP_PROD_ASSERT(false);
+    } else {
+      CHPP_LOGE(
+          "GNSS ControlMeasurementSession request failed at service. "
+          "error=%" PRIu8,
+          rxHeader->error);
+      gCallbacks->measurementStatusChangeCallback(false, CHRE_ERROR);
+    }
 
   } else {
     struct ChppGnssControlMeasurementSessionResponse *result =
@@ -429,6 +458,36 @@ static void chppGnssControlMeasurementSessionResult(
 
     gCallbacks->measurementStatusChangeCallback(result->enabled,
                                                 result->errorCode);
+  }
+}
+
+/**
+ * Handles the service response for the Configure Passive Location Listener
+ * client request.
+ *
+ * This function is called from chppDispatchGnssResponse().
+ *
+ * @param clientContext Maintains status for each client instance.
+ * @param buf Input data. Cannot be null.
+ * @param len Length of input data in bytes.
+ */
+static void chppGnssConfigurePassiveLocationListenerResult(
+    struct ChppGnssClientState *clientContext, uint8_t *buf, size_t len) {
+  UNUSED_VAR(clientContext);
+  UNUSED_VAR(len);
+
+  struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
+
+  if (rxHeader->error != CHPP_APP_ERROR_NONE) {
+    CHPP_LOGE(
+        "WiFi ConfigurePassiveLocationListener request failed at service. "
+        "error=%" PRIu8,
+        rxHeader->error);
+    CHPP_DEBUG_ASSERT(false);
+
+  } else {
+    CHPP_LOGD(
+        "WiFi ConfigurePassiveLocationListener request accepted at service");
   }
 }
 
@@ -527,33 +586,24 @@ static bool chppGnssClientOpen(const struct chrePalSystemApi *systemApi,
   CHPP_DEBUG_ASSERT(systemApi != NULL);
   CHPP_DEBUG_ASSERT(callbacks != NULL);
 
-  gGnssClientContext.opened = false;
+  bool result = false;
   gSystemApi = systemApi;
   gCallbacks = callbacks;
 
-  // Local
-  gGnssClientContext.capabilities = CHRE_GNSS_CAPABILITIES_NONE;
+  CHPP_LOGI("GNSS client opening");
 
-  // Wait for discovery to complete for "open" call to succeed
-  if (!chppWaitForDiscoveryComplete(gGnssClientContext.client.appContext,
-                                    CHPP_GNSS_DISCOVERY_TIMEOUT_MS)) {
-    CHPP_LOGE("Timed out waiting to discover CHPP GNSS service");
-  } else {
-    // Remote
-    struct ChppAppHeader *request = chppAllocClientRequestCommand(
-        &gGnssClientContext.client, CHPP_GNSS_OPEN);
-
-    if (request == NULL) {
-      CHPP_LOG_OOM();
-    } else {
-      chppSendTimestampedRequestAndWait(&gGnssClientContext.client,
-                                        &gGnssClientContext.open, request,
-                                        sizeof(*request));
-      // gGnssClientContext.opened is now set
-    }
+  if (chppWaitForDiscoveryComplete(gGnssClientContext.client.appContext,
+                                   CHPP_GNSS_DISCOVERY_TIMEOUT_MS)) {
+    result = chppClientSendOpenRequest(&gGnssClientContext.client,
+                                       &gGnssClientContext.open, CHPP_GNSS_OPEN,
+                                       /*reopen=*/false);
   }
 
-  return gGnssClientContext.opened;
+#ifdef CHPP_GNSS_CLIENT_OPEN_ALWAYS_SUCCESS
+  result = true;
+#endif
+
+  return result;
 }
 
 /**
@@ -569,7 +619,7 @@ static void chppGnssClientClose(void) {
   } else if (chppSendTimestampedRequestAndWait(&gGnssClientContext.client,
                                                &gGnssClientContext.close,
                                                request, sizeof(*request))) {
-    gGnssClientContext.opened = false;
+    gGnssClientContext.client.openState = CHPP_OPEN_STATE_CLOSED;
     gGnssClientContext.capabilities = CHRE_GNSS_CAPABILITIES_NONE;
   }
 }
@@ -581,7 +631,11 @@ static void chppGnssClientClose(void) {
  * @return Capabilities flags.
  */
 static uint32_t chppGnssClientGetCapabilities(void) {
+#ifdef CHPP_GNSS_DEFAULT_CAPABILITIES
+  uint32_t capabilities = CHPP_GNSS_DEFAULT_CAPABILITIES;
+#else
   uint32_t capabilities = CHRE_GNSS_CAPABILITIES_NONE;
+#endif
 
   if (gGnssClientContext.capabilities != CHRE_GNSS_CAPABILITIES_NONE) {
     // Result already cached

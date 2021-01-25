@@ -55,6 +55,15 @@ extern "C" {
 #define CHPP_DEBUG_ASSERT(var) CHPP_ASSERT(var)
 #endif
 
+// Asserts to be enabled for production software
+#ifndef CHPP_PROD_ASSERT
+#ifdef CHPP_PROD_ASSERT_ENABLED
+#define CHPP_PROD_ASSERT(var) CHPP_ASSERT(var)
+#else
+#define CHPP_PROD_ASSERT(var)
+#endif
+#endif
+
 #ifndef PRIu64  // Pre-C99 lacks PRIu64 support. Note that the correct
                 // definition on pre-C99 systems would be compiler-dependent.
 #define PRIu64 "llu"
@@ -85,6 +94,8 @@ extern "C" {
 #define CHPP_NSEC_PER_MSEC (CHPP_NSEC_PER_USEC * CHPP_USEC_PER_MSEC)
 #define CHPP_NSEC_PER_SEC \
   (CHPP_NSEC_PER_USEC * CHPP_USEC_PER_MSEC * CHPP_MSEC_PER_SEC)
+#define CHPP_NSEC_PER_MINUTE (CHPP_NSEC_PER_SEC * 60)
+#define CHPP_NSEC_PER_HOUR (CHPP_NSEC_PER_MINUTE * 60)
 
 #if defined(__GNUC__) || defined(__clang__)
 #define check_types_match(t1, t2) ((__typeof__(t1) *)0 != (__typeof__(t2) *)0)
