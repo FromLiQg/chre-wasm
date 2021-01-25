@@ -148,6 +148,8 @@ static void chppWifiConfigureScanMonitorResult(
     struct ChppWifiClientState *clientContext, uint8_t *buf, size_t len);
 static void chppWifiRequestScanResult(struct ChppWifiClientState *clientContext,
                                       uint8_t *buf, size_t len);
+static void chppWifiRequestRangingResult(
+    struct ChppWifiClientState *clientContext, uint8_t *buf, size_t len);
 
 static void chppWifiScanEventNotification(
     struct ChppWifiClientState *clientContext, uint8_t *buf, size_t len);
@@ -210,6 +212,12 @@ static enum ChppAppErrorCode chppDispatchWifiResponse(void *clientContext,
     case CHPP_WIFI_REQUEST_SCAN_ASYNC: {
       chppClientTimestampResponse(&wifiClientContext->requestScan, rxHeader);
       chppWifiRequestScanResult(wifiClientContext, buf, len);
+      break;
+    }
+
+    case CHPP_WIFI_REQUEST_RANGING_ASYNC: {
+      chppClientTimestampResponse(&wifiClientContext->requestRanging, rxHeader);
+      chppWifiRequestRangingResult(wifiClientContext, buf, len);
       break;
     }
 
@@ -367,6 +375,7 @@ static void chppWifiGetCapabilitiesResult(
     struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
     CHPP_LOGE("WiFi GetCapabilities request failed at service. error=%" PRIu8,
               rxHeader->error);
+    CHPP_ASSERT(rxHeader->error != CHPP_APP_ERROR_NONE);
 
   } else {
     struct ChppWifiGetCapabilitiesParameters *result =
@@ -400,11 +409,19 @@ static void chppWifiConfigureScanMonitorResult(
   UNUSED_VAR(clientContext);
 
   if (len < sizeof(struct ChppWifiConfigureScanMonitorAsyncResponse)) {
+    // Short response length indicates an error
+
     struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
-    CHPP_LOGE(
-        "WiFi ControlLocationSession request failed at service. "
-        "error=%" PRIu8,
-        rxHeader->error);
+    if (rxHeader->error == CHPP_APP_ERROR_NONE) {
+      // But no error reported
+      CHPP_PROD_ASSERT(false);
+    } else {
+      CHPP_LOGE(
+          "WiFi ControlLocationSession request failed at service. "
+          "error=%" PRIu8,
+          rxHeader->error);
+      gCallbacks->scanMonitorStatusChangeCallback(false, CHRE_ERROR);
+    }
 
   } else {
     struct ChppWifiConfigureScanMonitorAsyncResponseParameters *result =
@@ -444,9 +461,18 @@ static void chppWifiRequestScanResult(struct ChppWifiClientState *clientContext,
   UNUSED_VAR(clientContext);
 
   if (len < sizeof(struct ChppWifiRequestScanResponse)) {
+    // Short response length indicates an error
+
     struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
-    CHPP_LOGE("WiFi RequestScanResult request failed at service. error=%" PRIu8,
-              rxHeader->error);
+    if (rxHeader->error == CHPP_APP_ERROR_NONE) {
+      // But no error reported
+      CHPP_PROD_ASSERT(false);
+    } else {
+      CHPP_LOGE(
+          "WiFi RequestScanResult request failed at service. error=%" PRIu8,
+          rxHeader->error);
+      gCallbacks->scanResponseCallback(false, CHRE_ERROR);
+    }
 
   } else {
     struct ChppWifiRequestScanResponseParameters *result =
@@ -456,6 +482,33 @@ static void chppWifiRequestScanResult(struct ChppWifiClientState *clientContext,
               result->pending ? "accepted and " : "FAILURE - accepted but un");
 
     gCallbacks->scanResponseCallback(result->pending, result->errorCode);
+  }
+}
+
+/**
+ * Handles the service response for the Request Ranging Result client request.
+ *
+ * This function is called from chppDispatchWifiResponse().
+ *
+ * @param clientContext Maintains status for each client instance.
+ * @param buf Input data. Cannot be null.
+ * @param len Length of input data in bytes.
+ */
+static void chppWifiRequestRangingResult(
+    struct ChppWifiClientState *clientContext, uint8_t *buf, size_t len) {
+  UNUSED_VAR(clientContext);
+  UNUSED_VAR(len);
+
+  struct ChppAppHeader *rxHeader = (struct ChppAppHeader *)buf;
+
+  if (rxHeader->error != CHPP_APP_ERROR_NONE) {
+    CHPP_LOGE(
+        "WiFi RequestRangingResult request failed at service. error=%" PRIu8,
+        rxHeader->error);
+    gCallbacks->rangingEventCallback(CHRE_ERROR, NULL);
+
+  } else {
+    CHPP_LOGD("WiFi RequestRangingResult request accepted at service");
   }
 }
 
