@@ -22,6 +22,17 @@ COMMON_CFLAGS += -DCHRE_ON_DEVICE_TESTS_ENABLED
 
 COMMON_SRCS += $(PW_UT_SRCS)
 
-# Test Sources Follow!
+# Core unit tests
+COMMON_SRCS += $(CHRE_PREFIX)/core/tests/audio_util_test.cc
+COMMON_SRCS += $(CHRE_PREFIX)/core/tests/memory_manager_test.cc
+COMMON_SRCS += $(CHRE_PREFIX)/core/tests/request_multiplexer_test.cc
+COMMON_SRCS += $(CHRE_PREFIX)/core/tests/sensor_request_test.cc
+COMMON_SRCS += $(CHRE_PREFIX)/core/tests/wifi_scan_request_test.cc
+
+# PAL unit tests
+COMMON_CFLAGS += -I$(CHRE_PREFIX)/pal/tests/include
+
+COMMON_SRCS += $(CHRE_PREFIX)/pal/tests/src/version_test.cc
+COMMON_SRCS += $(CHRE_PREFIX)/pal/tests/src/wwan_test.cc
 
 endif
