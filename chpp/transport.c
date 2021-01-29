@@ -840,7 +840,8 @@ static void chppTransportDoWork(struct ChppTransportState *context) {
       context->txStatus.sentSeq = txHeader->seq;
       context->txStatus.retxCount++;
 
-      if (context->txStatus.retxCount > CHPP_TRANSPORT_MAX_RETX) {
+      if (context->txStatus.retxCount > CHPP_TRANSPORT_MAX_RETX &&
+          context->resetState != CHPP_RESET_STATE_RESETTING) {
         CHPP_LOGE("ReTx packet failed after %d tries. Attempting to reset CHPP",
                   CHPP_TRANSPORT_MAX_RETX);
 
@@ -1265,8 +1266,9 @@ uint64_t chppTransportGetTimeUntilNextDoWorkNs(
     struct ChppTransportState *context) {
   uint64_t time = chppGetCurrentTimeNs();
 
-  if (!context->txStatus.hasPacketsToSend &&
-      (context->resetState != CHPP_RESET_STATE_RESETTING)) {
+  if ((!context->txStatus.hasPacketsToSend &&
+       (context->resetState != CHPP_RESET_STATE_RESETTING)) ||
+      (context->resetState == CHPP_RESET_STATE_PERMANENT_FAILURE)) {
     return CHPP_TRANSPORT_TIMEOUT_INFINITE;
 
   } else if (time >
@@ -1321,6 +1323,7 @@ bool chppWorkThreadHandleSignal(struct ChppTransportState *context,
          CHPP_TRANSPORT_RESET_TIMEOUT_NS)) {
       if (context->resetCount < CHPP_TRANSPORT_MAX_RESET) {
         CHPP_LOGE("Timeout while waiting for RESET-ACK. Retrying a reset");
+        context->resetCount++;
         chppReset(context, CHPP_TRANSPORT_ATTR_RESET);
       } else {
         CHPP_LOGE("Timeout while waiting for RESET-ACK. Giving up permanently");
