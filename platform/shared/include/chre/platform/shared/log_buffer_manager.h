@@ -22,6 +22,10 @@
 #include "chre/util/singleton.h"
 #include "chre_api/chre/re.h"
 
+#ifndef CHRE_LOG_BUFFER_DATA_SIZE
+#define CHRE_LOG_BUFFER_DATA_SIZE CHRE_MESSAGE_TO_HOST_MAX_SIZE
+#endif
+
 namespace chre {
 
 /**
@@ -59,6 +63,11 @@ class LogBufferManager : public LogBufferCallbackInterface {
   void onLogsReady(LogBuffer *logBuffer) final;
 
   /**
+   * Flush any logs that might be in the default log buffer.
+   */
+  void flushLogs();
+
+  /**
    * The platform code should call this method after the logs have been sent to
    * the host to signal that more logs can be sent to the host when ready.
    */
@@ -81,7 +90,7 @@ class LogBufferManager : public LogBufferCallbackInterface {
   LogBufferLogLevel chreToLogBufferLogLevel(chreLogLevel chreLogLevel);
 
   LogBuffer mLogBuffer;
-  uint8_t mLogBufferData[CHRE_MESSAGE_TO_HOST_MAX_SIZE];
+  uint8_t mLogBufferData[CHRE_LOG_BUFFER_DATA_SIZE];
   uint8_t mTempLogBufferData[sizeof(mLogBufferData)];
 
   bool mLogFlushToHostPending = false;
