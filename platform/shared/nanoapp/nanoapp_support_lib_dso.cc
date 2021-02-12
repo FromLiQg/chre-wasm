@@ -38,16 +38,16 @@ namespace {
 constexpr uint32_t kNanoappPermissions =
     0
 #ifdef CHRE_NANOAPP_USES_AUDIO
-    | static_cast<uint32_t>(chre::NanoappPermissions::NANOAPP_USES_AUDIO)
+    | static_cast<uint32_t>(chre::NanoappPermissions::CHRE_PERMS_AUDIO)
 #endif
 #ifdef CHRE_NANOAPP_USES_GNSS
-    | static_cast<uint32_t>(chre::NanoappPermissions::NANOAPP_USES_GNSS)
+    | static_cast<uint32_t>(chre::NanoappPermissions::CHRE_PERMS_GNSS)
 #endif
 #ifdef CHRE_NANOAPP_USES_WIFI
-    | static_cast<uint32_t>(chre::NanoappPermissions::NANOAPP_USES_WIFI)
+    | static_cast<uint32_t>(chre::NanoappPermissions::CHRE_PERMS_WIFI)
 #endif
 #ifdef CHRE_NANOAPP_USES_WWAN
-    | static_cast<uint32_t>(chre::NanoappPermissions::NANOAPP_USES_WWAN)
+    | static_cast<uint32_t>(chre::NanoappPermissions::CHRE_PERMS_WWAN)
 #endif
     ;
 
@@ -244,6 +244,18 @@ bool chreWifiRequestRangingAsync(const struct chreWifiRangingParams *params,
 }
 
 #endif /* CHRE_NANOAPP_USES_WIFI */
+
+WEAK_SYMBOL
+bool chreSensorFind(uint8_t sensorType, uint8_t sensorIndex, uint32_t *handle) {
+  auto *fptr = CHRE_NSL_LAZY_LOOKUP(chreSensorFind);
+  if (fptr != nullptr) {
+    return fptr(sensorType, sensorIndex, handle);
+  } else if (sensorIndex == 0) {
+    return chreSensorFindDefault(sensorType, handle);
+  } else {
+    return false;
+  }
+}
 
 WEAK_SYMBOL
 bool chreSensorConfigureBiasEvents(uint32_t sensorHandle, bool enable) {
