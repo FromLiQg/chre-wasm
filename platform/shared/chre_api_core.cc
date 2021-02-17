@@ -73,7 +73,7 @@ DLL_EXPORT bool chreSendMessageToHost(void *message, uint32_t messageSize,
       CHRE_HOST_ENDPOINT_BROADCAST, freeCallback);
 }
 
-DLL_EXPORT bool chreSendMessageToHostWithPerms(
+DLL_EXPORT bool chreSendMessageWithPermissions(
     void *message, size_t messageSize, uint32_t messageType,
     uint16_t hostEndpoint, uint32_t messagePermissions,
     chreMessageFreeFunction *freeCallback) {
@@ -85,6 +85,10 @@ DLL_EXPORT bool chreSendMessageToHostWithPerms(
     LOGW("Rejecting message to host from app instance %" PRIu32
          " because it's stopping",
          nanoapp->getInstanceId());
+  } else if (BITMASK_HAS_VALUE(nanoapp->getAppPermissions(),
+                               messagePermissions)) {
+    LOGE("Message perms %" PRIx32 " not subset of napp perms %" PRIx32,
+         messagePermissions, nanoapp->getAppPermissions());
   } else {
     auto &hostCommsManager =
         EventLoopManagerSingleton::get()->getHostCommsManager();
@@ -103,9 +107,9 @@ DLL_EXPORT bool chreSendMessageToHostWithPerms(
 DLL_EXPORT bool chreSendMessageToHostEndpoint(
     void *message, size_t messageSize, uint32_t messageType,
     uint16_t hostEndpoint, chreMessageFreeFunction *freeCallback) {
-  return chreSendMessageToHostWithPerms(
+  return chreSendMessageWithPermissions(
       message, messageSize, messageType, hostEndpoint,
-      static_cast<uint32_t>(chre::NanoappPermissions::CHRE_PERMS_NOTHING),
+      static_cast<uint32_t>(chre::NanoappPermissions::CHRE_PERMS_NONE),
       freeCallback);
 }
 
