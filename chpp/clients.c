@@ -170,6 +170,9 @@ void chppDeregisterCommonClients(struct ChppAppState *context) {
 }
 
 void chppClientInit(struct ChppClientState *clientContext, uint8_t handle) {
+  CHPP_ASSERT_LOG(!clientContext->initialized,
+                  "Client H#%" PRIu8 " already initialized", handle);
+
   clientContext->handle = handle;
   chppMutexInit(&clientContext->responseMutex);
   chppConditionVariableInit(&clientContext->responseCondVar);
@@ -177,6 +180,10 @@ void chppClientInit(struct ChppClientState *clientContext, uint8_t handle) {
 }
 
 void chppClientDeinit(struct ChppClientState *clientContext) {
+  CHPP_ASSERT_LOG(clientContext->initialized,
+                  "Client H#%" PRIu8 " already deinitialized",
+                  clientContext->handle);
+
   clientContext->initialized = false;
   chppConditionVariableDeinit(&clientContext->responseCondVar);
   chppMutexDeinit(&clientContext->responseMutex);
@@ -352,8 +359,7 @@ bool chppClientSendOpenRequest(struct ChppClientState *clientState,
     if (!chppSendTimestampedRequestOrFail(clientState, openRRState, request,
                                           sizeof(*request))) {
       clientState->openState = CHPP_OPEN_STATE_CLOSED;
-      CHPP_LOGE("Failed to reopen service");
-      CHPP_PROD_ASSERT(false);
+      CHPP_ASSERT_LOG(false, "Failed to reopen service");
     } else {
       result = true;
     }
