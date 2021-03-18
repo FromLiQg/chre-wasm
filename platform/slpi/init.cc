@@ -101,6 +101,17 @@ bool gThreadRunning;
 int gTlsKey;
 bool gTlsKeyValid;
 
+// TODO(b/181871430): Enable buffered logging for QSH. The QSH implementation
+// will not log currently.
+
+#ifdef CHRE_USE_BUFFERED_LOGGING
+
+//! Primary and secondary log buffers for the LogBufferManager
+uint8_t gPrimaryLogBufferData[CHRE_LOG_BUFFER_DATA_SIZE];
+uint8_t gSecondaryLogBufferData[CHRE_LOG_BUFFER_DATA_SIZE];
+
+#endif
+
 /**
  * Entry point for the QuRT thread that runs CHRE.
  *
@@ -161,7 +172,9 @@ extern "C" int chre_slpi_start_thread(void) {
   int fastRpcResult = CHRE_FASTRPC_ERROR;
 
 #ifdef CHRE_USE_BUFFERED_LOGGING
-  chre::LogBufferManagerSingleton::init();
+  chre::LogBufferManagerSingleton::init(gPrimaryLogBufferData,
+                                        gSecondaryLogBufferData,
+                                        sizeof(gPrimaryLogBufferData));
 #endif
 
   if (gThreadRunning) {
