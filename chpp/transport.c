@@ -35,8 +35,6 @@
  *  Prototypes
  ***********************************************/
 
-static void chppClearTxQueue(struct ChppTransportState *context);
-
 static void chppSetRxState(struct ChppTransportState *context,
                            enum ChppRxState newState);
 static size_t chppConsumePreamble(struct ChppTransportState *context,
@@ -75,11 +73,10 @@ static void chppAppendToPendingTxPacket(struct PendingTxPacket *packet,
                                         const uint8_t *buf, size_t len);
 static bool chppEnqueueTxDatagram(struct ChppTransportState *context,
                                   uint8_t packetCode, void *buf, size_t len);
+size_t chppDequeueTxDatagram(struct ChppTransportState *context);
+static void chppClearTxDatagramQueue(struct ChppTransportState *context);
 
 static void chppResetTransportContext(struct ChppTransportState *context);
-
-// Exposed for testing
-size_t chppDequeueTxDatagram(struct ChppTransportState *context);
 
 // TODO(b/178963854): remove once fixed
 extern void chreCheckFor178963854(void);
@@ -88,18 +85,6 @@ void __attribute__((weak)) chreCheckFor178963854() {}
 /************************************************
  *  Private Functions
  ***********************************************/
-
-/**
- * Clears the TX queue of any pending packets.
- *
- * @param context Maintains status for each transport layer instance.
- */
-static void chppClearTxQueue(struct ChppTransportState *context) {
-  while (context->txDatagramQueue.pending > 0) {
-    chppDequeueTxDatagram(context);
-  }
-  context->txStatus.hasPacketsToSend = false;
-}
 
 /**
  * Called any time the Rx state needs to be changed. Ensures that the location
@@ -311,6 +296,12 @@ static size_t chppConsumeFooter(struct ChppTransportState *context,
       chppReset(context, CHPP_TRANSPORT_ATTR_RESET_ACK);
       chppMutexLock(&context->mutex);
 
+    } else if (context->resetState == CHPP_RESET_STATE_PERMANENT_FAILURE) {
+      // Only a reset is accepted in this state
+      CHPP_LOGE("RX discarded in perm fail. seq=%" PRIu8 " len=%" PRIu16,
+                context->rxHeader.seq, context->rxHeader.length);
+      chppRxAbortPacket(context);
+
     } else if (CHPP_TRANSPORT_GET_ATTR(context->rxHeader.packetCode) ==
                CHPP_TRANSPORT_ATTR_RESET_ACK) {
       CHPP_LOGI("RX RESET-ACK packet. seq=%" PRIu8, context->rxHeader.seq);
@@ -325,9 +316,10 @@ static size_t chppConsumeFooter(struct ChppTransportState *context,
 #endif
 
     } else if (context->resetState == CHPP_RESET_STATE_RESETTING) {
-      CHPP_LOGE("RX packet discarded seq=%" PRIu8 " len=%" PRIu16,
+      CHPP_LOGE("RX discarded in reset. seq=%" PRIu8 " len=%" PRIu16,
                 context->rxHeader.seq, context->rxHeader.length);
       chppRxAbortPacket(context);
+
     } else {
       CHPP_LOGI("RX good packet. payload len=%" PRIu16 ", seq=%" PRIu8
                 ", ackSeq=%" PRIu8 ", flags=0x%" PRIx8 ", packetCode=0x%" PRIx8,
@@ -413,8 +405,8 @@ static void chppProcessTransportLoopbackRequest(
     context->pendingTxPacket.length += sizeof(*txHeader);
 
     *txHeader = context->rxHeader;
-    CHPP_TRANSPORT_SET_ATTR(txHeader->packetCode,
-                            CHPP_TRANSPORT_ATTR_LOOPBACK_RESPONSE);
+    txHeader->packetCode = CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
+        CHPP_TRANSPORT_ATTR_LOOPBACK_RESPONSE, txHeader->packetCode);
 
     size_t payloadLen =
         MIN(context->rxDatagram.length, CHPP_TRANSPORT_TX_MTU_BYTES);
@@ -774,6 +766,18 @@ size_t chppDequeueTxDatagram(struct ChppTransportState *context) {
 }
 
 /**
+ * Flushes the Tx datagram queue of any pending packets.
+ *
+ * @param context Maintains status for each transport layer instance.
+ */
+static void chppClearTxDatagramQueue(struct ChppTransportState *context) {
+  while (context->txDatagramQueue.pending > 0) {
+    chppDequeueTxDatagram(context);
+  }
+  context->txStatus.hasPacketsToSend = false;
+}
+
+/**
  * Sends out a pending outgoing packet based on a notification from
  * chppEnqueueTxPacket().
  *
@@ -817,7 +821,8 @@ static void chppTransportDoWork(struct ChppTransportState *context) {
     context->pendingTxPacket.length += sizeof(*txHeader);
 
     txHeader->packetCode = context->txStatus.packetCodeToSend;
-    context->txStatus.packetCodeToSend = CHPP_TRANSPORT_ERROR_NONE;
+    context->txStatus.packetCodeToSend = CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
+        context->txStatus.packetCodeToSend, CHPP_TRANSPORT_ERROR_NONE);
 
     txHeader->ackSeq = context->rxStatus.expectedSeq;
     context->txStatus.sentAckSeq = txHeader->ackSeq;
@@ -1109,7 +1114,7 @@ void chppTransportDeinit(struct ChppTransportState *transportContext) {
   chppNotifierDeinit(&transportContext->notifier);
   chppMutexDeinit(&transportContext->mutex);
 
-  chppClearTxQueue(transportContext);
+  chppClearTxDatagramQueue(transportContext);
 
   transportContext->initialized = false;
 }
@@ -1241,8 +1246,7 @@ void chppEnqueueTxErrorDatagram(struct ChppTransportState *context,
     }
   }
   chppEnqueueTxPacket(context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
-                                   CHPP_TRANSPORT_ATTR_NONE,
-                                   CHPP_TRANSPORT_GET_ERROR(errorCode)));
+                                   CHPP_TRANSPORT_ATTR_NONE, errorCode));
 }
 
 uint64_t chppTransportGetTimeUntilNextDoWorkNs(
@@ -1315,6 +1319,7 @@ bool chppWorkThreadHandleSignal(struct ChppTransportState *context,
       } else {
         CHPP_LOGE("RESET-ACK timeout; giving up");
         context->resetState = CHPP_RESET_STATE_PERMANENT_FAILURE;
+        chppClearTxDatagramQueue(context);
       }
       chreCheckFor178963854();  // TODO(b/178963854): remove once fixed
     }
@@ -1404,8 +1409,8 @@ uint8_t chppRunTransportLoopback(struct ChppTransportState *context,
             .payload[context->pendingTxPacket.length];
     context->pendingTxPacket.length += sizeof(*txHeader);
 
-    CHPP_TRANSPORT_SET_ATTR(txHeader->packetCode,
-                            CHPP_TRANSPORT_ATTR_LOOPBACK_REQUEST);
+    txHeader->packetCode = CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
+        CHPP_TRANSPORT_ATTR_LOOPBACK_REQUEST, txHeader->packetCode);
 
     size_t payloadLen = MIN(len, CHPP_TRANSPORT_TX_MTU_BYTES);
     txHeader->length = (uint16_t)payloadLen;
