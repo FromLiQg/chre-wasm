@@ -181,7 +181,7 @@ void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
 
     char uuidText[CHPP_SERVICE_UUID_STRING_LEN];
     chppUuidToStr(newClient->descriptor.uuid, uuidText);
-    CHPP_LOGI("Client # %" PRIu8 " UUID=%s, version=%" PRIu8 ".%" PRIu8
+    CHPP_LOGD("Client # %" PRIu8 " UUID=%s, version=%" PRIu8 ".%" PRIu8
               ".%" PRIu16 ", min_len=%" PRIuSIZE,
               appContext->registeredClientCount, uuidText,
               newClient->descriptor.version.major,
@@ -283,6 +283,7 @@ struct ChppAppHeader *chppAllocClientRequest(
     result->type = CHPP_MESSAGE_TYPE_CLIENT_REQUEST;
     result->transaction = clientState->transaction;
     result->error = CHPP_APP_ERROR_NONE;
+    result->command = CHPP_APP_COMMAND_NONE;
 
     clientState->transaction++;
   }
