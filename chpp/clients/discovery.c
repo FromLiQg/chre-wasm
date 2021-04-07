@@ -126,9 +126,7 @@ static void chppDiscoveryProcessDiscoverAll(struct ChppAppState *context,
     CHPP_DEBUG_ASSERT(false);
   }
 
-  CHPP_LOGD("Attempting to match %" PRIu8 " registered clients and %" PRIu8
-            " discovered services",
-            context->registeredClientCount, serviceCount);
+  CHPP_LOGI("Discovered %" PRIu8 " services", serviceCount);
 
   uint8_t matchedClients = 0;
   for (uint8_t i = 0; i < MIN(serviceCount, CHPP_MAX_DISCOVERED_SERVICES);
@@ -317,6 +315,8 @@ void chppInitiateDiscovery(struct ChppAppState *context) {
   struct ChppAppHeader *request = chppMalloc(sizeof(struct ChppAppHeader));
   request->handle = CHPP_HANDLE_DISCOVERY;
   request->type = CHPP_MESSAGE_TYPE_CLIENT_REQUEST;
+  request->transaction = 0;
+  request->error = CHPP_APP_ERROR_NONE;
   request->command = CHPP_DISCOVERY_COMMAND_DISCOVER_ALL;
 
   chppEnqueueTxDatagramOrFail(context->transportContext, request,
