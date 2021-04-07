@@ -181,7 +181,7 @@ void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
 
     char uuidText[CHPP_SERVICE_UUID_STRING_LEN];
     chppUuidToStr(newClient->descriptor.uuid, uuidText);
-    CHPP_LOGI("Client # %" PRIu8 " UUID=%s, version=%" PRIu8 ".%" PRIu8
+    CHPP_LOGD("Client # %" PRIu8 " UUID=%s, version=%" PRIu8 ".%" PRIu8
               ".%" PRIu16 ", min_len=%" PRIuSIZE,
               appContext->registeredClientCount, uuidText,
               newClient->descriptor.version.major,
@@ -283,6 +283,7 @@ struct ChppAppHeader *chppAllocClientRequest(
     result->type = CHPP_MESSAGE_TYPE_CLIENT_REQUEST;
     result->transaction = clientState->transaction;
     result->error = CHPP_APP_ERROR_NONE;
+    result->command = CHPP_APP_COMMAND_NONE;
 
     clientState->transaction++;
   }
@@ -411,12 +412,16 @@ bool chppClientSendOpenRequest(struct ChppClientState *clientState,
     CHPP_LOG_OOM();
 
   } else if (reopen) {
-    CHPP_LOGW("Reopening service after reset");
+    CHPP_LOGW("Reopening service");
+    uint8_t priorState = clientState->openState;
     clientState->openState = CHPP_OPEN_STATE_OPENING;
     if (!chppSendTimestampedRequestOrFail(clientState, openRRState, request,
                                           sizeof(*request))) {
       clientState->openState = CHPP_OPEN_STATE_CLOSED;
-      CHPP_ASSERT_LOG(false, "Failed to reopen service");
+      CHPP_LOGE("Failed to reopen service in state %" PRIu8, priorState);
+      if (priorState == CHPP_OPEN_STATE_PSEUDO_OPEN) {
+        clientState->openState = CHPP_OPEN_STATE_PSEUDO_OPEN;
+      }
     } else {
       result = true;
     }
