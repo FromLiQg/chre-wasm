@@ -328,12 +328,14 @@ static size_t chppConsumeFooter(struct ChppTransportState *context,
       chppRxAbortPacket(context);
 
     } else {
-      CHPP_LOGI("RX good packet. payload len=%" PRIu16 ", seq=%" PRIu8
-                ", ackSeq=%" PRIu8 ", flags=0x%" PRIx8 ", packetCode=0x%" PRIx8,
+      CHPP_LOGD("RX good packet. len=%" PRIu16 ", seq=%" PRIu8
+                ", ackSeq=%" PRIu8 ", flags=0x%" PRIx8 ", code=0x%" PRIx8,
                 context->rxHeader.length, context->rxHeader.seq,
                 context->rxHeader.ackSeq, context->rxHeader.flags,
                 context->rxHeader.packetCode);
 
+      context->rxStatus.lastGoodPacketTimeMs =
+          (uint32_t)(chppGetCurrentTimeNs() / CHPP_NSEC_PER_MSEC);
       context->rxStatus.receivedPacketCode = context->rxHeader.packetCode;
       chppRegisterRxAck(context);
 
@@ -652,6 +654,10 @@ static void chppRegisterRxAck(struct ChppTransportState *context) {
               .length);
 
       context->rxStatus.receivedAckSeq = rxAckSeq;
+      if (context->txStatus.retxCount > 1) {
+        CHPP_LOGW("Packet retx'd %" PRIuSIZE " times (seq %" PRIu8 ")",
+                  context->txStatus.retxCount, context->rxHeader.seq);
+      }
       context->txStatus.retxCount = 0;
 
       // Process and if necessary pop from Tx datagram queue
@@ -928,7 +934,7 @@ static void chppTransportDoWork(struct ChppTransportState *context) {
   chppMutexUnlock(&context->mutex);
 
   if (havePacketForLinkLayer) {
-    CHPP_LOGI("TX->Link: len=%" PRIuSIZE " flags=0x%" PRIx8 " code=0x%" PRIx8
+    CHPP_LOGD("TX->Link: len=%" PRIuSIZE " flags=0x%" PRIx8 " code=0x%" PRIx8
               " ackSeq=%" PRIu8 " seq=%" PRIu8 " payloadLen=%" PRIu16
               " pending=%" PRIu8,
               context->pendingTxPacket.length, txHeader->flags,
@@ -965,6 +971,24 @@ static void chppAppendToPendingTxPacket(struct PendingTxPacket *packet,
 }
 
 /**
+ * @return A human readable form of the packet attribution.
+ */
+static const char *chppGetPacketAttrStr(uint8_t packetCode) {
+  switch (CHPP_TRANSPORT_GET_ATTR(packetCode)) {
+    case CHPP_TRANSPORT_ATTR_RESET:
+      return "(RESET)";
+    case CHPP_TRANSPORT_ATTR_RESET_ACK:
+      return "(RESET-ACK)";
+    case CHPP_TRANSPORT_ATTR_LOOPBACK_REQUEST:
+      return "(LOOP-REQ)";
+    case CHPP_TRANSPORT_ATTR_LOOPBACK_RESPONSE:
+      return "(LOOP-RES)";
+    default:
+      return "";
+  }
+}
+
+/**
  * Enqueues an outgoing datagram of a specified length. The payload must have
  * been allocated by the caller using chppMalloc.
  *
@@ -990,27 +1014,25 @@ static bool chppEnqueueTxDatagram(struct ChppTransportState *context,
     CHPP_DEBUG_ASSERT(false);
 
   } else {
-    uint8_t *handle = buf;
-
-    if (len < sizeof(struct ChppAppHeader)) {
-      CHPP_LOGI("Enqueue TX: code=0x%" PRIx8 " len=%" PRIuSIZE " H#%" PRIu8
+    if ((len < sizeof(struct ChppAppHeader)) ||
+        (CHPP_TRANSPORT_GET_ATTR(packetCode) != 0)) {
+      CHPP_LOGI("Enqueue TX: code=0x%" PRIx8 "%s len=%" PRIuSIZE
                 " pending=%" PRIu8,
-                packetCode, len, *handle,
+                packetCode, chppGetPacketAttrStr(packetCode), len,
                 (uint8_t)(context->txDatagramQueue.pending + 1));
     } else {
       struct ChppAppHeader *header = buf;
-      CHPP_LOGI("Enqueue TX: code=0x%" PRIx8 " len=%" PRIuSIZE " H#%" PRIu8
-                " type=0x%" PRIx8 " ID=%" PRIu8 " err=%" PRIu8 " cmd=0x%" PRIx16
-                " pending=%" PRIu8,
-                packetCode, len, header->handle, header->type,
-                header->transaction, header->error, header->command,
-                (uint8_t)(context->txDatagramQueue.pending + 1));
+      CHPP_LOGI(
+          "Enqueue TX: len=%" PRIuSIZE " H#%" PRIu8 " type=0x%" PRIx8
+          " ID=%" PRIu8 " err=%" PRIu8 " cmd=0x%" PRIx16 " pending=%" PRIu8,
+          len, header->handle, header->type, header->transaction, header->error,
+          header->command, (uint8_t)(context->txDatagramQueue.pending + 1));
     }
 
     chppMutexLock(&context->mutex);
 
     if (context->txDatagramQueue.pending >= CHPP_TX_DATAGRAM_QUEUE_LEN) {
-      CHPP_LOGE("Cannot enqueue TX datagram: H#%" PRIu8, *handle);
+      CHPP_LOGE("Cannot enqueue TX datagram");
 
     } else {
       uint16_t end =
@@ -1169,6 +1191,9 @@ bool chppRxDataCb(struct ChppTransportState *context, const uint8_t *buf,
 
   CHPP_LOGD("RX %" PRIuSIZE " bytes: state=%" PRIu8, len,
             context->rxStatus.state);
+  context->rxStatus.lastDataTimeMs =
+      (uint32_t)(chppGetCurrentTimeNs() / CHPP_NSEC_PER_MSEC);
+  context->rxStatus.numTotalDataBytes += len;
 
   size_t consumed = 0;
   while (consumed < len) {
@@ -1502,9 +1527,9 @@ void chppTransportSendReset(struct ChppTransportState *context,
 
   // Send out the reset datagram
   if (resetType == CHPP_TRANSPORT_ATTR_RESET_ACK) {
-    CHPP_LOGI("Sending RESET-ACK");
+    CHPP_LOGD("Sending RESET-ACK");
   } else {
-    CHPP_LOGI("Sending RESET");
+    CHPP_LOGD("Sending RESET");
   }
 
   if (resetType == CHPP_TRANSPORT_ATTR_RESET_ACK) {

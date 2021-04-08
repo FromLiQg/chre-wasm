@@ -187,41 +187,49 @@ static enum ChppAppErrorCode chppDispatchWifiResponse(void *clientContext,
 
   switch (rxHeader->command) {
     case CHPP_WIFI_OPEN: {
-      chppClientTimestampResponse(&wifiClientContext->open, rxHeader);
-      chppClientProcessOpenResponse(&wifiClientContext->client, buf, len);
-      chppWiFiRecoverScanMonitor(wifiClientContext);
+      if (chppClientTimestampResponse(&wifiClientContext->open, rxHeader)) {
+        chppClientProcessOpenResponse(&wifiClientContext->client, buf, len);
+        chppWiFiRecoverScanMonitor(wifiClientContext);
+      }
       break;
     }
 
     case CHPP_WIFI_CLOSE: {
-      chppClientTimestampResponse(&wifiClientContext->close, rxHeader);
-      chppWifiCloseResult(wifiClientContext, buf, len);
+      if (chppClientTimestampResponse(&wifiClientContext->close, rxHeader)) {
+        chppWifiCloseResult(wifiClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_WIFI_GET_CAPABILITIES: {
-      chppClientTimestampResponse(&wifiClientContext->getCapabilities,
-                                  rxHeader);
-      chppWifiGetCapabilitiesResult(wifiClientContext, buf, len);
+      if (chppClientTimestampResponse(&wifiClientContext->getCapabilities,
+                                      rxHeader)) {
+        chppWifiGetCapabilitiesResult(wifiClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_WIFI_CONFIGURE_SCAN_MONITOR_ASYNC: {
-      chppClientTimestampResponse(&wifiClientContext->configureScanMonitor,
-                                  rxHeader);
-      chppWifiConfigureScanMonitorResult(wifiClientContext, buf, len);
+      if (chppClientTimestampResponse(&wifiClientContext->configureScanMonitor,
+                                      rxHeader)) {
+        chppWifiConfigureScanMonitorResult(wifiClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_WIFI_REQUEST_SCAN_ASYNC: {
-      chppClientTimestampResponse(&wifiClientContext->requestScan, rxHeader);
-      chppWifiRequestScanResult(wifiClientContext, buf, len);
+      if (chppClientTimestampResponse(&wifiClientContext->requestScan,
+                                      rxHeader)) {
+        chppWifiRequestScanResult(wifiClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_WIFI_REQUEST_RANGING_ASYNC: {
-      chppClientTimestampResponse(&wifiClientContext->requestRanging, rxHeader);
-      chppWifiRequestRangingResult(wifiClientContext, buf, len);
+      if (chppClientTimestampResponse(&wifiClientContext->requestRanging,
+                                      rxHeader)) {
+        chppWifiRequestRangingResult(wifiClientContext, buf, len);
+      }
       break;
     }
 
@@ -337,7 +345,7 @@ static void chppWifiClientNotifyMatch(void *clientContext) {
       (struct ChppWifiClientState *)clientContext;
 
   if (wifiClientContext->client.openState == CHPP_OPEN_STATE_PSEUDO_OPEN) {
-    CHPP_LOGI("Previously pseudo-open WiFi client reopening");
+    CHPP_LOGD("Previously pseudo-open WiFi client reopening");
     chppClientSendOpenRequest(&gWifiClientContext.client,
                               &gWifiClientContext.open, CHPP_WIFI_OPEN,
                               /*reopen=*/true);

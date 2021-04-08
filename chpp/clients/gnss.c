@@ -109,6 +109,9 @@ struct ChppGnssClientState {
       passiveLocationListener;  // PassiveLocationListener state
 
   uint32_t capabilities;  // Cached GetCapabilities result
+
+  // True if requestStateResync() is waiting to be processed
+  bool requestStateResyncPending;
 };
 
 // Note: This global definition of gGnssClientContext supports only one
@@ -181,43 +184,53 @@ static enum ChppAppErrorCode chppDispatchGnssResponse(void *clientContext,
 
   switch (rxHeader->command) {
     case CHPP_GNSS_OPEN: {
-      chppClientTimestampResponse(&gnssClientContext->open, rxHeader);
-      chppClientProcessOpenResponse(&gnssClientContext->client, buf, len);
+      if (chppClientTimestampResponse(&gnssClientContext->open, rxHeader)) {
+        chppClientProcessOpenResponse(&gnssClientContext->client, buf, len);
+        if (gnssClientContext->requestStateResyncPending) {
+          gCallbacks->requestStateResync();
+          gnssClientContext->requestStateResyncPending = false;
+        }
+      }
       break;
     }
 
     case CHPP_GNSS_CLOSE: {
-      chppClientTimestampResponse(&gnssClientContext->close, rxHeader);
-      chppGnssCloseResult(gnssClientContext, buf, len);
+      if (chppClientTimestampResponse(&gnssClientContext->close, rxHeader)) {
+        chppGnssCloseResult(gnssClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_GNSS_GET_CAPABILITIES: {
-      chppClientTimestampResponse(&gnssClientContext->getCapabilities,
-                                  rxHeader);
-      chppGnssGetCapabilitiesResult(gnssClientContext, buf, len);
+      if (chppClientTimestampResponse(&gnssClientContext->getCapabilities,
+                                      rxHeader)) {
+        chppGnssGetCapabilitiesResult(gnssClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_GNSS_CONTROL_LOCATION_SESSION: {
-      chppClientTimestampResponse(&gnssClientContext->controlLocationSession,
-                                  rxHeader);
-      chppGnssControlLocationSessionResult(gnssClientContext, buf, len);
+      if (chppClientTimestampResponse(
+              &gnssClientContext->controlLocationSession, rxHeader)) {
+        chppGnssControlLocationSessionResult(gnssClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_GNSS_CONTROL_MEASUREMENT_SESSION: {
-      chppClientTimestampResponse(&gnssClientContext->controlMeasurementSession,
-                                  rxHeader);
-      chppGnssControlMeasurementSessionResult(gnssClientContext, buf, len);
+      if (chppClientTimestampResponse(
+              &gnssClientContext->controlMeasurementSession, rxHeader)) {
+        chppGnssControlMeasurementSessionResult(gnssClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_GNSS_CONFIGURE_PASSIVE_LOCATION_LISTENER: {
-      chppClientTimestampResponse(&gnssClientContext->passiveLocationListener,
-                                  rxHeader);
-      chppGnssConfigurePassiveLocationListenerResult(gnssClientContext, buf,
-                                                     len);
+      if (chppClientTimestampResponse(
+              &gnssClientContext->passiveLocationListener, rxHeader)) {
+        chppGnssConfigurePassiveLocationListenerResult(gnssClientContext, buf,
+                                                       len);
+      }
       break;
     }
 
@@ -338,7 +351,7 @@ static void chppGnssClientNotifyMatch(void *clientContext) {
       (struct ChppGnssClientState *)clientContext;
 
   if (gnssClientContext->client.openState == CHPP_OPEN_STATE_PSEUDO_OPEN) {
-    CHPP_LOGI("Previously pseudo-open GNSS client reopening");
+    CHPP_LOGD("Previously pseudo-open GNSS client reopening");
     chppClientSendOpenRequest(&gGnssClientContext.client,
                               &gGnssClientContext.open, CHPP_GNSS_OPEN,
                               /*reopen=*/true);
@@ -514,11 +527,17 @@ static void chppGnssConfigurePassiveLocationListenerResult(
  */
 static void chppGnssStateResyncNotification(
     struct ChppGnssClientState *clientContext, uint8_t *buf, size_t len) {
-  UNUSED_VAR(clientContext);
   UNUSED_VAR(buf);
   UNUSED_VAR(len);
-  // TODO: Possibly needs more housekeeping
-  gCallbacks->requestStateResync();
+  if (clientContext->client.openState == CHPP_OPEN_STATE_WAITING_TO_OPEN) {
+    // If the GNSS client is waiting for the open to proceed, the CHRE handler
+    // for requestStateResync() may fail, so we set a flag to process it later
+    // when the open has succeeded.
+    clientContext->requestStateResyncPending = true;
+  } else {
+    gCallbacks->requestStateResync();
+    clientContext->requestStateResyncPending = false;
+  }
 }
 
 /**

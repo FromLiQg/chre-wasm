@@ -159,28 +159,32 @@ static enum ChppAppErrorCode chppDispatchWwanResponse(void *clientContext,
 
   switch (rxHeader->command) {
     case CHPP_WWAN_OPEN: {
-      chppClientTimestampResponse(&wwanClientContext->open, rxHeader);
-      chppClientProcessOpenResponse(&wwanClientContext->client, buf, len);
+      if (chppClientTimestampResponse(&wwanClientContext->open, rxHeader)) {
+        chppClientProcessOpenResponse(&wwanClientContext->client, buf, len);
+      }
       break;
     }
 
     case CHPP_WWAN_CLOSE: {
-      chppClientTimestampResponse(&wwanClientContext->close, rxHeader);
-      chppWwanCloseResult(wwanClientContext, buf, len);
+      if (chppClientTimestampResponse(&wwanClientContext->close, rxHeader)) {
+        chppWwanCloseResult(wwanClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_WWAN_GET_CAPABILITIES: {
-      chppClientTimestampResponse(&wwanClientContext->getCapabilities,
-                                  rxHeader);
-      chppWwanGetCapabilitiesResult(wwanClientContext, buf, len);
+      if (chppClientTimestampResponse(&wwanClientContext->getCapabilities,
+                                      rxHeader)) {
+        chppWwanGetCapabilitiesResult(wwanClientContext, buf, len);
+      }
       break;
     }
 
     case CHPP_WWAN_GET_CELLINFO_ASYNC: {
-      chppClientTimestampResponse(&wwanClientContext->getCellInfoAsync,
-                                  rxHeader);
-      chppWwanGetCellInfoAsyncResult(wwanClientContext, buf, len);
+      if (chppClientTimestampResponse(&wwanClientContext->getCellInfoAsync,
+                                      rxHeader)) {
+        chppWwanGetCellInfoAsyncResult(wwanClientContext, buf, len);
+      }
       break;
     }
 
@@ -255,7 +259,7 @@ static void chppWwanClientNotifyMatch(void *clientContext) {
       (struct ChppWwanClientState *)clientContext;
 
   if (wwanClientContext->client.openState == CHPP_OPEN_STATE_PSEUDO_OPEN) {
-    CHPP_LOGI("Previously pseudo-open WWAN client reopening");
+    CHPP_LOGD("Previously pseudo-open WWAN client reopening");
     chppClientSendOpenRequest(&gWwanClientContext.client,
                               &gWwanClientContext.open, CHPP_WWAN_OPEN,
                               /*reopen=*/true);
@@ -361,6 +365,7 @@ static void chppWwanGetCellInfoAsyncResult(
       chre->cellInfoCount = 0;
       chre->reserved = 0;
       chre->cookie = 0;
+      chre->cells = NULL;
     }
 
   } else {
