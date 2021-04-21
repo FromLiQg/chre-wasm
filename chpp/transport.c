@@ -82,10 +82,6 @@ static void chppClearTxDatagramQueue(struct ChppTransportState *context);
 
 static void chppResetTransportContext(struct ChppTransportState *context);
 
-// TODO(b/178963854): remove once fixed
-extern void chreCheckFor178963854(void);
-void __attribute__((weak)) chreCheckFor178963854() {}
-
 /************************************************
  *  Private Functions
  ***********************************************/
@@ -590,7 +586,8 @@ static bool chppRxChecksumIsOk(const struct ChppTransportState *context) {
     CHPP_LOGE("Rx BAD checksum: footer=0x%" PRIx32 ", calc=0x%" PRIx32
               ", len=%" PRIuSIZE,
               context->rxFooter.checksum, crc,
-              context->rxHeader.length + sizeof(struct ChppTransportHeader));
+              (size_t)(context->rxHeader.length +
+                       sizeof(struct ChppTransportHeader)));
   }
 
   return (context->rxFooter.checksum == crc);
@@ -951,8 +948,6 @@ static void chppTransportDoWork(struct ChppTransportState *context) {
       chppLinkSendDoneCb(&context->linkParams, error);
     }
   }
-
-  chreCheckFor178963854();  // TODO(b/178963854): remove once fixed
 }
 
 /**
@@ -1124,12 +1119,14 @@ static void chppReset(struct ChppTransportState *transportContext,
       transportContext->rxHeader.packetCode;
   transportContext->rxStatus.expectedSeq = transportContext->rxHeader.seq + 1;
 
-  // Send reset-ACK
+  // Send reset or reset-ACK
   chppMutexUnlock(&transportContext->mutex);
   chppTransportSendReset(transportContext, resetType, error);
 
   // Inform the App Layer
-  chppAppProcessRxReset(appContext);
+  if (resetType == CHPP_TRANSPORT_ATTR_RESET_ACK) {
+    chppAppProcessReset(appContext);
+  }
 }
 
 /************************************************
@@ -1375,7 +1372,6 @@ bool chppWorkThreadHandleSignal(struct ChppTransportState *context,
         context->resetState = CHPP_RESET_STATE_PERMANENT_FAILURE;
         chppClearTxDatagramQueue(context);
       }
-      chreCheckFor178963854();  // TODO(b/178963854): remove once fixed
     }
   }
 
@@ -1384,7 +1380,6 @@ bool chppWorkThreadHandleSignal(struct ChppTransportState *context,
                            signals & CHPP_TRANSPORT_SIGNAL_PLATFORM_MASK);
   }
 
-  chreCheckFor178963854();  // TODO(b/178963854): remove once fixed
   return true;
 }
 
@@ -1415,7 +1410,6 @@ void chppLinkSendDoneCb(struct ChppPlatformLinkParameters *params,
 void chppDatagramProcessDoneCb(struct ChppTransportState *context,
                                uint8_t *buf) {
   UNUSED_VAR(context);
-  chreCheckFor178963854();  // TODO(b/178963854): remove once fixed
 
   CHPP_FREE_AND_NULLIFY(buf);
 }

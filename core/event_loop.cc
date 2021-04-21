@@ -29,9 +29,6 @@
 #include "chre/util/time.h"
 #include "chre_api/chre/version.h"
 
-extern void chreCheckFor178963854();  // TODO(b/178963854): remove once fixed
-void __attribute__((weak)) chreCheckFor178963854() {}
-
 namespace chre {
 
 // Out of line declaration required for nonintegral static types
@@ -254,10 +251,12 @@ bool EventLoop::unloadNanoapp(uint32_t instanceId,
 
 void EventLoop::postEventOrDie(uint16_t eventType, void *eventData,
                                chreEventCompleteFunction *freeCallback,
-                               uint32_t targetInstanceId) {
+                               uint32_t targetInstanceId,
+                               uint16_t targetGroupMask) {
   if (mRunning) {
     if (!allocateAndPostEvent(eventType, eventData, freeCallback,
-                              kSystemInstanceId, targetInstanceId)) {
+                              kSystemInstanceId, targetInstanceId,
+                              targetGroupMask)) {
       FATAL_ERROR("Failed to post critical system event 0x%" PRIx16, eventType);
     }
   } else if (freeCallback != nullptr) {
@@ -283,13 +282,14 @@ bool EventLoop::postSystemEvent(uint16_t eventType, void *eventData,
 bool EventLoop::postLowPriorityEventOrFree(
     uint16_t eventType, void *eventData,
     chreEventCompleteFunction *freeCallback, uint32_t senderInstanceId,
-    uint32_t targetInstanceId) {
+    uint32_t targetInstanceId, uint16_t targetGroupMask) {
   bool eventPosted = false;
 
   if (mRunning) {
     if (mEventPool.getFreeBlockCount() > kMinReservedHighPriorityEventCount) {
       eventPosted = allocateAndPostEvent(eventType, eventData, freeCallback,
-                                         senderInstanceId, targetInstanceId);
+                                         senderInstanceId, targetInstanceId,
+                                         targetGroupMask);
       if (!eventPosted) {
         LOGE("Failed to allocate event 0x%" PRIx16 " to instanceId %" PRIu32,
              eventType, targetInstanceId);
@@ -366,11 +366,13 @@ void EventLoop::logStateToBuffer(DebugDumpWrapper &debugDump) const {
 bool EventLoop::allocateAndPostEvent(uint16_t eventType, void *eventData,
                                      chreEventCompleteFunction *freeCallback,
                                      uint32_t senderInstanceId,
-                                     uint32_t targetInstanceId) {
+                                     uint32_t targetInstanceId,
+                                     uint16_t targetGroupMask) {
   bool success = false;
 
-  Event *event = mEventPool.allocate(eventType, eventData, freeCallback,
-                                     senderInstanceId, targetInstanceId);
+  Event *event =
+      mEventPool.allocate(eventType, eventData, freeCallback, senderInstanceId,
+                          targetInstanceId, targetGroupMask);
   if (event != nullptr) {
     success = mEvents.push(event);
   }
@@ -396,7 +398,6 @@ bool EventLoop::deliverNextEvent(const UniquePtr<Nanoapp> &app) {
   // TODO: cleaner way to set/clear this? RAII-style?
   mCurrentApp = app.get();
   Event *event = app->processNextEvent();
-  chreCheckFor178963854();  // TODO(b/178963854): remove once fixed
   mCurrentApp = nullptr;
 
   if (event->isUnreferenced()) {
@@ -409,7 +410,8 @@ bool EventLoop::deliverNextEvent(const UniquePtr<Nanoapp> &app) {
 void EventLoop::distributeEvent(Event *event) {
   for (const UniquePtr<Nanoapp> &app : mNanoapps) {
     if ((event->targetInstanceId == chre::kBroadcastInstanceId &&
-         app->isRegisteredForBroadcastEvent(event->eventType)) ||
+         app->isRegisteredForBroadcastEvent(event->eventType,
+                                            event->targetAppGroupMask)) ||
         event->targetInstanceId == app->getInstanceId()) {
       app->postEvent(event);
     }
@@ -428,7 +430,6 @@ void EventLoop::distributeEvent(Event *event) {
     }
     freeEvent(event);
   }
-  chreCheckFor178963854();  // TODO(b/178963854): remove once fixed
 }
 
 void EventLoop::flushInboundEventQueue() {
@@ -447,7 +448,6 @@ void EventLoop::freeEvent(Event *event) {
     // TODO: find a better way to set the context to the creator of the event
     mCurrentApp = lookupAppByInstanceId(event->senderInstanceId);
     event->invokeFreeCallback();
-    chreCheckFor178963854();  // TODO(b/178963854): remove once fixed
     mCurrentApp = nullptr;
   }
 
