@@ -31,6 +31,7 @@
 #include "chpp/common/standard_uuids.h"
 #include "chpp/common/wifi.h"
 #include "chpp/common/wifi_types.h"
+#include "chpp/common/wifi_utils.h"
 #include "chpp/log.h"
 #include "chpp/macros.h"
 #include "chpp/memory.h"
@@ -325,6 +326,8 @@ static void chppWifiClientNotifyReset(void *clientContext) {
   struct ChppWifiClientState *wifiClientContext =
       (struct ChppWifiClientState *)clientContext;
 
+  chppCheckWifiScanEventNotificationReset();
+
   if (wifiClientContext->client.openState != CHPP_OPEN_STATE_OPENED) {
     CHPP_LOGW("WiFi client reset but client wasn't open");
   } else {
@@ -570,6 +573,8 @@ static void chppWifiScanEventNotification(
               chre->referenceTime, correctedTime);
     chre->referenceTime = correctedTime;
 #endif
+
+    CHPP_ASSERT(chppCheckWifiScanEventNotification(chre));
 
     gCallbacks->scanEventCallback(chre);
   }
