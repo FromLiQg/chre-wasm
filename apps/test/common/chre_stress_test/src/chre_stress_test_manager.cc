@@ -18,6 +18,7 @@
 
 #include <pb_decode.h>
 
+#include "chre/util/macros.h"
 #include "chre/util/nanoapp/callbacks.h"
 #include "chre/util/nanoapp/log.h"
 #include "chre_stress_test.nanopb.h"
@@ -82,6 +83,10 @@ void Manager::handleMessageFromHost(uint32_t senderInstanceId,
           handleWifiStartCommand(testCommand.start);
           break;
         }
+        case chre_stress_test_TestCommand_Feature_GNSS_LOCATION: {
+          handleGnssLocationStartCommand(testCommand.start);
+          break;
+        }
         default: {
           LOGE("Unknown feature %d", testCommand.feature);
           success = false;
@@ -114,6 +119,19 @@ void Manager::handleDataFromChre(uint16_t eventType, const void *eventData) {
     case CHRE_EVENT_WIFI_SCAN_RESULT:
       handleWifiScanEvent(static_cast<const chreWifiScanEvent *>(eventData));
       break;
+
+    case CHRE_EVENT_GNSS_ASYNC_RESULT:
+      handleGnssAsyncResult(static_cast<const chreAsyncResult *>(eventData));
+      break;
+
+    case CHRE_EVENT_GNSS_LOCATION:
+      handleGnssLocationEvent(
+          static_cast<const chreGnssLocationEvent *>(eventData));
+      break;
+
+    default:
+      LOGW("Unknown event type %" PRIu16, eventType);
+      break;
   }
 }
 
@@ -133,6 +151,11 @@ void Manager::handleTimerEvent(const uint32_t *handle) {
     }
 
     requestDelayedWifiScan();
+  } else if (*handle == mGnssLocationTimerHandle) {
+    makeGnssLocationRequest();
+  } else if (*handle == mGnssAsyncTimerHandle &&
+             mGnssLocationAsyncRequest.has_value()) {
+    logAndSendFailure("GNSS async result timed out");
   } else {
     logAndSendFailure("Unknown timer handle");
   }
@@ -147,7 +170,7 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
     }
 
     if (!mWifiScanAsyncRequest.has_value()) {
-      logAndSendFailure("Received async result with no pending request");
+      logAndSendFailure("Received WiFi async result with no pending request");
     } else if (result->cookie != mWifiScanAsyncRequest->cookie) {
       logAndSendFailure("On-demand scan cookie mismatch");
     }
@@ -156,6 +179,31 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
   } else {
     logAndSendFailure("Unknown WiFi async result type");
   }
+}
+
+void Manager::handleGnssAsyncResult(const chreAsyncResult *result) {
+  if ((result->requestType == CHRE_GNSS_REQUEST_TYPE_LOCATION_SESSION_START) ||
+      (result->requestType == CHRE_GNSS_REQUEST_TYPE_LOCATION_SESSION_STOP)) {
+    if (!mGnssLocationAsyncRequest.has_value()) {
+      logAndSendFailure(
+          "Received location async result with no pending request");
+    } else if (!result->success) {
+      logAndSendFailure("Async location failure");
+    } else if (result->cookie != mGnssLocationAsyncRequest->cookie) {
+      logAndSendFailure("Location cookie mismatch");
+    }
+
+    cancelTimer(&mGnssAsyncTimerHandle);
+    mGnssLocationAsyncRequest.reset();
+  } else {
+    logAndSendFailure("Unknown GNSS async result type");
+  }
+}
+
+void Manager::handleGnssLocationEvent(const chreGnssLocationEvent *event) {
+  LOGI("Received GNSS location event at %" PRIu64 " ns", event->timestamp);
+
+  // TODO(b/186868033): Check results
 }
 
 void Manager::handleWifiScanEvent(const chreWifiScanEvent *event) {
@@ -173,15 +221,73 @@ void Manager::handleWifiStartCommand(bool start) {
   }
 }
 
+void Manager::handleGnssLocationStartCommand(bool start) {
+  constexpr uint64_t kTimerDelayNs = Seconds(60).toRawNanoseconds();
+
+  if (chreGnssGetCapabilities() & CHRE_GNSS_CAPABILITIES_LOCATION) {
+    mGnssLocationTestStarted = start;
+    makeGnssLocationRequest();
+
+    if (start) {
+      setTimer(kTimerDelayNs, false /* oneShot */, &mGnssLocationTimerHandle);
+    }
+  } else {
+    logAndSendFailure("Platform has no location capability");
+  }
+}
+
+void Manager::setTimer(uint64_t delayNs, bool oneShot, uint32_t *timerHandle) {
+  *timerHandle = chreTimerSet(delayNs, timerHandle, oneShot);
+  if (*timerHandle == CHRE_TIMER_INVALID) {
+    logAndSendFailure("Failed to set timer");
+  }
+}
+
+void Manager::cancelTimer(uint32_t *timerHandle) {
+  if (*timerHandle != CHRE_TIMER_INVALID) {
+    if (!chreTimerCancel(*timerHandle)) {
+      // We don't treat this as a test failure, because the CHRE API does not
+      // guarantee this method succeeds (e.g. if the timer is one-shot and just
+      // fired).
+      LOGW("Failed to cancel timer");
+    }
+    *timerHandle = CHRE_TIMER_INVALID;
+  }
+}
+
+void Manager::makeGnssLocationRequest() {
+  // The list of location intervals to iterate; wraps around.
+  static const uint32_t kMinIntervalMsList[] = {1000, 0};
+  static size_t sIntervalIndex = 0;
+
+  uint32_t minIntervalMs = kMinIntervalMsList[sIntervalIndex];
+  sIntervalIndex = (sIntervalIndex + 1) % ARRAY_SIZE(kMinIntervalMsList);
+
+  bool success = false;
+  if (minIntervalMs > 0 && mGnssLocationTestStarted) {
+    success = chreGnssLocationSessionStartAsync(
+        minIntervalMs, 0 /* minTimeToNextFixMs */, &kGnssLocationCookie);
+  } else {
+    success = chreGnssLocationSessionStopAsync(&kGnssLocationCookie);
+  }
+
+  LOGI("Configure GNSS location interval %" PRIu32 " ms success ? %d",
+       minIntervalMs, success);
+
+  if (!success) {
+    logAndSendFailure("Failed to make location request");
+  } else {
+    mGnssLocationAsyncRequest = AsyncRequest(&kGnssLocationCookie);
+    setTimer(CHRE_GNSS_ASYNC_RESULT_TIMEOUT_NS, true /* oneShot */,
+             &mGnssAsyncTimerHandle);
+  }
+}
+
 void Manager::requestDelayedWifiScan() {
   if (mWifiTestStarted) {
     if (chreWifiGetCapabilities() & CHRE_WIFI_CAPABILITIES_ON_DEMAND_SCAN) {
-      mWifiScanTimerHandle =
-          chreTimerSet(kWifiScanInterval.toRawNanoseconds(),
-                       &mWifiScanTimerHandle /* data */, true /* oneShot */);
-      if (mWifiScanTimerHandle == CHRE_TIMER_INVALID) {
-        logAndSendFailure("Failed to set timer for delayed WiFi scan");
-      }
+      setTimer(kWifiScanInterval.toRawNanoseconds(), true /* oneShot */,
+               &mWifiScanTimerHandle);
     } else {
       logAndSendFailure("Platform has no on-demand scan capability");
     }
