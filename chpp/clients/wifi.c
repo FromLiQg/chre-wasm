@@ -447,10 +447,10 @@ static void chppWifiConfigureScanMonitorResult(
     CHPP_LOGE("Scan monitor failed at service err=%" PRIu8, rxHeader->error);
     if (rxHeader->error == CHPP_APP_ERROR_NONE) {
       CHPP_LOGE("Missing err");
-    } else {
-      // TODO (b/182309999): Remove else and always call
-      gCallbacks->scanMonitorStatusChangeCallback(false, CHRE_ERROR);
+      rxHeader->error = CHPP_APP_ERROR_INVALID_LENGTH;
     }
+    gCallbacks->scanMonitorStatusChangeCallback(
+        false, chppAppErrorToChreError(rxHeader->error));
 
   } else {
     struct ChppWifiConfigureScanMonitorAsyncResponseParameters *result =
@@ -496,17 +496,15 @@ static void chppWifiRequestScanResult(struct ChppWifiClientState *clientContext,
     CHPP_LOGE("Scan request failed at service err=%" PRIu8, rxHeader->error);
     if (rxHeader->error == CHPP_APP_ERROR_NONE) {
       CHPP_LOGE("Missing err");
-    } else {
-      // TODO (b/182309999): Remove else and always call
-      gCallbacks->scanResponseCallback(false, CHRE_ERROR);
+      rxHeader->error = CHPP_APP_ERROR_INVALID_LENGTH;
     }
+    gCallbacks->scanResponseCallback(false,
+                                     chppAppErrorToChreError(rxHeader->error));
 
   } else {
     struct ChppWifiRequestScanResponseParameters *result =
         &((struct ChppWifiRequestScanResponse *)buf)->params;
-
     CHPP_LOGI("Scan request success=%d (at service)", result->pending);
-
     gCallbacks->scanResponseCallback(result->pending, result->errorCode);
   }
 }
@@ -529,12 +527,8 @@ static void chppWifiRequestRangingResult(
 
   if (rxHeader->error != CHPP_APP_ERROR_NONE) {
     CHPP_LOGE("Ranging request failed at service err=%" PRIu8, rxHeader->error);
-    if (rxHeader->error == CHPP_APP_ERROR_NONE) {
-      CHPP_LOGE("Missing err");
-    } else {
-      // TODO (b/182309999): Remove else and always call
-      gCallbacks->rangingEventCallback(CHRE_ERROR, NULL);
-    }
+    gCallbacks->rangingEventCallback(chppAppErrorToChreError(rxHeader->error),
+                                     NULL);
 
   } else {
     CHPP_LOGD("Ranging request accepted at service");
@@ -767,10 +761,16 @@ static bool chppWifiClientRequestScan(const struct chreWifiScanParams *params) {
  * @param event Location event to be released.
  */
 static void chppWifiClientReleaseScanEvent(struct chreWifiScanEvent *event) {
-  void *scannedFreqList = CHPP_CONST_CAST_POINTER(event->scannedFreqList);
-  CHPP_FREE_AND_NULLIFY(scannedFreqList);
-  void *results = CHPP_CONST_CAST_POINTER(event->results);
-  CHPP_FREE_AND_NULLIFY(results);
+  if (event->scannedFreqListLen > 0) {
+    void *scannedFreqList = CHPP_CONST_CAST_POINTER(event->scannedFreqList);
+    CHPP_FREE_AND_NULLIFY(scannedFreqList);
+  }
+
+  if (event->resultCount > 0) {
+    void *results = CHPP_CONST_CAST_POINTER(event->results);
+    CHPP_FREE_AND_NULLIFY(results);
+  }
+
   CHPP_FREE_AND_NULLIFY(event);
 }
 
@@ -812,8 +812,11 @@ static bool chppWifiClientRequestRanging(
  */
 static void chppWifiClientReleaseRangingEvent(
     struct chreWifiRangingEvent *event) {
-  void *results = CHPP_CONST_CAST_POINTER(event->results);
-  CHPP_FREE_AND_NULLIFY(results);
+  if (event->resultCount > 0) {
+    void *results = CHPP_CONST_CAST_POINTER(event->results);
+    CHPP_FREE_AND_NULLIFY(results);
+  }
+
   CHPP_FREE_AND_NULLIFY(event);
 }
 

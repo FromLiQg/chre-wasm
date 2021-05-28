@@ -430,10 +430,10 @@ static void chppGnssControlLocationSessionResult(
     CHPP_LOGE("ControlLocation failed at service err=%" PRIu8, rxHeader->error);
     if (rxHeader->error == CHPP_APP_ERROR_NONE) {
       CHPP_LOGE("Missing err");
-    } else {
-      // TODO (b/182309999): Remove else and always call
-      gCallbacks->locationStatusChangeCallback(false, CHRE_ERROR);
+      rxHeader->error = CHPP_APP_ERROR_INVALID_LENGTH;
     }
+    gCallbacks->locationStatusChangeCallback(
+        false, chppAppErrorToChreError(rxHeader->error));
 
   } else {
     struct ChppGnssControlLocationSessionResponse *result =
@@ -470,10 +470,10 @@ static void chppGnssControlMeasurementSessionResult(
     CHPP_LOGE("Measurement failed at service err=%" PRIu8, rxHeader->error);
     if (rxHeader->error == CHPP_APP_ERROR_NONE) {
       CHPP_LOGE("Missing err");
-    } else {
-      // TODO (b/182309999): Remove else and always call
-      gCallbacks->measurementStatusChangeCallback(false, CHRE_ERROR);
+      rxHeader->error = CHPP_APP_ERROR_INVALID_LENGTH;
     }
+    gCallbacks->measurementStatusChangeCallback(
+        false, chppAppErrorToChreError(rxHeader->error));
 
   } else {
     struct ChppGnssControlMeasurementSessionResponse *result =
@@ -776,8 +776,11 @@ static bool chppGnssClientControlMeasurementSession(bool enable,
  */
 static void chppGnssClientReleaseMeasurementDataEvent(
     struct chreGnssDataEvent *event) {
-  void *measurements = CHPP_CONST_CAST_POINTER(event->measurements);
-  CHPP_FREE_AND_NULLIFY(measurements);
+  if (event->measurement_count > 0) {
+    void *measurements = CHPP_CONST_CAST_POINTER(event->measurements);
+    CHPP_FREE_AND_NULLIFY(measurements);
+  }
+
   CHPP_FREE_AND_NULLIFY(event);
 }
 
