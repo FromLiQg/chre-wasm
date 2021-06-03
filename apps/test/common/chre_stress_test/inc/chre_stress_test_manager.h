@@ -80,6 +80,7 @@ class Manager {
   void handleWifiStartCommand(bool start);
   void handleGnssLocationStartCommand(bool start);
   void handleGnssMeasurementStartCommand(bool start);
+  void handleWwanStartCommand(bool start);
 
   /**
    * @param result The WiFi async result from CHRE.
@@ -97,11 +98,11 @@ class Manager {
   void requestDelayedWifiScan();
 
   /**
-   * Logs an error message and sends the failure to the host.
+   * Sends the failure to the host.
    *
    * @param errorMessage The error message string.
    */
-  void logAndSendFailure(const char *errorMessage);
+  void sendFailure(const char *errorMessage);
 
   /**
    * Sets/cancels a timer and asserts success.
@@ -139,6 +140,16 @@ class Manager {
   void handleGnssLocationEvent(const chreGnssLocationEvent *event);
   void handleGnssDataEvent(const chreGnssDataEvent *event);
 
+  /**
+   * Makes the next cell info request.
+   */
+  void makeWwanCellInfoRequest();
+
+  /**
+   * @param event The cell info event from CHRE.
+   */
+  void handleCellInfoResult(const chreWwanCellInfoResult *event);
+
   //! The host endpoint of the current test host.
   Optional<uint16_t> mHostEndpoint;
 
@@ -148,21 +159,25 @@ class Manager {
   uint32_t mGnssLocationAsyncTimerHandle = CHRE_TIMER_INVALID;
   uint32_t mGnssMeasurementTimerHandle = CHRE_TIMER_INVALID;
   uint32_t mGnssMeasurementAsyncTimerHandle = CHRE_TIMER_INVALID;
+  uint32_t mWwanTimerHandle = CHRE_TIMER_INVALID;
 
   //! true if the test has been started for the feature.
   bool mWifiTestStarted = false;
   bool mGnssLocationTestStarted = false;
   bool mGnssMeasurementTestStarted = false;
+  bool mWwanTestStarted = false;
 
   //! The cookie to use for requests.
   const uint32_t kOnDemandWifiScanCookie = 0xface;
   const uint32_t kGnssLocationCookie = 0xbeef;
   const uint32_t kGnssMeasurementCookie = 0xbead;
+  const uint32_t kWwanCellInfoCookie = 0x1337;
 
   //! The pending requests.
   Optional<AsyncRequest> mWifiScanAsyncRequest;
   Optional<AsyncRequest> mGnssLocationAsyncRequest;
   Optional<AsyncRequest> mGnssMeasurementAsyncRequest;
+  Optional<AsyncRequest> mWwanCellInfoAsyncRequest;
 };
 
 // The stress test manager singleton.
