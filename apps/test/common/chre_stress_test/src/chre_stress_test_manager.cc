@@ -34,6 +34,16 @@ namespace {
 
 constexpr chre::Nanoseconds kWifiScanInterval = chre::Seconds(5);
 
+bool isRequestTypeForLocation(uint8_t requestType) {
+  return (requestType == CHRE_GNSS_REQUEST_TYPE_LOCATION_SESSION_START) ||
+         (requestType == CHRE_GNSS_REQUEST_TYPE_LOCATION_SESSION_STOP);
+}
+
+bool isRequestTypeForMeasurement(uint8_t requestType) {
+  return (requestType == CHRE_GNSS_REQUEST_TYPE_MEASUREMENT_SESSION_START) ||
+         (requestType == CHRE_GNSS_REQUEST_TYPE_MEASUREMENT_SESSION_STOP);
+}
+
 }  // anonymous namespace
 
 void Manager::handleEvent(uint32_t senderInstanceId, uint16_t eventType,
@@ -87,6 +97,14 @@ void Manager::handleMessageFromHost(uint32_t senderInstanceId,
           handleGnssLocationStartCommand(testCommand.start);
           break;
         }
+        case chre_stress_test_TestCommand_Feature_GNSS_MEASUREMENT: {
+          handleGnssMeasurementStartCommand(testCommand.start);
+          break;
+        }
+        case chre_stress_test_TestCommand_Feature_WWAN: {
+          handleWwanStartCommand(testCommand.start);
+          break;
+        }
         default: {
           LOGE("Unknown feature %d", testCommand.feature);
           success = false;
@@ -129,6 +147,15 @@ void Manager::handleDataFromChre(uint16_t eventType, const void *eventData) {
           static_cast<const chreGnssLocationEvent *>(eventData));
       break;
 
+    case CHRE_EVENT_GNSS_DATA:
+      handleGnssDataEvent(static_cast<const chreGnssDataEvent *>(eventData));
+      break;
+
+    case CHRE_EVENT_WWAN_CELL_INFO_RESULT:
+      handleCellInfoResult(
+          static_cast<const chreWwanCellInfoResult *>(eventData));
+      break;
+
     default:
       LOGW("Unknown event type %" PRIu16, eventType);
       break;
@@ -140,7 +167,7 @@ void Manager::handleTimerEvent(const uint32_t *handle) {
     if (mWifiScanAsyncRequest.has_value()) {
       if (chreGetTime() > (mWifiScanAsyncRequest->requestTimeNs +
                            CHRE_WIFI_SCAN_RESULT_TIMEOUT_NS)) {
-        logAndSendFailure("Prev WiFi scan did not complete in time");
+        sendFailure("Prev WiFi scan did not complete in time");
       }
     } else {
       bool success = chreWifiRequestScanAsyncDefault(&kOnDemandWifiScanCookie);
@@ -153,11 +180,18 @@ void Manager::handleTimerEvent(const uint32_t *handle) {
     requestDelayedWifiScan();
   } else if (*handle == mGnssLocationTimerHandle) {
     makeGnssLocationRequest();
-  } else if (*handle == mGnssAsyncTimerHandle &&
+  } else if (*handle == mGnssMeasurementTimerHandle) {
+    makeGnssMeasurementRequest();
+  } else if (*handle == mGnssLocationAsyncTimerHandle &&
              mGnssLocationAsyncRequest.has_value()) {
-    logAndSendFailure("GNSS async result timed out");
+    sendFailure("GNSS location async result timed out");
+  } else if (*handle == mGnssMeasurementAsyncTimerHandle &&
+             mGnssMeasurementAsyncRequest.has_value()) {
+    sendFailure("GNSS measurement async result timed out");
+  } else if (*handle == mWwanTimerHandle) {
+    makeWwanCellInfoRequest();
   } else {
-    logAndSendFailure("Unknown timer handle");
+    sendFailure("Unknown timer handle");
   }
 }
 
@@ -170,38 +204,53 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
     }
 
     if (!mWifiScanAsyncRequest.has_value()) {
-      logAndSendFailure("Received WiFi async result with no pending request");
+      sendFailure("Received WiFi async result with no pending request");
     } else if (result->cookie != mWifiScanAsyncRequest->cookie) {
-      logAndSendFailure("On-demand scan cookie mismatch");
+      sendFailure("On-demand scan cookie mismatch");
     }
 
     mWifiScanAsyncRequest.reset();
   } else {
-    logAndSendFailure("Unknown WiFi async result type");
+    sendFailure("Unknown WiFi async result type");
   }
 }
 
 void Manager::handleGnssAsyncResult(const chreAsyncResult *result) {
-  if ((result->requestType == CHRE_GNSS_REQUEST_TYPE_LOCATION_SESSION_START) ||
-      (result->requestType == CHRE_GNSS_REQUEST_TYPE_LOCATION_SESSION_STOP)) {
-    if (!mGnssLocationAsyncRequest.has_value()) {
-      logAndSendFailure(
-          "Received location async result with no pending request");
-    } else if (!result->success) {
-      logAndSendFailure("Async location failure");
-    } else if (result->cookie != mGnssLocationAsyncRequest->cookie) {
-      logAndSendFailure("Location cookie mismatch");
-    }
-
-    cancelTimer(&mGnssAsyncTimerHandle);
-    mGnssLocationAsyncRequest.reset();
+  if (isRequestTypeForLocation(result->requestType)) {
+    validateGnssAsyncResult(result, mGnssLocationAsyncRequest,
+                            &mGnssLocationAsyncTimerHandle);
+  } else if (isRequestTypeForMeasurement(result->requestType)) {
+    validateGnssAsyncResult(result, mGnssMeasurementAsyncRequest,
+                            &mGnssMeasurementAsyncTimerHandle);
   } else {
-    logAndSendFailure("Unknown GNSS async result type");
+    sendFailure("Unknown GNSS async result type");
   }
+}
+
+void Manager::validateGnssAsyncResult(const chreAsyncResult *result,
+                                      Optional<AsyncRequest> &request,
+                                      uint32_t *asyncTimerHandle) {
+  if (!request.has_value()) {
+    sendFailure("Received GNSS async result with no pending request");
+  } else if (!result->success) {
+    sendFailure("Async GNSS failure");
+  } else if (result->cookie != request->cookie) {
+    sendFailure("GNSS async cookie mismatch");
+  }
+
+  cancelTimer(asyncTimerHandle);
+  request.reset();
 }
 
 void Manager::handleGnssLocationEvent(const chreGnssLocationEvent *event) {
   LOGI("Received GNSS location event at %" PRIu64 " ns", event->timestamp);
+
+  // TODO(b/186868033): Check results
+}
+
+void Manager::handleGnssDataEvent(const chreGnssDataEvent *event) {
+  LOGI("Received GNSS measurement event at %" PRIu64 " ns",
+       event->clock.time_ns);
 
   // TODO(b/186868033): Check results
 }
@@ -214,10 +263,24 @@ void Manager::handleWifiScanEvent(const chreWifiScanEvent *event) {
   // TODO(b/186868033): Check results
 }
 
+void Manager::handleCellInfoResult(const chreWwanCellInfoResult *event) {
+  LOGI("Received cell info result");
+
+  mWwanCellInfoAsyncRequest.reset();
+  if (event->errorCode != CHRE_ERROR_NONE) {
+    LOGE("Cell info request failed with error code %" PRIu8, event->errorCode);
+    sendFailure("Cell info request failed");
+  } else {
+    // TODO(b/186868033): Check results
+  }
+}
+
 void Manager::handleWifiStartCommand(bool start) {
   mWifiTestStarted = start;
   if (start) {
     requestDelayedWifiScan();
+  } else {
+    cancelTimer(&mWifiScanTimerHandle);
   }
 }
 
@@ -230,23 +293,63 @@ void Manager::handleGnssLocationStartCommand(bool start) {
 
     if (start) {
       setTimer(kTimerDelayNs, false /* oneShot */, &mGnssLocationTimerHandle);
+    } else {
+      cancelTimer(&mGnssLocationTimerHandle);
     }
   } else {
-    logAndSendFailure("Platform has no location capability");
+    sendFailure("Platform has no location capability");
+  }
+}
+
+void Manager::handleGnssMeasurementStartCommand(bool start) {
+  constexpr uint64_t kTimerDelayNs = Seconds(60).toRawNanoseconds();
+
+  if (chreGnssGetCapabilities() & CHRE_GNSS_CAPABILITIES_MEASUREMENTS) {
+    mGnssMeasurementTestStarted = start;
+    makeGnssMeasurementRequest();
+
+    if (start) {
+      setTimer(kTimerDelayNs, false /* oneShot */,
+               &mGnssMeasurementTimerHandle);
+    } else {
+      cancelTimer(&mGnssMeasurementTimerHandle);
+    }
+  } else {
+    sendFailure("Platform has no GNSS measurement capability");
+  }
+}
+
+void Manager::handleWwanStartCommand(bool start) {
+  constexpr uint64_t kTimerDelayNs = CHRE_ASYNC_RESULT_TIMEOUT_NS;
+
+  if (chreWwanGetCapabilities() & CHRE_WWAN_GET_CELL_INFO) {
+    mWwanTestStarted = start;
+    makeWwanCellInfoRequest();
+
+    if (start) {
+      setTimer(kTimerDelayNs, false /* oneShot */, &mWwanTimerHandle);
+    } else {
+      cancelTimer(&mWwanTimerHandle);
+    }
+  } else {
+    sendFailure("Platform has no WWAN cell info capability");
   }
 }
 
 void Manager::setTimer(uint64_t delayNs, bool oneShot, uint32_t *timerHandle) {
   *timerHandle = chreTimerSet(delayNs, timerHandle, oneShot);
   if (*timerHandle == CHRE_TIMER_INVALID) {
-    logAndSendFailure("Failed to set timer");
+    sendFailure("Failed to set timer");
   }
 }
 
 void Manager::cancelTimer(uint32_t *timerHandle) {
   if (*timerHandle != CHRE_TIMER_INVALID) {
     if (!chreTimerCancel(*timerHandle)) {
-      logAndSendFailure("Failed to cancel timer");
+      // We don't treat this as a test failure, because the CHRE API does not
+      // guarantee this method succeeds (e.g. if the timer is one-shot and just
+      // fired).
+      LOGW("Failed to cancel timer");
     }
     *timerHandle = CHRE_TIMER_INVALID;
   }
@@ -257,11 +360,16 @@ void Manager::makeGnssLocationRequest() {
   static const uint32_t kMinIntervalMsList[] = {1000, 0};
   static size_t sIntervalIndex = 0;
 
-  uint32_t minIntervalMs = kMinIntervalMsList[sIntervalIndex];
-  sIntervalIndex = (sIntervalIndex + 1) % ARRAY_SIZE(kMinIntervalMsList);
+  uint32_t minIntervalMs = 0;
+  if (mGnssLocationTestStarted) {
+    minIntervalMs = kMinIntervalMsList[sIntervalIndex];
+    sIntervalIndex = (sIntervalIndex + 1) % ARRAY_SIZE(kMinIntervalMsList);
+  } else {
+    sIntervalIndex = 0;
+  }
 
   bool success = false;
-  if (minIntervalMs > 0 && mGnssLocationTestStarted) {
+  if (minIntervalMs > 0) {
     success = chreGnssLocationSessionStartAsync(
         minIntervalMs, 0 /* minTimeToNextFixMs */, &kGnssLocationCookie);
   } else {
@@ -272,11 +380,44 @@ void Manager::makeGnssLocationRequest() {
        minIntervalMs, success);
 
   if (!success) {
-    logAndSendFailure("Failed to make location request");
+    sendFailure("Failed to make location request");
   } else {
     mGnssLocationAsyncRequest = AsyncRequest(&kGnssLocationCookie);
     setTimer(CHRE_GNSS_ASYNC_RESULT_TIMEOUT_NS, true /* oneShot */,
-             &mGnssAsyncTimerHandle);
+             &mGnssLocationAsyncTimerHandle);
+  }
+}
+
+void Manager::makeGnssMeasurementRequest() {
+  // The list of measurement intervals to iterate; wraps around.
+  static const uint32_t kMinIntervalMsList[] = {1000, 0};
+  static size_t sIntervalIndex = 0;
+
+  uint32_t minIntervalMs = 0;
+  if (mGnssMeasurementTestStarted) {
+    minIntervalMs = kMinIntervalMsList[sIntervalIndex];
+    sIntervalIndex = (sIntervalIndex + 1) % ARRAY_SIZE(kMinIntervalMsList);
+  } else {
+    sIntervalIndex = 0;
+  }
+
+  bool success = false;
+  if (minIntervalMs > 0) {
+    success = chreGnssMeasurementSessionStartAsync(minIntervalMs,
+                                                   &kGnssMeasurementCookie);
+  } else {
+    success = chreGnssMeasurementSessionStopAsync(&kGnssMeasurementCookie);
+  }
+
+  LOGI("Configure GNSS measurement interval %" PRIu32 " ms success ? %d",
+       minIntervalMs, success);
+
+  if (!success) {
+    sendFailure("Failed to make measurement request");
+  } else {
+    mGnssMeasurementAsyncRequest = AsyncRequest(&kGnssMeasurementCookie);
+    setTimer(CHRE_GNSS_ASYNC_RESULT_TIMEOUT_NS, true /* oneShot */,
+             &mGnssMeasurementAsyncTimerHandle);
   }
 }
 
@@ -286,13 +427,33 @@ void Manager::requestDelayedWifiScan() {
       setTimer(kWifiScanInterval.toRawNanoseconds(), true /* oneShot */,
                &mWifiScanTimerHandle);
     } else {
-      logAndSendFailure("Platform has no on-demand scan capability");
+      sendFailure("Platform has no on-demand scan capability");
     }
   }
 }
 
-void Manager::logAndSendFailure(const char *errorMessage) {
-  LOGE("%s", errorMessage);
+void Manager::makeWwanCellInfoRequest() {
+  if (mWwanTestStarted) {
+    if (mWwanCellInfoAsyncRequest.has_value()) {
+      if (chreGetTime() > mWwanCellInfoAsyncRequest->requestTimeNs +
+                              CHRE_ASYNC_RESULT_TIMEOUT_NS) {
+        sendFailure("Prev cell info request did not complete in time");
+      }
+    } else {
+      bool success = chreWwanGetCellInfoAsync(&kWwanCellInfoCookie);
+
+      LOGI("Cell info request success ? %d", success);
+
+      if (!success) {
+        sendFailure("Failed to make cell info request");
+      } else {
+        mWwanCellInfoAsyncRequest = AsyncRequest(&kWwanCellInfoCookie);
+      }
+    }
+  }
+}
+
+void Manager::sendFailure(const char *errorMessage) {
   test_shared::sendTestResultWithMsgToHost(
       mHostEndpoint.value(),
       chre_stress_test_MessageType_TEST_RESULT /* messageType */,

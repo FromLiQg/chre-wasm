@@ -352,9 +352,9 @@ static enum ChppAppErrorCode chppWifiServiceGetCapabilities(
  * Configures whether scanEventCallback receives unsolicited scan results, i.e.
  * the results of scans not performed at the request of CHRE.
  *
- * This function returns an error code synchronously. A subsequent call to
- * chppWifiServiceScanMonitorStatusChangeCallback() will be used to communicate
- * the result of the operation.
+ * This function returns an error code synchronously.
+ * A subsequent call to chppWifiServiceScanMonitorStatusChangeCallback() will be
+ * used to communicate the result of this request (as a service response).
  *
  * @param serviceContext Maintains status for each service instance.
  * @param requestHeader App layer header of the request.
@@ -418,7 +418,16 @@ static enum ChppAppErrorCode chppWifiServiceRequestScanAsync(
     if (!wifiServiceContext->api->requestScan(chre)) {
       error = CHPP_APP_ERROR_UNSPECIFIED;
     }
-    chppFree(chre);
+
+    if (chre->frequencyListLen > 0) {
+      void *frequencyList = CHPP_CONST_CAST_POINTER(chre->frequencyList);
+      CHPP_FREE_AND_NULLIFY(frequencyList);
+    }
+    if (chre->ssidListLen > 0) {
+      void *ssidList = CHPP_CONST_CAST_POINTER(chre->ssidList);
+      CHPP_FREE_AND_NULLIFY(ssidList);
+    }
+    CHPP_FREE_AND_NULLIFY(chre);
   }
 
   return error;
@@ -474,7 +483,11 @@ static enum ChppAppErrorCode chppWifiServiceRequestRangingAsync(
       }
     }
 
-    chppFree(chre);
+    if (chre->targetListLen > 0) {
+      void *targetList = CHPP_CONST_CAST_POINTER(chre->targetList);
+      CHPP_FREE_AND_NULLIFY(targetList);
+    }
+    CHPP_FREE_AND_NULLIFY(chre);
   }
 
   return error;
