@@ -166,6 +166,7 @@ void chppDeregisterCommonClients(struct ChppAppState *context) {
 }
 
 void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
+                        struct ChppClientState *clientState,
                         const struct ChppClient *newClient) {
   CHPP_NOT_NULL(newClient);
 
@@ -174,6 +175,7 @@ void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
               appContext->registeredClientCount);
 
   } else {
+    clientState->appContext = appContext;
     appContext->registeredClients[appContext->registeredClientCount] =
         newClient;
     appContext->registeredClientContexts[appContext->registeredClientCount] =
@@ -211,26 +213,26 @@ void chppInitBasicClients(struct ChppAppState *context) {
 #endif
 }
 
-void chppClientInit(struct ChppClientState *clientContext, uint8_t handle) {
-  CHPP_ASSERT_LOG(!clientContext->initialized,
+void chppClientInit(struct ChppClientState *clientState, uint8_t handle) {
+  CHPP_ASSERT_LOG(!clientState->initialized,
                   "Client H#%" PRIu8 " already initialized", handle);
 
-  if (!clientContext->everInitialized) {
-    clientContext->handle = handle;
-    chppMutexInit(&clientContext->responseMutex);
-    chppConditionVariableInit(&clientContext->responseCondVar);
-    clientContext->everInitialized = true;
+  if (!clientState->everInitialized) {
+    clientState->handle = handle;
+    chppMutexInit(&clientState->responseMutex);
+    chppConditionVariableInit(&clientState->responseCondVar);
+    clientState->everInitialized = true;
   }
 
-  clientContext->initialized = true;
+  clientState->initialized = true;
 }
 
-void chppClientDeinit(struct ChppClientState *clientContext) {
-  CHPP_ASSERT_LOG(clientContext->initialized,
+void chppClientDeinit(struct ChppClientState *clientState) {
+  CHPP_ASSERT_LOG(clientState->initialized,
                   "Client H#%" PRIu8 " already deinitialized",
-                  clientContext->handle);
+                  clientState->handle);
 
-  clientContext->initialized = false;
+  clientState->initialized = false;
 }
 
 void chppDeinitBasicClients(struct ChppAppState *context) {
