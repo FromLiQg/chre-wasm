@@ -148,15 +148,17 @@ void chppDeregisterCommonClients(struct ChppAppState *context);
  *
  * @param appContext Maintains status for each app layer instance.
  * @param clientContext Maintains status for each client instance.
+ * @param clientState State variable of the client.
  * @param newClient The client to be registered on this platform.
  */
 void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
+                        struct ChppClientState *clientState,
                         const struct ChppClient *newClient);
 
 /**
  * Initializes basic CHPP clients.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param context Maintains status for each app layer instance.
  */
 void chppInitBasicClients(struct ChppAppState *context);
 
@@ -164,29 +166,29 @@ void chppInitBasicClients(struct ChppAppState *context);
  * Initializes a client. This function must be called when a client is matched
  * with a service during discovery to provides its handle number.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param clientState State variable of the client.
  * @param handle Handle number for this client.
  */
-void chppClientInit(struct ChppClientState *clientContext, uint8_t handle);
+void chppClientInit(struct ChppClientState *clientState, uint8_t handle);
 
 /**
  * Deinitializes a client.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param clientState State variable of the client.
  */
-void chppClientDeinit(struct ChppClientState *clientContext);
+void chppClientDeinit(struct ChppClientState *clientState);
 
 /**
  * Deinitializes basic clients.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param context Maintains status for each app layer instance.
  */
 void chppDeinitBasicClients(struct ChppAppState *context);
 
 /**
  * Deinitializes all matched clients.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param context Maintains status for each app layer instance.
  */
 void chppDeinitMatchedClients(struct ChppAppState *context);
 
@@ -314,7 +316,7 @@ bool chppSendTimestampedRequestAndWaitTimeout(
  * Markes a closed client as pseudo-open, so that it would be opened upon a
  * reset.
  *
- * @param clientState State of the client receiving the response.
+ * @param clientState State variable of the client.
  */
 void chppClientPseudoOpen(struct ChppClientState *clientState);
 
@@ -325,7 +327,7 @@ void chppClientPseudoOpen(struct ChppClientState *clientState);
  * The command will be sent non-blocking if reopening after a reset, and
  * blocking otherwise.
  *
- * @param clientState State of the client receiving the response.
+ * @param clientState State variable of the client.
  * @param openRRState Request/response state for the open command.
  * @param openCommand Open command to be sent.
  * @param reopen Indicates that this is a reopen (vs. initial open) request.
@@ -339,7 +341,7 @@ bool chppClientSendOpenRequest(struct ChppClientState *clientState,
 /**
  * Processes a service response for the open command.
  *
- * @param clientState State of the client receiving the response.
+ * @param clientState State variable of the client.
  */
 void chppClientProcessOpenResponse(struct ChppClientState *clientState,
                                    uint8_t *buf, size_t len);
