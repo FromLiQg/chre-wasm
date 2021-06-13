@@ -73,6 +73,15 @@ class Manager {
   void handleTimerEvent(const uint32_t *handle);
 
   /**
+   * Validates a timestamp of an event where the timestamp is expected
+   * to be monotonically increasing.
+   *
+   * @param timestamp The timestamp.
+   * @param pastTimestamp The previous timestamp.
+   */
+  void checkTimestamp(uint64_t timestamp, uint64_t pastTimestamp);
+
+  /**
    * Handles a start command from the host.
    *
    * @param start true to start the test, stop otherwise.
@@ -96,6 +105,7 @@ class Manager {
    * Sets up a WiFi scan request after some time.
    */
   void requestDelayedWifiScan();
+  void handleDelayedWifiTimer();
 
   /**
    * Sends the failure to the host.
@@ -155,6 +165,7 @@ class Manager {
 
   //! The timer handle for performing requests.
   uint32_t mWifiScanTimerHandle = CHRE_TIMER_INVALID;
+  uint32_t mWifiScanAsyncTimerHandle = CHRE_TIMER_INVALID;
   uint32_t mGnssLocationTimerHandle = CHRE_TIMER_INVALID;
   uint32_t mGnssLocationAsyncTimerHandle = CHRE_TIMER_INVALID;
   uint32_t mGnssMeasurementTimerHandle = CHRE_TIMER_INVALID;
@@ -178,6 +189,12 @@ class Manager {
   Optional<AsyncRequest> mGnssLocationAsyncRequest;
   Optional<AsyncRequest> mGnssMeasurementAsyncRequest;
   Optional<AsyncRequest> mWwanCellInfoAsyncRequest;
+
+  //! The previous timestamp of events.
+  uint64_t mPrevGnssLocationEventTimestampMs = 0;
+  uint64_t mPrevGnssMeasurementEventTimestampNs = 0;
+  uint64_t mPrevWifiScanEventTimestampNs = 0;
+  uint64_t mPrevWwanCellInfoEventTimestampNs = 0;
 };
 
 // The stress test manager singleton.
