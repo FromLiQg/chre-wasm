@@ -25,6 +25,7 @@
 #include "chpp/condition_variable.h"
 #include "chpp/macros.h"
 #include "chpp/mutex.h"
+#include "chre_api/chre/common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -68,6 +69,7 @@ extern "C" {
  */
 struct ChppClientState {
   struct ChppAppState *appContext;  // Pointer to app layer context
+  uint8_t index;                    // Index of this client
   uint8_t handle;                   // Handle number for this client
   uint8_t transaction;              // Next Transaction ID to be used
 
@@ -100,9 +102,10 @@ struct ChppClientState {
 #define CHPP_CLIENT_ENABLED
 #endif
 
-// Default timeout for chppSendTimestampedRequestAndWait().
-#ifndef CHPP_DEFAULT_CLIENT_REQUEST_TIMEOUT_NS
-#define CHPP_DEFAULT_CLIENT_REQUEST_TIMEOUT_NS UINT64_C(5000000000)  // 5s
+#define CHPP_CLIENT_REQUEST_TIMEOUT_INFINITE CHPP_TIME_MAX
+
+#ifndef CHPP_CLIENT_REQUEST_TIMEOUT_DEFAULT
+#define CHPP_CLIENT_REQUEST_TIMEOUT_DEFAULT CHRE_ASYNC_RESULT_TIMEOUT_NS
 #endif
 
 // Default timeout for discovery completion.
@@ -148,15 +151,17 @@ void chppDeregisterCommonClients(struct ChppAppState *context);
  *
  * @param appContext Maintains status for each app layer instance.
  * @param clientContext Maintains status for each client instance.
+ * @param clientState State variable of the client.
  * @param newClient The client to be registered on this platform.
  */
 void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
+                        struct ChppClientState *clientState,
                         const struct ChppClient *newClient);
 
 /**
  * Initializes basic CHPP clients.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param context Maintains status for each app layer instance.
  */
 void chppInitBasicClients(struct ChppAppState *context);
 
@@ -164,29 +169,29 @@ void chppInitBasicClients(struct ChppAppState *context);
  * Initializes a client. This function must be called when a client is matched
  * with a service during discovery to provides its handle number.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param clientState State variable of the client.
  * @param handle Handle number for this client.
  */
-void chppClientInit(struct ChppClientState *clientContext, uint8_t handle);
+void chppClientInit(struct ChppClientState *clientState, uint8_t handle);
 
 /**
  * Deinitializes a client.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param clientState State variable of the client.
  */
-void chppClientDeinit(struct ChppClientState *clientContext);
+void chppClientDeinit(struct ChppClientState *clientState);
 
 /**
  * Deinitializes basic clients.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param context Maintains status for each app layer instance.
  */
 void chppDeinitBasicClients(struct ChppAppState *context);
 
 /**
  * Deinitializes all matched clients.
  *
- * @param clientContext Maintains status for each client instance.
+ * @param context Maintains status for each app layer instance.
  */
 void chppDeinitMatchedClients(struct ChppAppState *context);
 
@@ -231,13 +236,16 @@ struct ChppAppHeader *chppAllocClientRequestCommand(
  * This function prints an error message if a duplicate request is sent
  * while outstanding request is still pending without a response.
  *
+ * @param clientState State of the client sending the client request.
  * @param transactionId The transaction ID to use when loading the app.
  * @param rRState Maintains the basic state for each request/response
  * functionality of a client.
  * @param requestHeader Client request header.
  */
-void chppClientTimestampRequest(struct ChppRequestResponseState *rRState,
-                                struct ChppAppHeader *requestHeader);
+void chppClientTimestampRequest(struct ChppClientState *clientState,
+                                struct ChppRequestResponseState *rRState,
+                                struct ChppAppHeader *requestHeader,
+                                uint64_t timeoutNs);
 
 /**
  * This function shall be called for incoming responses to a client request in
@@ -250,13 +258,15 @@ void chppClientTimestampRequest(struct ChppRequestResponseState *rRState,
  * This function prints an error message if a response is received without an
  * outstanding request.
  *
+ * @param clientState State of the client sending the client request.
  * @param rRState Maintains the basic state for each request/response
  * functionality of a client.
  * @param requestHeader Client request header.
  *
  * @return false if there is an error. True otherwise.
  */
-bool chppClientTimestampResponse(struct ChppRequestResponseState *rRState,
+bool chppClientTimestampResponse(struct ChppClientState *clientState,
+                                 struct ChppRequestResponseState *rRState,
                                  const struct ChppAppHeader *responseHeader);
 
 /**
@@ -273,13 +283,16 @@ bool chppClientTimestampResponse(struct ChppRequestResponseState *rRState,
  * functionality of a client.
  * @param buf Datagram payload allocated through chppMalloc. Cannot be null.
  * @param len Datagram length in bytes.
+ * @param timeoutNs Time in nanoseconds before a timeout response is generated.
+ * Zero means no timeout response.
  *
  * @return True informs the sender that the datagram was successfully enqueued.
  * False informs the sender that the queue was full and the payload discarded.
  */
 bool chppSendTimestampedRequestOrFail(struct ChppClientState *clientState,
                                       struct ChppRequestResponseState *rRState,
-                                      void *buf, size_t len);
+                                      void *buf, size_t len,
+                                      uint64_t timeoutNs);
 
 /**
  * Similar to chppSendTimestampedRequestOrFail() but blocks execution until a
@@ -314,7 +327,7 @@ bool chppSendTimestampedRequestAndWaitTimeout(
  * Markes a closed client as pseudo-open, so that it would be opened upon a
  * reset.
  *
- * @param clientState State of the client receiving the response.
+ * @param clientState State variable of the client.
  */
 void chppClientPseudoOpen(struct ChppClientState *clientState);
 
@@ -325,7 +338,7 @@ void chppClientPseudoOpen(struct ChppClientState *clientState);
  * The command will be sent non-blocking if reopening after a reset, and
  * blocking otherwise.
  *
- * @param clientState State of the client receiving the response.
+ * @param clientState State variable of the client.
  * @param openRRState Request/response state for the open command.
  * @param openCommand Open command to be sent.
  * @param reopen Indicates that this is a reopen (vs. initial open) request.
@@ -339,10 +352,18 @@ bool chppClientSendOpenRequest(struct ChppClientState *clientState,
 /**
  * Processes a service response for the open command.
  *
- * @param clientState State of the client receiving the response.
+ * @param clientState State variable of the client.
  */
 void chppClientProcessOpenResponse(struct ChppClientState *clientState,
                                    uint8_t *buf, size_t len);
+
+/**
+ * Recalculates the next upcoming client request timeout time.
+ *
+ * @param context Maintains status for each app layer instance.
+ */
+void chppClientRecalculateNextTimeout(struct ChppAppState *context);
+
 #ifdef __cplusplus
 }
 #endif

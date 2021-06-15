@@ -164,20 +164,9 @@ void Manager::handleDataFromChre(uint16_t eventType, const void *eventData) {
 
 void Manager::handleTimerEvent(const uint32_t *handle) {
   if (*handle == mWifiScanTimerHandle) {
-    if (mWifiScanAsyncRequest.has_value()) {
-      if (chreGetTime() > (mWifiScanAsyncRequest->requestTimeNs +
-                           CHRE_WIFI_SCAN_RESULT_TIMEOUT_NS)) {
-        sendFailure("Prev WiFi scan did not complete in time");
-      }
-    } else {
-      bool success = chreWifiRequestScanAsyncDefault(&kOnDemandWifiScanCookie);
-      LOGI("Requested on demand wifi success ? %d", success);
-      if (success) {
-        mWifiScanAsyncRequest = AsyncRequest(&kOnDemandWifiScanCookie);
-      }
-    }
-
-    requestDelayedWifiScan();
+    handleDelayedWifiTimer();
+  } else if (*handle == mWifiScanAsyncTimerHandle) {
+    sendFailure("WiFi scan request timed out");
   } else if (*handle == mGnssLocationTimerHandle) {
     makeGnssLocationRequest();
   } else if (*handle == mGnssMeasurementTimerHandle) {
@@ -195,6 +184,30 @@ void Manager::handleTimerEvent(const uint32_t *handle) {
   }
 }
 
+void Manager::handleDelayedWifiTimer() {
+  // NOTE: We set the maxScanAgeMs to something smaller than the WiFi
+  // scan periodicity to ensure new scans are generated.
+  static const struct chreWifiScanParams params = {
+      /*.scanType=*/CHRE_WIFI_SCAN_TYPE_NO_PREFERENCE,
+      /*.maxScanAgeMs=*/2000,  // 2 seconds
+      /*.frequencyListLen=*/0,
+      /*.frequencyList=*/NULL,
+      /*.ssidListLen=*/0,
+      /*.ssidList=*/NULL,
+      /*.radioChainPref=*/CHRE_WIFI_RADIO_CHAIN_PREF_DEFAULT,
+      /*.channelSet=*/CHRE_WIFI_CHANNEL_SET_NON_DFS};
+
+  bool success = chreWifiRequestScanAsync(&params, &kOnDemandWifiScanCookie);
+  LOGI("Requested on demand wifi success ? %d", success);
+  if (!success) {
+    sendFailure("Failed to make WiFi scan request");
+  } else {
+    mWifiScanAsyncRequest = AsyncRequest(&kOnDemandWifiScanCookie);
+    setTimer(CHRE_WIFI_SCAN_RESULT_TIMEOUT_NS, true /* oneShot */,
+             &mWifiScanAsyncTimerHandle);
+  }
+}
+
 void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
   if (result->requestType == CHRE_WIFI_REQUEST_TYPE_REQUEST_SCAN) {
     if (result->success) {
@@ -209,7 +222,9 @@ void Manager::handleWifiAsyncResult(const chreAsyncResult *result) {
       sendFailure("On-demand scan cookie mismatch");
     }
 
+    cancelTimer(&mWifiScanAsyncTimerHandle);
     mWifiScanAsyncRequest.reset();
+    requestDelayedWifiScan();
   } else {
     sendFailure("Unknown WiFi async result type");
   }
@@ -242,17 +257,27 @@ void Manager::validateGnssAsyncResult(const chreAsyncResult *result,
   request.reset();
 }
 
-void Manager::handleGnssLocationEvent(const chreGnssLocationEvent *event) {
-  LOGI("Received GNSS location event at %" PRIu64 " ns", event->timestamp);
+void Manager::checkTimestamp(uint64_t timestamp, uint64_t pastTimestamp) {
+  if (timestamp < pastTimestamp) {
+    sendFailure("Timestamp was too old");
+  } else if (timestamp == pastTimestamp) {
+    sendFailure("Timestamp was duplicate");
+  }
+}
 
-  // TODO(b/186868033): Check results
+void Manager::handleGnssLocationEvent(const chreGnssLocationEvent *event) {
+  LOGI("Received GNSS location event at %" PRIu64 " ms", event->timestamp);
+
+  checkTimestamp(event->timestamp, mPrevGnssLocationEventTimestampMs);
+  mPrevGnssLocationEventTimestampMs = event->timestamp;
 }
 
 void Manager::handleGnssDataEvent(const chreGnssDataEvent *event) {
   LOGI("Received GNSS measurement event at %" PRIu64 " ns",
        event->clock.time_ns);
 
-  // TODO(b/186868033): Check results
+  checkTimestamp(event->clock.time_ns, mPrevGnssMeasurementEventTimestampNs);
+  mPrevGnssMeasurementEventTimestampNs = event->clock.time_ns;
 }
 
 void Manager::handleWifiScanEvent(const chreWifiScanEvent *event) {
@@ -260,18 +285,28 @@ void Manager::handleWifiScanEvent(const chreWifiScanEvent *event) {
        " results at %" PRIu64 " ns",
        event->scanType, event->resultCount, event->referenceTime);
 
-  // TODO(b/186868033): Check results
+  if (event->eventIndex == 0) {
+    checkTimestamp(event->referenceTime, mPrevWifiScanEventTimestampNs);
+    mPrevWifiScanEventTimestampNs = event->referenceTime;
+  }
 }
 
 void Manager::handleCellInfoResult(const chreWwanCellInfoResult *event) {
-  LOGI("Received cell info result");
+  LOGI("Received %" PRIu8 " cell info results", event->cellInfoCount);
 
   mWwanCellInfoAsyncRequest.reset();
   if (event->errorCode != CHRE_ERROR_NONE) {
     LOGE("Cell info request failed with error code %" PRIu8, event->errorCode);
     sendFailure("Cell info request failed");
-  } else {
-    // TODO(b/186868033): Check results
+  } else if (event->cellInfoCount > 0) {
+    uint64_t maxTimestamp = 0;
+    for (uint8_t i = 0; i < event->cellInfoCount; i++) {
+      maxTimestamp = MAX(maxTimestamp, event->cells[i].timeStamp);
+      checkTimestamp(event->cells[i].timeStamp,
+                     mPrevWwanCellInfoEventTimestampNs);
+    }
+
+    mPrevWwanCellInfoEventTimestampNs = maxTimestamp;
   }
 }
 
@@ -407,6 +442,8 @@ void Manager::makeGnssMeasurementRequest() {
                                                    &kGnssMeasurementCookie);
   } else {
     success = chreGnssMeasurementSessionStopAsync(&kGnssMeasurementCookie);
+    // Reset the previous timestamp, since the GNSS internal clock may reset.
+    mPrevGnssMeasurementEventTimestampNs = 0;
   }
 
   LOGI("Configure GNSS measurement interval %" PRIu32 " ms success ? %d",
