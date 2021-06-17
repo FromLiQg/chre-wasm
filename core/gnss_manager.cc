@@ -27,15 +27,6 @@ namespace chre {
 
 namespace {
 
-#if CHRE_FIRST_SUPPORTED_API_VERSION < CHRE_API_VERSION_1_5
-#define CHRE_GNSS_MEASUREMENT_BACK_COMPAT_ENABLED
-#endif
-
-#ifdef CHRE_GNSS_MEASUREMENT_BACK_COMPAT_ENABLED
-constexpr uint16_t kGroupIdMaskGnssMeasurementPreV1_5 = (1 << 0);
-constexpr uint16_t kGroupIdMaskGnssMeasurementFromV1_5 = (1 << 1);
-#endif  // CHRE_GNSS_MEASUREMENT_BACK_COMPAT_ENABLED
-
 bool getCallbackType(uint16_t eventType, SystemCallbackType *callbackType) {
   bool success = true;
   switch (eventType) {
@@ -266,6 +257,10 @@ void GnssSession::handleStatusChange(bool enabled, uint8_t errorCode) {
 }
 
 void GnssSession::handleReportEvent(void *event) {
+  if (mRequests.empty()) {
+    LOGW("Unexpected %s event", mName);
+  }
+
   auto callback = [](uint16_t type, void *data, void * /*extraData*/) {
     uint16_t reportEventType;
     if (!getReportEventType(static_cast<SystemCallbackType>(type),
@@ -273,31 +268,8 @@ void GnssSession::handleReportEvent(void *event) {
         (getSettingState(Setting::LOCATION) == SettingState::DISABLED)) {
       freeReportEventCallback(reportEventType, data);
     } else {
-      uint16_t groupIdMask = kDefaultTargetGroupMask;
-
-#ifdef CHRE_GNSS_MEASUREMENT_BACK_COMPAT_ENABLED
-      if (reportEventType == CHRE_EVENT_GNSS_DATA) {
-        auto *event = static_cast<struct chreGnssDataEvent *>(data);
-        if (event->measurement_count > CHRE_GNSS_MAX_MEASUREMENT_PRE_1_5) {
-          auto newData = chre::MakeUnique<struct chreGnssDataEvent>();
-          if (newData.isNull()) {
-            LOG_OOM();
-          } else {
-            memcpy(newData.get(), data, sizeof(struct chreGnssDataEvent));
-            newData->measurement_count = CHRE_GNSS_MAX_MEASUREMENT_PRE_1_5;
-            EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
-                reportEventType, newData.release(), freeEventDataCallback,
-                kBroadcastInstanceId, kGroupIdMaskGnssMeasurementPreV1_5);
-          }
-
-          groupIdMask = kGroupIdMaskGnssMeasurementFromV1_5;
-        }
-      }
-#endif  // CHRE_GNSS_MEASUREMENT_BACK_COMPAT_ENABLED
-
       EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
-          reportEventType, data, freeReportEventCallback, kBroadcastInstanceId,
-          groupIdMask);
+          reportEventType, data, freeReportEventCallback);
     }
   };
 
@@ -311,7 +283,7 @@ void GnssSession::handleReportEvent(void *event) {
 
 void GnssSession::onSettingChanged(Setting setting, SettingState state) {
   if (setting == Setting::LOCATION) {
-    if (!mStateTransitions.empty()) {
+    if (asyncResponsePending()) {
       // A request is in progress, so we wait until the async response arrives
       // to handle the state change.
       mSettingChangePending = true;
@@ -323,23 +295,25 @@ void GnssSession::onSettingChanged(Setting setting, SettingState state) {
 }
 
 bool GnssSession::updatePlatformRequest(bool forceUpdate) {
-  SettingState state = getSettingState(Setting::LOCATION);
-  bool chreDisable =
-      ((state == SettingState::DISABLED) && (mPlatformEnabled || forceUpdate));
-  bool chreEnable = ((state == SettingState::ENABLED) &&
-                     (!mPlatformEnabled || forceUpdate) && !mRequests.empty());
+  SettingState locationSetting = getSettingState(Setting::LOCATION);
+
+  bool desiredPlatformState =
+      (locationSetting == SettingState::ENABLED) && !mRequests.empty();
+  bool shouldUpdatePlatform =
+      forceUpdate ||
+      (desiredPlatformState != mPlatformEnabled) /* (enable/disable) */;
 
   bool requestPending = false;
-  if (chreEnable || chreDisable) {
-    if (controlPlatform(chreEnable, mCurrentInterval,
+  if (shouldUpdatePlatform) {
+    if (controlPlatform(desiredPlatformState, mCurrentInterval,
                         Milliseconds(0) /* minTimeToNext */)) {
-      LOGD("Configured GNSS %s: setting state %" PRIu8, mName,
-           static_cast<uint8_t>(state));
-      addSessionRequestLog(CHRE_INSTANCE_ID, mCurrentInterval, chreEnable);
+      LOGD("Configured GNSS %s: enable %d", mName, desiredPlatformState);
+      addSessionRequestLog(CHRE_INSTANCE_ID, mCurrentInterval,
+                           desiredPlatformState);
       requestPending = true;
     } else {
-      LOGE("Failed to configure GNSS %s: setting state %" PRIu8, mName,
-           static_cast<uint8_t>(state));
+      LOGE("Failed to configure GNSS %s: enable %d", mName,
+           desiredPlatformState);
     }
   }
 
@@ -347,7 +321,7 @@ bool GnssSession::updatePlatformRequest(bool forceUpdate) {
 }
 
 void GnssSession::handleRequestStateResyncCallbackSync() {
-  if (!mStateTransitions.empty()) {
+  if (asyncResponsePending()) {
     // A request is in progress, so we wait until the async response arrives
     // to handle the resync callback.
     mResyncPending = true;
@@ -534,8 +508,7 @@ bool GnssSession::updateRequests(bool enable, Milliseconds minInterval,
         if (!success) {
           LOG_OOM();
         } else {
-          uint16_t groupIdMask = getGroupIdMask(*nanoapp);
-          nanoapp->registerForBroadcastEvent(kReportEventType, groupIdMask);
+          nanoapp->registerForBroadcastEvent(kReportEventType);
         }
       }
     } else if (hasExistingRequest) {
@@ -555,18 +528,6 @@ bool GnssSession::updateRequests(bool enable, Milliseconds minInterval,
   }
 
   return success;
-}
-
-uint16_t GnssSession::getGroupIdMask(const Nanoapp &nanoapp) const {
-  uint16_t mask = kDefaultTargetGroupMask;
-#ifdef CHRE_GNSS_MEASUREMENT_BACK_COMPAT_ENABLED
-  if (kReportEventType == CHRE_EVENT_GNSS_DATA) {
-    mask = (nanoapp.getTargetApiVersion() < CHRE_API_VERSION_1_5)
-               ? kGroupIdMaskGnssMeasurementPreV1_5
-               : kGroupIdMaskGnssMeasurementFromV1_5;
-  }
-#endif  // CHRE_GNSS_MEASUREMENT_BACK_COMPAT_ENABLED
-  return mask;
 }
 
 bool GnssSession::postAsyncResultEvent(uint32_t instanceId, bool success,
@@ -608,7 +569,7 @@ void GnssSession::postAsyncResultEventFatal(uint32_t instanceId, bool success,
 void GnssSession::handleStatusChangeSync(bool enabled, uint8_t errorCode) {
   bool success = (errorCode == CHRE_ERROR_NONE);
 
-  CHRE_ASSERT_LOG(!mStateTransitions.empty() || mInternalRequestPending,
+  CHRE_ASSERT_LOG(asyncResponsePending(),
                   "handleStatusChangeSync called with no transitions");
   if (mInternalRequestPending) {
     // Silently handle internal requests from CHRE, since they are not pushed
