@@ -85,6 +85,14 @@ class GnssSession {
   void handleReportEvent(void *event);
 
   /**
+   * @return true if an async response is pending from GNSS. This method should
+   * be used to check if a GNSS session request is in flight.
+   */
+  bool asyncResponsePending() const {
+    return !mStateTransitions.empty() || mInternalRequestPending;
+  }
+
+  /**
    * Invoked when the host notifies CHRE of a settings change.
    *
    * @param setting The setting that changed.
@@ -93,7 +101,9 @@ class GnssSession {
   void onSettingChanged(Setting setting, SettingState state);
 
   /**
-   * Updates the platform GNSS request according to the current state.
+   * Updates the platform GNSS request according to the current state. It should
+   * be used to synchronize the GNSS to the desired state, e.g. for setting
+   * updates or handling a state resync request.
    *
    * @param forceUpdate If true, force the platform GNSS request to be made.
    *
@@ -289,14 +299,6 @@ class GnssSession {
    */
   bool updateRequests(bool enable, Milliseconds minInterval,
                       uint32_t instanceId);
-
-  /**
-   * @param nanoapp A reference to the nanoapp.
-   *
-   * @return The group ID mask that should be used to broadcast the event for
-   * this GNSS session given the nanoapp.
-   */
-  uint16_t getGroupIdMask(const Nanoapp &nanoapp) const;
 
   /**
    * Posts the result of a GNSS session add/remove request.
