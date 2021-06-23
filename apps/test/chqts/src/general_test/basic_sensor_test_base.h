@@ -42,6 +42,11 @@ class BasicSensorTestBase : public Test {
   void setUp(uint32_t messageSize, const void *message) override;
 
   /**
+   * Sends a message to itself to trigger startTest();
+   */
+  void sendStartTestMessage();
+
+  /**
    * Abstract method indicating which sensor type this is.
    *
    * @returns One of the CHRE_SENSOR_TYPE_* constants.
@@ -102,6 +107,9 @@ class BasicSensorTestBase : public Test {
 
   bool mSupportsPassiveMode = true;
 
+  // The current sensor index that we are testing for.
+  uint8_t mCurrentSensorIndex = 0;
+
   void startTest();
   void finishTest();
   void checkPassiveConfigure();
@@ -109,9 +117,9 @@ class BasicSensorTestBase : public Test {
                        const chreSensorThreeAxisData *eventData);
   void handleSamplingChangeEvent(
       const chreSensorSamplingStatusEvent *eventData);
-  void handleSensorDataEvent(const void *eventData);
-  void sanityCheckHeader(const chreSensorDataHeader *header,
-                         bool modifyTimestamps, uint64_t eventDuration);
+  void handleSensorDataEvent(uint16_t eventType, const void *eventData);
+  void verifyEventHeader(const chreSensorDataHeader *header, uint16_t eventType,
+                         uint64_t eventDuration);
 };
 
 }  // namespace general_test
