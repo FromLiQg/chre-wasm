@@ -69,9 +69,11 @@ extern "C" {
  */
 struct ChppClientState {
   struct ChppAppState *appContext;  // Pointer to app layer context
-  uint8_t index;                    // Index of this client
-  uint8_t handle;                   // Handle number for this client
-  uint8_t transaction;              // Next Transaction ID to be used
+  struct ChppRequestResponseState
+      *rRStates;        // Pointer to array of request-response states, if any
+  uint8_t index;        // Index of this client
+  uint8_t handle;       // Handle number for this client
+  uint8_t transaction;  // Next Transaction ID to be used
 
   uint8_t openState;         // As defined in enum ChppOpenState
   bool initialized : 1;      // Is initialized
@@ -152,10 +154,12 @@ void chppDeregisterCommonClients(struct ChppAppState *context);
  * @param appContext Maintains status for each app layer instance.
  * @param clientContext Maintains status for each client instance.
  * @param clientState State variable of the client.
+ * @param rRStates Pointer to array of request-response states, if any.
  * @param newClient The client to be registered on this platform.
  */
 void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
                         struct ChppClientState *clientState,
+                        struct ChppRequestResponseState *rRStates,
                         const struct ChppClient *newClient);
 
 /**
@@ -363,6 +367,20 @@ void chppClientProcessOpenResponse(struct ChppClientState *clientState,
  * @param context Maintains status for each app layer instance.
  */
 void chppClientRecalculateNextTimeout(struct ChppAppState *context);
+
+/**
+ * Closes any remaining open requests for a given client by sending a timeout.
+ * This function is used when a client is reset.
+ *
+ * @param clientState State variable of the client.
+ * @param client The client for whech to clear out open requests.
+ * @param clearOnly If true, indicates that a timeout response shouldn't be
+ *     sent to the client. This must only be set if the requests are being
+ *     cleared as part of the client closing.
+ */
+void chppClientCloseOpenRequests(struct ChppClientState *clientState,
+                                 const struct ChppClient *client,
+                                 bool clearOnly);
 
 #ifdef __cplusplus
 }

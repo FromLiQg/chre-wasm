@@ -22,7 +22,11 @@
 #include <shared/send_message.h>
 #include <shared/time_util.h>
 
+#include "chre/util/nanoapp/log.h"
+
 #include <chre.h>
+
+#define LOG_TAG "[BasicSensorTest]"
 
 using nanoapp_testing::kOneMillisecondInNanoseconds;
 using nanoapp_testing::kOneSecondInNanoseconds;
@@ -88,6 +92,12 @@ void BasicSensorTestBase::setUp(uint32_t messageSize,
     sendFatalFailureToHost("Beginning message expects 0 additional bytes, got ",
                            &messageSize);
   }
+
+  sendStartTestMessage();
+}
+
+void BasicSensorTestBase::sendStartTestMessage() {
+  mState = State::kPreStart;
   // Most tests start running in the constructor.  However, since this
   // is a base class, and we invoke abstract methods when running our
   // test, we don't start until after the class has been fully
@@ -169,11 +179,27 @@ void BasicSensorTestBase::checkPassiveConfigure() {
 
 void BasicSensorTestBase::startTest() {
   mState = State::kPreConfigure;
-  if (!chreSensorFindDefault(getSensorType(), &mSensorHandle)) {
+
+  bool found = false;
+  if (mApiVersion >= CHRE_API_VERSION_1_5) {
+    found =
+        chreSensorFind(getSensorType(), mCurrentSensorIndex, &mSensorHandle);
+    if (!found && chreSensorFind(getSensorType(), mCurrentSensorIndex + 1,
+                                 &mSensorHandle)) {
+      sendFatalFailureToHostUint8("Missing sensor index ", mCurrentSensorIndex);
+      return;
+    }
+  } else {
+    found = chreSensorFindDefault(getSensorType(), &mSensorHandle);
+  }
+
+  if (!found) {
     sendStringToHost(MessageType::kSkipped,
                      "No default sensor found for optional sensor.");
     return;
   }
+
+  LOGI("Starting test for sensor index %" PRIu8, mCurrentSensorIndex);
 
   chreSensorInfo info;
   if (!chreGetSensorInfo(mSensorHandle, &info)) {
@@ -291,8 +317,24 @@ void BasicSensorTestBase::finishTest() {
       }
     }
   }
-  mState = State::kFinished;
-  sendSuccessToHost();
+
+  LOGI("Test passed for sensor index %" PRIu8, mCurrentSensorIndex);
+
+  bool finished = true;
+  if (mApiVersion >= CHRE_API_VERSION_1_5) {
+    mCurrentSensorIndex++;
+    uint32_t sensorHandle;
+    if (chreSensorFind(getSensorType(), mCurrentSensorIndex, &sensorHandle)) {
+      finished = false;
+      mPrevSensorHandle = mSensorHandle;
+      sendStartTestMessage();
+    }
+  }
+
+  if (finished) {
+    mState = State::kFinished;
+    sendSuccessToHost();
+  }
 }
 
 void BasicSensorTestBase::verifyEventHeader(const chreSensorDataHeader *header,
@@ -397,27 +439,34 @@ void BasicSensorTestBase::handleBiasEvent(
 
 void BasicSensorTestBase::handleSamplingChangeEvent(
     const chreSensorSamplingStatusEvent *eventData) {
+  if (mPrevSensorHandle.has_value() &&
+      (mPrevSensorHandle.value() == eventData->sensorHandle)) {
+    // We can get a "DONE" event from the previous sensor for multi-sensor
+    // devices, so we ignore these events.
+    return;
+  }
+
   if (eventData->sensorHandle != mSensorHandle) {
     sendFatalFailureToHost("SamplingChangeEvent for wrong sensor handle:",
                            &eventData->sensorHandle);
   }
-  if (mState == State::kFinished) {
-    // TODO: If we strictly define whether this event is or isn't
-    //     generated upon being DONE with a sensor, then we can perform
-    //     a strict check here.  For now, we just let this go.
-    return;
-  }
-  // Passive sensor requests do not guarantee sensors will always be enabled.
-  // Bypass 'enabled' check for passive configurations.
-  if (!eventData->status.enabled) {
-    sendFatalFailureToHost("SamplingChangeEvent disabled the sensor.");
-  }
 
-  if ((mNewStatus.interval != eventData->status.interval) ||
-      (mNewStatus.latency != eventData->status.latency)) {
-    // This is from someone other than us.  Let's note that so we know
-    // our consistency checks are invalid.
-    mExternalSamplingStatusChange = true;
+  // TODO: If we strictly define whether this event is or isn't
+  //     generated upon being DONE with a sensor, then we can perform
+  //     a strict check here.  For now, we just let this go.
+  if (mState != State::kFinished) {
+    // Passive sensor requests do not guarantee sensors will always be enabled.
+    // Bypass 'enabled' check for passive configurations.
+    if (!eventData->status.enabled) {
+      sendFatalFailureToHost("SamplingChangeEvent disabled the sensor.");
+    }
+
+    if ((mNewStatus.interval != eventData->status.interval) ||
+        (mNewStatus.latency != eventData->status.latency)) {
+      // This is from someone other than us.  Let's note that so we know
+      // our consistency checks are invalid.
+      mExternalSamplingStatusChange = true;
+    }
   }
 }
 
@@ -461,9 +510,6 @@ void BasicSensorTestBase::handleEvent(uint32_t senderInstanceId,
     if ((eventType == kStartEvent) && (mState == State::kPreStart)) {
       startTest();
     }
-  } else if ((mState == State::kPreStart) || (mState == State::kPreConfigure)) {
-    unexpectedEvent(eventType);
-
   } else if (senderInstanceId != CHRE_INSTANCE_ID) {
     sendFatalFailureToHost("Unexpected senderInstanceId:", &senderInstanceId);
 
