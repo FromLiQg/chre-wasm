@@ -53,7 +53,6 @@
 static bool chppIsClientApiReady(struct ChppClientState *clientState);
 ChppClientDeinitFunction *chppGetClientDeinitFunction(
     struct ChppAppState *context, uint8_t index);
-void chppClientRecalculateNextTimeout(struct ChppAppState *context);
 
 /************************************************
  *  Private Functions
@@ -168,6 +167,7 @@ void chppDeregisterCommonClients(struct ChppAppState *context) {
 
 void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
                         struct ChppClientState *clientState,
+                        struct ChppRequestResponseState *rRStates,
                         const struct ChppClient *newClient) {
   CHPP_NOT_NULL(newClient);
 
@@ -177,11 +177,15 @@ void chppRegisterClient(struct ChppAppState *appContext, void *clientContext,
 
   } else {
     clientState->appContext = appContext;
+    clientState->rRStates = rRStates;
     clientState->index = appContext->registeredClientCount;
-    appContext->registeredClients[appContext->registeredClientCount] =
-        newClient;
+
     appContext->registeredClientContexts[appContext->registeredClientCount] =
         clientContext;
+    appContext->registeredClientStates[appContext->registeredClientCount] =
+        clientState;
+    appContext->registeredClients[appContext->registeredClientCount] =
+        newClient;
 
     char uuidText[CHPP_SERVICE_UUID_STRING_LEN];
     chppUuidToStr(newClient->descriptor.uuid, uuidText);
@@ -530,7 +534,7 @@ void chppClientRecalculateNextTimeout(struct ChppAppState *context) {
          cmdIdx < context->registeredClients[clientIdx]->rRStateCount;
          cmdIdx++) {
       struct ChppRequestResponseState *rRState =
-          &context->registeredClients[clientIdx]->rRStates[cmdIdx];
+          &context->registeredClientStates[clientIdx]->rRStates[cmdIdx];
 
       if (rRState->requestState == CHPP_REQUEST_STATE_REQUEST_SENT) {
         context->nextRequestTimeoutNs =
@@ -540,4 +544,43 @@ void chppClientRecalculateNextTimeout(struct ChppAppState *context) {
   }
 
   CHPP_LOGD("nextReqTimeout=%" PRIu64, context->nextRequestTimeoutNs);
+}
+
+void chppClientCloseOpenRequests(struct ChppClientState *clientState,
+                                 const struct ChppClient *client,
+                                 bool clearOnly) {
+  bool recalcNeeded = false;
+
+  for (uint16_t cmdIdx = 0; cmdIdx < client->rRStateCount; cmdIdx++) {
+    if (clientState->rRStates[cmdIdx].requestState ==
+        CHPP_REQUEST_STATE_REQUEST_SENT) {
+      recalcNeeded = true;
+
+      CHPP_LOGE("Closing open req #%" PRIu16 " clear %d", cmdIdx, clearOnly);
+
+      if (clearOnly) {
+        clientState->rRStates[cmdIdx].requestState =
+            CHPP_REQUEST_STATE_RESPONSE_TIMEOUT;
+      } else {
+        struct ChppAppHeader *response =
+            chppMalloc(sizeof(struct ChppAppHeader));
+        if (response == NULL) {
+          CHPP_LOG_OOM();
+        } else {
+          response->handle = clientState->handle;
+          response->type = CHPP_MESSAGE_TYPE_SERVICE_RESPONSE;
+          response->transaction = clientState->rRStates[cmdIdx].transaction;
+          response->error = CHPP_APP_ERROR_TIMEOUT;
+          response->command = cmdIdx;
+
+          chppAppProcessRxDatagram(clientState->appContext, (uint8_t *)response,
+                                   sizeof(struct ChppAppHeader));
+        }
+      }
+    }
+  }
+
+  if (recalcNeeded) {
+    chppClientRecalculateNextTimeout(clientState->appContext);
+  }
 }
