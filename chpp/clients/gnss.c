@@ -107,9 +107,6 @@ static const struct ChppClient kGnssClientConfig = {
     // Service notification dispatch function pointer
     .deinitFunctionPtr = &chppGnssClientDeinit,
 
-    // Pointer to array of request-response states
-    .rRStates = gGnssClientContext.rRState,
-
     // Number of request-response states in the rRStates array.
     .rRStateCount = ARRAY_SIZE(gGnssClientContext.rRState),
 
@@ -321,6 +318,9 @@ static void chppGnssClientDeinit(void *clientContext) {
 static void chppGnssClientNotifyReset(void *clientContext) {
   struct ChppGnssClientState *gnssClientContext =
       (struct ChppGnssClientState *)clientContext;
+
+  chppClientCloseOpenRequests(&gnssClientContext->client, &kGnssClientConfig,
+                              false /* clearOnly */);
 
   if (gnssClientContext->client.openState != CHPP_OPEN_STATE_OPENED &&
       gnssClientContext->client.openState != CHPP_OPEN_STATE_PSEUDO_OPEN) {
@@ -645,6 +645,8 @@ static void chppGnssClientClose(void) {
                  sizeof(*request))) {
     gGnssClientContext.client.openState = CHPP_OPEN_STATE_CLOSED;
     gGnssClientContext.capabilities = CHRE_GNSS_CAPABILITIES_NONE;
+    chppClientCloseOpenRequests(&gGnssClientContext.client, &kGnssClientConfig,
+                                true /* clearOnly */);
   }
 }
 
@@ -822,7 +824,8 @@ static bool chppGnssClientConfigurePassiveLocationListener(bool enable) {
 
 void chppRegisterGnssClient(struct ChppAppState *appContext) {
   chppRegisterClient(appContext, (void *)&gGnssClientContext,
-                     &gGnssClientContext.client, &kGnssClientConfig);
+                     &gGnssClientContext.client, gGnssClientContext.rRState,
+                     &kGnssClientConfig);
 }
 
 void chppDeregisterGnssClient(struct ChppAppState *appContext) {
