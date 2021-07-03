@@ -1228,7 +1228,7 @@ struct ChppAppHeader *chppTransportGetClientRequestTimeoutResponse(
            context->appContext->registeredClients[clientIdx]->rRStateCount;
            cmdIdx++) {
         struct ChppRequestResponseState *rRState =
-            &context->appContext->registeredClients[clientIdx]
+            &context->appContext->registeredClientStates[clientIdx]
                  ->rRStates[cmdIdx];
 
         if (rRState->requestState == CHPP_REQUEST_STATE_REQUEST_SENT &&
@@ -1259,7 +1259,7 @@ struct ChppAppHeader *chppTransportGetClientRequestTimeoutResponse(
       response->handle = CHPP_SERVICE_HANDLE_OF_INDEX(timedOutClient);
       response->type = CHPP_MESSAGE_TYPE_SERVICE_RESPONSE;
       response->transaction =
-          context->appContext->registeredClients[timedOutClient]
+          context->appContext->registeredClientStates[timedOutClient]
               ->rRStates[timedOutCmd]
               .transaction;
       response->error = CHPP_APP_ERROR_TIMEOUT;
@@ -1420,25 +1420,31 @@ bool chppEnqueueTxDatagramOrFail(struct ChppTransportState *context, void *buf,
   return success;
 }
 
+// TODO(b/192359485): Consider removing this function, or making it more robust.
 void chppEnqueueTxErrorDatagram(struct ChppTransportState *context,
                                 enum ChppTransportErrorCode errorCode) {
-  switch (errorCode) {
-    case CHPP_TRANSPORT_ERROR_OOM: {
-      CHPP_LOGD("App layer enqueueing CHPP_TRANSPORT_ERROR_OOM");
-      break;
+  bool resetting = (context->resetState == CHPP_RESET_STATE_RESETTING);
+  if (resetting) {
+    CHPP_LOGE("Discarding app error 0x%" PRIx8 " (resetting)", errorCode);
+  } else {
+    switch (errorCode) {
+      case CHPP_TRANSPORT_ERROR_OOM: {
+        CHPP_LOGD("App layer enqueueing CHPP_TRANSPORT_ERROR_OOM");
+        break;
+      }
+      case CHPP_TRANSPORT_ERROR_APPLAYER: {
+        CHPP_LOGD("App layer enqueueing CHPP_TRANSPORT_ERROR_APPLAYER");
+        break;
+      }
+      default: {
+        // App layer should not invoke any other errors
+        CHPP_LOGE("App enqueueing invalid err=%" PRIu8, errorCode);
+        CHPP_DEBUG_ASSERT(false);
+      }
     }
-    case CHPP_TRANSPORT_ERROR_APPLAYER: {
-      CHPP_LOGD("App layer enqueueing CHPP_TRANSPORT_ERROR_APPLAYER");
-      break;
-    }
-    default: {
-      // App layer should not invoke any other errors
-      CHPP_LOGE("App enqueueing invalid err=%" PRIu8, errorCode);
-      CHPP_DEBUG_ASSERT(false);
-    }
+    chppEnqueueTxPacket(context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
+                                     CHPP_TRANSPORT_ATTR_NONE, errorCode));
   }
-  chppEnqueueTxPacket(context, CHPP_ATTR_AND_ERROR_TO_PACKET_CODE(
-                                   CHPP_TRANSPORT_ATTR_NONE, errorCode));
 }
 
 uint64_t chppTransportGetTimeUntilNextDoWorkNs(
