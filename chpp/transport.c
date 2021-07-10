@@ -86,8 +86,10 @@ static void chppResetTransportContext(struct ChppTransportState *context);
 static void chppReset(struct ChppTransportState *context,
                       enum ChppTransportPacketAttributes resetType,
                       enum ChppTransportErrorCode error);
+#ifdef CHPP_CLIENT_ENABLED
 struct ChppAppHeader *chppTransportGetClientRequestTimeoutResponse(
     struct ChppTransportState *context);
+#endif
 
 /************************************************
  *  Private Functions
@@ -506,6 +508,20 @@ static void chppSetResetComplete(struct ChppTransportState *context) {
  * @param context Maintains status for each transport layer instance.
  */
 static void chppProcessResetAck(struct ChppTransportState *context) {
+  if (context->resetState == CHPP_RESET_STATE_NONE) {
+    CHPP_LOGE("Unexpected reset-ack seq=%" PRIu8 " code=0x%" PRIx8,
+              context->rxHeader.seq, context->rxHeader.packetCode);
+    // In a reset race condition with both endpoints sending resets and
+    // reset-acks, the sent resets and reset-acks will both have a sequence
+    // number of 0.
+    // By ignoring the received reset-ack, the next expected sequence number
+    // will remain at 1 (following a reset with a sequence number of 0).
+    // Therefore, no further correction is necessary (beyond ignoring the
+    // received reset-ack), as the next packet (e.g. discovery) will have a
+    // sequence number of 1.
+    return;
+  }
+
   chppSetResetComplete(context);
   context->rxStatus.receivedPacketCode = context->rxHeader.packetCode;
   context->rxStatus.expectedSeq = context->rxHeader.seq + 1;
@@ -527,6 +543,11 @@ static void chppProcessResetAck(struct ChppTransportState *context) {
 #else
   chppEnqueueTxPacket(context, CHPP_TRANSPORT_ERROR_NONE);
 #endif
+
+  // Inform the App Layer that a reset has completed
+  chppMutexUnlock(&context->mutex);
+  chppAppProcessReset(context->appContext);
+  chppMutexLock(&context->mutex);
 }
 
 /**
@@ -928,7 +949,7 @@ static void chppClearTxDatagramQueue(struct ChppTransportState *context) {
 static void chppTransportDoWork(struct ChppTransportState *context) {
   bool havePacketForLinkLayer = false;
   struct ChppTransportHeader *txHeader;
-  struct ChppAppHeader *timeoutResponse;
+  struct ChppAppHeader *timeoutResponse = NULL;
 
   // Note: For a future ACK window >1, there needs to be a loop outside the lock
   chppMutexLock(&context->mutex);
@@ -1011,7 +1032,9 @@ static void chppTransportDoWork(struct ChppTransportState *context) {
     }
   }
 
+#ifdef CHPP_CLIENT_ENABLED
   timeoutResponse = chppTransportGetClientRequestTimeoutResponse(context);
+#endif
   if (timeoutResponse != NULL) {
     CHPP_LOGE("Response timeout H#%" PRIu8 " cmd=%" PRIu16 " ID=%" PRIu8,
               timeoutResponse->handle, timeoutResponse->command,
@@ -1196,8 +1219,10 @@ static void chppReset(struct ChppTransportState *transportContext,
   chppMutexUnlock(&transportContext->mutex);
   chppTransportSendReset(transportContext, resetType, error);
 
-  // Inform the App Layer
-  chppAppProcessReset(appContext);
+  // Inform the App Layer that a reset has completed
+  if (resetType == CHPP_TRANSPORT_ATTR_RESET_ACK) {
+    chppAppProcessReset(appContext);
+  }  // else reset is sent out. Rx of reset-ack will indicate completion.
 }
 
 /**
@@ -1207,6 +1232,7 @@ static void chppReset(struct ChppTransportState *transportContext,
  * @param context Maintains status for each transport layer instance.
  * @return App layer response header if a timeout has occurred. Null otherwise.
  */
+#ifdef CHPP_CLIENT_ENABLED
 struct ChppAppHeader *chppTransportGetClientRequestTimeoutResponse(
     struct ChppTransportState *context) {
   struct ChppAppHeader *response = NULL;
@@ -1271,6 +1297,7 @@ struct ChppAppHeader *chppTransportGetClientRequestTimeoutResponse(
 
   return response;
 }
+#endif
 
 /************************************************
  *  Public Functions
