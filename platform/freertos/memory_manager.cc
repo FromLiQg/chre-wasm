@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,26 @@
  * limitations under the License.
  */
 
-#include "chre/core/init.h"
-
-#include "chre/core/event_loop_manager.h"
-#include "chre/platform/system_time.h"
-#include "chre/platform/version.h"
-#include "chre/util/singleton.h"
-
-static const char *kChreVersionString = chre::getChreVersionString();
+#include "chre/platform/memory_manager.h"
+#include "chre/platform/shared/memory.h"
+#include "chre/util/memory.h"
 
 namespace chre {
 
-void init() {
-  LOGI("CHRE init, version: %s", kChreVersionString);
-
-  SystemTime::init();
-  EventLoopManagerSingleton::init();
+void *MemoryManager::doAlloc(Nanoapp *app, uint32_t bytes) {
+  if (app->isTcmApp()) {
+    return chre::memoryAlloc(bytes);
+  } else {
+    return chre::memoryAllocDram(bytes);
+  }
 }
 
-void deinit() {
-  EventLoopManagerSingleton::deinit();
-
-  LOGD("CHRE deinit");
+void MemoryManager::doFree(Nanoapp *app, void *ptr) {
+  if (app->isTcmApp()) {
+    chre::memoryFree(ptr);
+  } else {
+    chre::memoryFreeDram(ptr);
+  }
 }
 
 }  // namespace chre

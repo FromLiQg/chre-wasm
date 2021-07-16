@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,22 @@
  * limitations under the License.
  */
 
-#include "chre/core/init.h"
+#ifndef CHRE_PLATFORM_FREERTOS_ATOMIC_BASE_H_
+#define CHRE_PLATFORM_FREERTOS_ATOMIC_BASE_H_
 
-#include "chre/core/event_loop_manager.h"
-#include "chre/platform/system_time.h"
-#include "chre/platform/version.h"
-#include "chre/util/singleton.h"
-
-static const char *kChreVersionString = chre::getChreVersionString();
+#include <atomic>
 
 namespace chre {
 
-void init() {
-  LOGI("CHRE init, version: %s", kChreVersionString);
+template <typename AtomicType>
+class AtomicBase {
+ protected:
+  std::atomic<AtomicType> mAtomic;
+};
 
-  SystemTime::init();
-  EventLoopManagerSingleton::init();
-}
-
-void deinit() {
-  EventLoopManagerSingleton::deinit();
-
-  LOGD("CHRE deinit");
-}
+typedef AtomicBase<bool> AtomicBoolBase;
+typedef AtomicBase<uint32_t> AtomicUint32Base;
 
 }  // namespace chre
+
+#endif  // CHRE_PLATFORM_FREERTOS_ATOMIC_BASE_H_

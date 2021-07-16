@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,19 @@
  * limitations under the License.
  */
 
-#include "chre/core/init.h"
+#include "chre/platform/context.h"
+#include "chre/target_platform/init.h"
 
-#include "chre/core/event_loop_manager.h"
-#include "chre/platform/system_time.h"
-#include "chre/platform/version.h"
-#include "chre/util/singleton.h"
-
-static const char *kChreVersionString = chre::getChreVersionString();
+#include "FreeRTOS.h"
+#include "task.h"
 
 namespace chre {
 
-void init() {
-  LOGI("CHRE init, version: %s", kChreVersionString);
+bool inEventLoopThread() {
+  TaskHandle_t evtLoopTaskHandle = xTaskGetHandle(freertos::getChreTaskName());
+  TaskHandle_t currentTaskHandle = xTaskGetCurrentTaskHandle();
 
-  SystemTime::init();
-  EventLoopManagerSingleton::init();
-}
-
-void deinit() {
-  EventLoopManagerSingleton::deinit();
-
-  LOGD("CHRE deinit");
+  return (evtLoopTaskHandle == currentTaskHandle);
 }
 
 }  // namespace chre

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,27 @@
  * limitations under the License.
  */
 
-#include "chre/core/init.h"
+#include "chre/platform/memory.h"
+#include "chre/platform/shared/pal_system_api.h"
 
-#include "chre/core/event_loop_manager.h"
-#include "chre/platform/system_time.h"
-#include "chre/platform/version.h"
-#include "chre/util/singleton.h"
-
-static const char *kChreVersionString = chre::getChreVersionString();
+#include <cstdlib>
 
 namespace chre {
 
-void init() {
-  LOGI("CHRE init, version: %s", kChreVersionString);
-
-  SystemTime::init();
-  EventLoopManagerSingleton::init();
+void *memoryAlloc(size_t size) {
+  return malloc(size);
 }
 
-void deinit() {
-  EventLoopManagerSingleton::deinit();
+void *palSystemApiMemoryAlloc(size_t size) {
+  return malloc(size);
+}
 
-  LOGD("CHRE deinit");
+void memoryFree(void *pointer) {
+  free(pointer);
+}
+
+void palSystemApiMemoryFree(void *pointer) {
+  free(pointer);
 }
 
 }  // namespace chre
