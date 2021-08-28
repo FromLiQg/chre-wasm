@@ -52,11 +52,6 @@ void end() {
                                  false /* enable */);
 }
 
-void finishLoadingNanoappCallback(SystemCallbackType /* type */,
-                                  UniquePtr<Nanoapp> &&nanoapp) {
-  EventLoopManagerSingleton::get()->getEventLoop().startNanoapp(nanoapp);
-}
-
 }  // anonymous namespace
 
 /**
@@ -75,7 +70,7 @@ TEST_F(TestBase, LocationSettingsTest) {
       "Test nanoapp", kAppId, kAppVersion, kAppPerms, start, handleEvent, end);
   EventLoopManagerSingleton::get()->deferCallback(
       SystemCallbackType::FinishLoadingNanoapp, std::move(nanoapp),
-      finishLoadingNanoappCallback);
+      testFinishLoadingNanoappCallback);
   waitForEvent(CHRE_EVENT_SIMULATION_TEST_NANOAPP_LOADED);
 
   waitForEvent(CHRE_EVENT_GNSS_ASYNC_RESULT);
@@ -85,14 +80,15 @@ TEST_F(TestBase, LocationSettingsTest) {
   postSettingChange(Setting::LOCATION, SettingState::DISABLED);
   waitForEvent(CHRE_EVENT_SETTING_CHANGED_LOCATION);
   ASSERT_EQ(getSettingState(Setting::LOCATION), SettingState::DISABLED);
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
   ASSERT_FALSE(chrePalGnssIsLocationEnabled());
 
   postSettingChange(Setting::LOCATION, SettingState::ENABLED);
   waitForEvent(CHRE_EVENT_SETTING_CHANGED_LOCATION);
   ASSERT_EQ(getSettingState(Setting::LOCATION), SettingState::ENABLED);
-  ASSERT_TRUE(chrePalGnssIsLocationEnabled());
 
   waitForEvent(CHRE_EVENT_GNSS_LOCATION);
+  ASSERT_TRUE(chrePalGnssIsLocationEnabled());
 }
 
 }  // namespace chre
