@@ -53,8 +53,29 @@ inline constexpr uint16_t extractChrePatchVersion(uint32_t chreVersion) {
   return static_cast<uint16_t>(chreVersion);
 }
 
+bool getFbsSetting(const Setting &setting, fbs::Setting *fbsSetting) {
+  bool foundSetting = true;
+
+  switch (setting) {
+    case Setting::LOCATION:
+      *fbsSetting = fbs::Setting::LOCATION;
+      break;
+    case Setting::AIRPLANE_MODE:
+      *fbsSetting = fbs::Setting::AIRPLANE_MODE;
+      break;
+    case Setting::MICROPHONE:
+      *fbsSetting = fbs::Setting::MICROPHONE;
+      break;
+    default:
+      foundSetting = false;
+      ALOGE("Setting update with invalid enum value %hhu", setting);
+      break;
+  }
+
+  return foundSetting;
+}
+
 // TODO(b/194285834): Implement debug dump
-// TODO(b/194285834): Implement service death handling
 
 }  // anonymous namespace
 
@@ -144,9 +165,33 @@ inline constexpr uint16_t extractChrePatchVersion(uint32_t chreVersion) {
   return ndk::ScopedAStatus::ok();
 }
 
-::ndk::ScopedAStatus ContextHub::onSettingChanged(Setting /* setting */,
-                                                  bool /* enabled */) {
-  // TODO(b/194285834): Implement this
+::ndk::ScopedAStatus ContextHub::onSettingChanged(Setting setting,
+                                                  bool enabled) {
+  mSettingEnabled[setting] = enabled;
+  fbs::Setting fbsSetting;
+  if ((setting != Setting::WIFI_MAIN) && (setting != Setting::WIFI_SCANNING) &&
+      getFbsSetting(setting, &fbsSetting)) {
+    mConnection.sendSettingChangedNotification(fbsSetting,
+                                               toFbsSettingState(enabled));
+  }
+
+  bool isWifiMainEnabled = isSettingEnabled(Setting::WIFI_MAIN);
+  bool isWifiScanEnabled = isSettingEnabled(Setting::WIFI_SCANNING);
+  bool isAirplaneModeEnabled = isSettingEnabled(Setting::AIRPLANE_MODE);
+
+  // Because the airplane mode impact on WiFi is not standardized in Android,
+  // we write a specific handling in the Context Hub HAL to inform CHRE.
+  // The following definition is a default one, and can be adjusted
+  // appropriately if necessary.
+  bool isWifiAvailable = isAirplaneModeEnabled
+                             ? (isWifiMainEnabled)
+                             : (isWifiMainEnabled || isWifiScanEnabled);
+  if (!mIsWifiAvailable.has_value() || (isWifiAvailable != mIsWifiAvailable)) {
+    mConnection.sendSettingChangedNotification(
+        fbs::Setting::WIFI_AVAILABLE, toFbsSettingState(isWifiAvailable));
+    mIsWifiAvailable = isWifiAvailable;
+  }
+
   return ndk::ScopedAStatus::ok();
 }
 
@@ -171,7 +216,23 @@ inline constexpr uint16_t extractChrePatchVersion(uint32_t chreVersion) {
   if (contextHubId != kDefaultHubId) {
     ALOGE("Invalid ID %" PRId32, contextHubId);
   } else {
+    std::lock_guard<std::mutex> lock(mCallbackMutex);
+    if (mCallback != nullptr) {
+      binder_status_t binder_status = AIBinder_unlinkToDeath(
+          mCallback->asBinder().get(), mDeathRecipient.get(), this);
+      if (binder_status != STATUS_OK) {
+        ALOGE("Failed to unlink to death");
+      }
+    }
+
     mCallback = cb;
+
+    binder_status_t binder_status =
+        AIBinder_linkToDeath(cb->asBinder().get(), mDeathRecipient.get(), this);
+    if (binder_status != STATUS_OK) {
+      ALOGE("Failed to link to death");
+    }
+
     success = true;
   }
 
@@ -198,6 +259,7 @@ inline constexpr uint16_t extractChrePatchVersion(uint32_t chreVersion) {
 }
 
 void ContextHub::onNanoappMessage(const ::chre::fbs::NanoappMessageT &message) {
+  std::lock_guard<std::mutex> lock(mCallbackMutex);
   if (mCallback != nullptr) {
     ContextHubMessage outMessage;
     outMessage.nanoappId = message.app_id;
@@ -214,6 +276,7 @@ void ContextHub::onNanoappMessage(const ::chre::fbs::NanoappMessageT &message) {
 
 void ContextHub::onNanoappListResponse(
     const ::chre::fbs::NanoappListResponseT &response) {
+  std::lock_guard<std::mutex> lock(mCallbackMutex);
   if (mCallback != nullptr) {
     std::vector<NanoappInfo> appInfoList;
 
@@ -246,12 +309,15 @@ void ContextHub::onNanoappListResponse(
 }
 
 void ContextHub::onTransactionResult(uint32_t transactionId, bool success) {
+  std::lock_guard<std::mutex> lock(mCallbackMutex);
   if (mCallback != nullptr) {
     mCallback->handleTransactionResult(transactionId, success);
   }
 }
 
 void ContextHub::onContextHubRestarted() {
+  std::lock_guard<std::mutex> lock(mCallbackMutex);
+  mIsWifiAvailable.reset();
   if (mCallback != nullptr) {
     mCallback->handleContextHubAsyncEvent(AsyncEventType::RESTARTED);
   }
@@ -262,6 +328,17 @@ void ContextHub::onDebugDumpData(
 
 void ContextHub::onDebugDumpComplete(
     const ::chre::fbs::DebugDumpResponseT & /* response */) {}
+
+void ContextHub::handleServiceDeath() {
+  ALOGI("Context Hub Service died ...");
+  std::lock_guard<std::mutex> lock(mCallbackMutex);
+  mCallback.reset();
+}
+
+void ContextHub::onServiceDied(void *cookie) {
+  auto *contexthub = static_cast<ContextHub *>(cookie);
+  contexthub->handleServiceDeath();
+}
 
 }  // namespace contexthub
 }  // namespace hardware
