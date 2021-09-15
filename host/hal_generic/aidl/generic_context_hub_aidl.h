@@ -21,6 +21,10 @@
 
 #include "hal_chre_socket_connection.h"
 
+#include <map>
+#include <mutex>
+#include <optional>
+
 namespace aidl {
 namespace android {
 namespace hardware {
@@ -29,6 +33,11 @@ namespace contexthub {
 class ContextHub : public BnContextHub,
                    public ::android::hardware::contexthub::common::
                        implementation::IChreSocketCallback {
+ public:
+  ContextHub()
+      : mDeathRecipient(
+            AIBinder_DeathRecipient_new(ContextHub::onServiceDied)) {}
+
   ::ndk::ScopedAStatus getContextHubs(
       std::vector<ContextHubInfo> *out_contextHubInfos) override;
   ::ndk::ScopedAStatus loadNanoapp(int32_t contextHubId,
@@ -68,11 +77,32 @@ class ContextHub : public BnContextHub,
   void onDebugDumpComplete(
       const ::chre::fbs::DebugDumpResponseT &response) override;
 
+  void handleServiceDeath();
+  static void onServiceDied(void *cookie);
+
  private:
   ::android::hardware::contexthub::common::implementation::
       HalChreSocketConnection mConnection{this};
 
+  // A mutex to protect concurrent modifications to the callback pointer and
+  // access (invocations).
+  std::mutex mCallbackMutex;
   std::shared_ptr<IContextHubCallback> mCallback;
+
+  ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
+
+  std::map<Setting, bool> mSettingEnabled;
+  std::optional<bool> mIsWifiAvailable;
+
+  bool isSettingEnabled(Setting setting) {
+    return mSettingEnabled.count(setting) > 0 ? mSettingEnabled[setting]
+                                              : false;
+  }
+
+  chre::fbs::SettingState toFbsSettingState(bool enabled) const {
+    return enabled ? chre::fbs::SettingState::ENABLED
+                   : chre::fbs::SettingState::DISABLED;
+  }
 };
 
 }  // namespace contexthub
