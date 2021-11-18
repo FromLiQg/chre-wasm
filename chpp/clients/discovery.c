@@ -99,8 +99,6 @@ static uint8_t chppFindMatchingClient(
  */
 static void chppDiscoveryProcessDiscoverAll(struct ChppAppState *context,
                                             const uint8_t *buf, size_t len) {
-  CHPP_DEBUG_ASSERT(len >= sizeof(struct ChppAppHeader));
-
   if (context->isDiscoveryComplete) {
     CHPP_LOGE("Duplicate discovery response");
     return;
@@ -120,7 +118,7 @@ static void chppDiscoveryProcessDiscoverAll(struct ChppAppState *context,
     CHPP_DEBUG_ASSERT(false);
   }
 
-  if (serviceCount >= CHPP_MAX_DISCOVERED_SERVICES) {
+  if (serviceCount > CHPP_MAX_DISCOVERED_SERVICES) {
     CHPP_LOGE("Service count=%" PRIu8 " larger than max=%d", serviceCount,
               CHPP_MAX_DISCOVERED_SERVICES);
     CHPP_DEBUG_ASSERT(false);
