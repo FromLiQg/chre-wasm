@@ -16,6 +16,7 @@
 
 #include "generic_context_hub_aidl.h"
 
+#include "chre_api/chre/event.h"
 #include "chre_host/fragmented_load_transaction.h"
 #include "chre_host/host_protocol_host.h"
 #include "permissions_util.h"
@@ -261,7 +262,13 @@ bool getFbsSetting(const Setting &setting, fbs::Setting *fbsSetting) {
   std::lock_guard<std::mutex> lock(mConnectedHostEndpointsMutex);
   mConnectedHostEndpoints.insert(in_info.hostEndpointId);
 
-  mConnection.onHostEndpointConnected(in_info.hostEndpointId);
+  uint8_t type = (in_info.type == HostEndpointInfo::Type::TYPE_FRAMEWORK)
+                     ? CHRE_HOST_ENDPOINT_TYPE_FRAMEWORK
+                     : CHRE_HOST_ENDPOINT_TYPE_APP;
+
+  mConnection.onHostEndpointConnected(
+      in_info.hostEndpointId, type, in_info.packageName.value_or(std::string()),
+      in_info.attributionTag.value_or(std::string()));
 
   return ndk::ScopedAStatus::ok();
 }
@@ -349,6 +356,10 @@ void ContextHub::onTransactionResult(uint32_t transactionId, bool success) {
 void ContextHub::onContextHubRestarted() {
   std::lock_guard<std::mutex> lock(mCallbackMutex);
   mIsWifiAvailable.reset();
+  {
+    std::lock_guard<std::mutex> lock(mConnectedHostEndpointsMutex);
+    mConnectedHostEndpoints.clear();
+  }
   if (mCallback != nullptr) {
     mCallback->handleContextHubAsyncEvent(AsyncEventType::RESTARTED);
   }
