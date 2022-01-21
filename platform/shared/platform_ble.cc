@@ -18,6 +18,7 @@
 
 #include <cinttypes>
 
+#include "chre/core/event_loop_manager.h"
 #include "chre/platform/log.h"
 #include "chre/platform/shared/pal_system_api.h"
 #include "chre_api/chre/ble.h"
@@ -73,18 +74,48 @@ uint32_t PlatformBle::getFilterCapabilities() {
   }
 }
 
-void PlatformBleBase::requestStateResync() {
-  // TODO(b/211899620): Implement method.
+bool PlatformBle::startScanAsync(chreBleScanMode mode, uint32_t reportDelayMs,
+                                 const struct chreBleScanFilter *filter) {
+  if (mBleApi != nullptr) {
+    prePalApiCall();
+    return mBleApi->startScan(mode, reportDelayMs, filter);
+  } else {
+    return false;
+  }
 }
 
-void PlatformBleBase::scanStatusChangeCallback(bool /* enabled */,
-                                               uint8_t /* errorCode */) {
-  // TODO(b/211899620): Implement method.
+bool PlatformBle::stopScanAsync() {
+  if (mBleApi != nullptr) {
+    prePalApiCall();
+    return mBleApi->stopScan();
+  } else {
+    return false;
+  }
+}
+
+void PlatformBle::releaseAdvertisingEvent(
+    struct chreBleAdvertisementEvent *event) {
+  prePalApiCall();
+  mBleApi->releaseAdvertisingEvent(event);
+}
+
+void PlatformBleBase::requestStateResync() {
+  EventLoopManagerSingleton::get()
+      ->getBleRequestManager()
+      .handleRequestStateResyncCallback();
+}
+
+void PlatformBleBase::scanStatusChangeCallback(bool enabled,
+                                               uint8_t errorCode) {
+  EventLoopManagerSingleton::get()->getBleRequestManager().handlePlatformChange(
+      enabled, errorCode);
 }
 
 void PlatformBleBase::advertisingEventCallback(
-    struct chreBleAdvertisementEvent * /* event */) {
-  // TODO(b/211899620): Implement method.
+    struct chreBleAdvertisementEvent *event) {
+  EventLoopManagerSingleton::get()
+      ->getBleRequestManager()
+      .handleAdvertisementEvent(event);
 }
 
 }  // namespace chre
