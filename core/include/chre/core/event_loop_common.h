@@ -64,6 +64,9 @@ enum class SystemCallbackType : uint16_t {
   WifiNanServiceSessionLostEvent,
   WifiNanServiceTerminatedEvent,
   DeferredMetricPostEvent,
+  BleAdvertisementEvent,
+  BleScanResponse,
+  BleRequestResyncEvent,
 };
 
 //! Deferred/delayed callbacks use the event subsystem but are invariably sent
