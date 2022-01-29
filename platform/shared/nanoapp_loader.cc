@@ -170,6 +170,7 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(fmodf),
     ADD_EXPORTED_C_SYMBOL(log10f),
     ADD_EXPORTED_C_SYMBOL(log1pf),
+    ADD_EXPORTED_C_SYMBOL(logf),
     ADD_EXPORTED_C_SYMBOL(lroundf),
     ADD_EXPORTED_C_SYMBOL(roundf),
     ADD_EXPORTED_C_SYMBOL(sinf),
@@ -206,6 +207,8 @@ const ExportedData gExportedData[] = {
     ADD_EXPORTED_C_SYMBOL(chreAudioGetSource),
     ADD_EXPORTED_C_SYMBOL(chreBleGetCapabilities),
     ADD_EXPORTED_C_SYMBOL(chreBleGetFilterCapabilities),
+    ADD_EXPORTED_C_SYMBOL(chreBleStartScanAsync),
+    ADD_EXPORTED_C_SYMBOL(chreBleStopScanAsync),
     ADD_EXPORTED_C_SYMBOL(chreConfigureDebugDumpEvent),
     ADD_EXPORTED_C_SYMBOL(chreConfigureHostSleepStateEvents),
     ADD_EXPORTED_C_SYMBOL(chreConfigureNanoappInfoEvents),
@@ -828,6 +831,7 @@ bool NanoappLoader::fixRelocations() {
     size_t nRelocs = relocSize / sizeof(ElfRel);
     LOGV("Relocation %zu entries in DT_REL table", nRelocs);
 
+    bool resolvedAllSymbols = true;
     size_t i;
     for (i = 0; i < nRelocs; ++i) {
       ElfRel *curr = &reloc[i];
@@ -863,7 +867,7 @@ bool NanoappLoader::fixRelocations() {
           if (resolved == nullptr) {
             LOGV("Failed to resolve global symbol(%d) at offset 0x%x", i,
                  curr->r_offset);
-            return false;
+            resolvedAllSymbols = false;
           }
           // TODO: When we move to DRAM allocations, we need to check if the
           // above address is in a Read-Only section of memory, and give it
@@ -881,7 +885,7 @@ bool NanoappLoader::fixRelocations() {
       }
     }
 
-    if (i != nRelocs) {
+    if (!resolvedAllSymbols) {
       LOGE("Unable to resolve all symbols in the binary");
     } else {
       success = true;
