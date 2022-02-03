@@ -82,9 +82,9 @@ uint32_t GnssManager::getCapabilities() {
   return mPlatformGnss.getCapabilities();
 }
 
-void GnssManager::onSettingChanged(Setting setting, SettingState state) {
-  mLocationSession.onSettingChanged(setting, state);
-  mMeasurementSession.onSettingChanged(setting, state);
+void GnssManager::onSettingChanged(Setting setting, bool enabled) {
+  mLocationSession.onSettingChanged(setting, enabled);
+  mMeasurementSession.onSettingChanged(setting, enabled);
 }
 
 void GnssManager::handleRequestStateResyncCallback() {
@@ -265,7 +265,9 @@ void GnssSession::handleReportEvent(void *event) {
     uint16_t reportEventType;
     if (!getReportEventType(static_cast<SystemCallbackType>(type),
                             &reportEventType) ||
-        (getSettingState(Setting::LOCATION) == SettingState::DISABLED)) {
+        !EventLoopManagerSingleton::get()
+             ->getSettingManager()
+             .getSettingEnabled(Setting::LOCATION)) {
       freeReportEventCallback(reportEventType, data);
     } else {
       EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
@@ -281,7 +283,7 @@ void GnssSession::handleReportEvent(void *event) {
   }
 }
 
-void GnssSession::onSettingChanged(Setting setting, SettingState /*state*/) {
+void GnssSession::onSettingChanged(Setting setting, bool /*enabled*/) {
   if (setting == Setting::LOCATION) {
     if (asyncResponsePending()) {
       // A request is in progress, so we wait until the async response arrives
@@ -295,10 +297,11 @@ void GnssSession::onSettingChanged(Setting setting, SettingState /*state*/) {
 }
 
 bool GnssSession::updatePlatformRequest(bool forceUpdate) {
-  SettingState locationSetting = getSettingState(Setting::LOCATION);
+  bool enabled =
+      EventLoopManagerSingleton::get()->getSettingManager().getSettingEnabled(
+          Setting::LOCATION);
 
-  bool desiredPlatformState =
-      (locationSetting == SettingState::ENABLED) && !mRequests.empty();
+  bool desiredPlatformState = enabled && !mRequests.empty();
   bool shouldUpdatePlatform =
       forceUpdate ||
       (desiredPlatformState != mPlatformEnabled) /* (enable/disable) */;
@@ -378,8 +381,9 @@ bool GnssSession::configure(Nanoapp *nanoapp, bool enable,
     success = addRequestToQueue(instanceId, enable, minInterval, cookie);
   } else if (stateTransitionIsRequired(enable, minInterval, hasRequest,
                                        requestIndex)) {
-    if (enable &&
-        getSettingState(Setting::LOCATION) == SettingState::DISABLED) {
+    if (enable && !EventLoopManagerSingleton::get()
+                       ->getSettingManager()
+                       .getSettingEnabled(Setting::LOCATION)) {
       // Treat as success but post async failure per API.
       success = postAsyncResultEvent(instanceId, false /* success */, enable,
                                      minInterval, CHRE_ERROR_FUNCTION_DISABLED,
@@ -684,7 +688,9 @@ void GnssSession::dispatchQueuedStateTransitions() {
     if (stateTransitionIsRequired(stateTransition.enable,
                                   stateTransition.minInterval, hasRequest,
                                   requestIndex)) {
-      if (getSettingState(Setting::LOCATION) == SettingState::DISABLED) {
+      if (!EventLoopManagerSingleton::get()
+               ->getSettingManager()
+               .getSettingEnabled(Setting::LOCATION)) {
         postAsyncResultEventFatal(
             stateTransition.nanoappInstanceId, false /* success */,
             stateTransition.enable, stateTransition.minInterval,
