@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef CHRE_CORE_API_MANAGER_COMMON_H_
-#define CHRE_CORE_API_MANAGER_COMMON_H_
+#ifndef CHRE_PLATFORM_LINUX_PAL_BLE_H_
+#define CHRE_PLATFORM_LINUX_PAL_BLE_H_
 
-#include "chre_api/chre/common.h"
+/**
+ * @return true if the BLE PAL is enabled.
+ */
+bool chrePalIsBleEnabled();
 
-namespace chre {
-
-//! The number of chre error types.
-//! NOTE: This value must be updated whenever the last value in chreError
-//! changes.
-static constexpr size_t CHRE_ERROR_SIZE =
-    chreError::CHRE_ERROR_OBSOLETE_REQUEST + 1;
-
-}  // namespace chre
-
-#endif  // CHRE_CORE_API_MANAGER_COMMON_H_
+#endif  // CHRE_PLATFORM_LINUX_PAL_BLE_H_
