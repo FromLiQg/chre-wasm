@@ -89,7 +89,7 @@ void sensorDataEventFree(uint16_t eventType, void *eventData) {
  * @param sensorHandle The handle of the sensor.
  * @param status A reference of the sampling status to be posted.
  */
-void postSamplingStatusEvent(uint16_t instanceId, uint32_t sensorHandle,
+void postSamplingStatusEvent(uint32_t instanceId, uint32_t sensorHandle,
                              const struct chreSensorSamplingStatus &status) {
   auto *event = memoryAlloc<struct chreSensorSamplingStatusEvent>();
   if (event == nullptr) {
@@ -196,21 +196,15 @@ bool SensorRequestManager::setSensorRequest(
           if (success) {
             cancelFlushRequests(sensorHandle, nanoapp->getInstanceId());
 
-            // Only unregister if nanoapp no longer has an outstanding request
-            // for a sensor + target group mask.
-            uint16_t activeMask =
-                getActiveTargetGroupMask(nanoapp->getInstanceId(), sensorType);
-            uint16_t inactiveMask = sensor.getTargetGroupMask() & ~activeMask;
-            if (inactiveMask != 0) {
-              nanoapp->unregisterForBroadcastEvent(eventType, inactiveMask);
+            nanoapp->unregisterForBroadcastEvent(eventType,
+                                                 sensor.getTargetGroupMask());
 
-              uint16_t biasEventType;
-              if (sensor.getBiasEventType(&biasEventType)) {
-                // Per API requirements, turn off bias reporting when
-                // unsubscribing from the sensor.
-                nanoapp->unregisterForBroadcastEvent(biasEventType,
-                                                     inactiveMask);
-              }
+            uint16_t biasEventType;
+            if (sensor.getBiasEventType(&biasEventType)) {
+              // Per API requirements, turn off bias reporting when
+              // unsubscribing from the sensor.
+              nanoapp->unregisterForBroadcastEvent(biasEventType,
+                                                   sensor.getTargetGroupMask());
             }
           }
         } else {
@@ -415,7 +409,7 @@ bool SensorRequestManager::flushAsync(Nanoapp *nanoapp, uint32_t sensorHandle,
                                       const void *cookie) {
   bool success = false;
 
-  uint16_t nanoappInstanceId = nanoapp->getInstanceId();
+  uint32_t nanoappInstanceId = nanoapp->getInstanceId();
   if (sensorHandle >= mSensors.size()) {
     LOG_INVALID_HANDLE(sensorHandle);
   } else if (mSensors[sensorHandle].isOneShot()) {
@@ -450,8 +444,6 @@ void SensorRequestManager::releaseSensorDataEvent(uint16_t eventType,
 void SensorRequestManager::handleFlushCompleteEvent(uint32_t sensorHandle,
                                                     uint32_t flushRequestId,
                                                     uint8_t errorCode) {
-  UNUSED_VAR(flushRequestId);
-
   if (sensorHandle < mSensors.size() &&
       mSensors[sensorHandle].isFlushRequestPending()) {
     // Cancel flush request timer before posting to the event queue to ensure
@@ -567,7 +559,7 @@ void SensorRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
       // TODO: Rearrange these prints to be similar to sensor request logs
       // below
       debugDump.print(
-          " %s: mode=%d int=%" PRIu64 " lat=%" PRIu64 " nappId=%" PRIu16 "\n",
+          " %s: mode=%d int=%" PRIu64 " lat=%" PRIu64 " nappId=%" PRIu32 "\n",
           mSensors[i].getSensorTypeName(), static_cast<int>(request.getMode()),
           request.getInterval().toRawNanoseconds(),
           request.getLatency().toRawNanoseconds(), request.getInstanceId());
@@ -580,7 +572,7 @@ void SensorRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
        i--) {
     const auto &log = mSensorRequestLogs[static_cast<size_t>(i)];
     const Sensor &sensor = mSensors[log.sensorHandle];
-    debugDump.print("  ts=%" PRIu64 " nappId=%" PRIu16 " type=%s idx=%" PRIu8
+    debugDump.print("  ts=%" PRIu64 " nappId=%" PRIu32 " type=%s idx=%" PRIu8
                     " mask=%" PRIx16 " mode=%s",
                     log.timestamp.toRawNanoseconds(), log.instanceId,
                     sensor.getSensorTypeName(), sensor.getSensorIndex(),
@@ -679,7 +671,7 @@ void SensorRequestManager::cancelFlushRequests(uint32_t sensorHandle,
 }
 
 void SensorRequestManager::addSensorRequestLog(
-    uint16_t nanoappInstanceId, uint32_t sensorHandle,
+    uint32_t nanoappInstanceId, uint32_t sensorHandle,
     const SensorRequest &sensorRequest) {
   mSensorRequestLogs.kick_push(SensorRequestLog(
       SystemTime::getMonotonicTime(), nanoappInstanceId, sensorHandle,
@@ -805,7 +797,7 @@ uint8_t SensorRequestManager::makeFlushRequest(FlushRequest &request) {
     Nanoseconds now = SystemTime::getMonotonicTime();
     Nanoseconds deadline = request.deadlineTimestamp;
     if (now >= deadline) {
-      LOGE("Flush sensor %s failed for nanoapp ID %" PRIu16
+      LOGE("Flush sensor %s failed for nanoapp ID %" PRIu32
            ": deadline exceeded",
            sensor.getSensorName(), request.nanoappInstanceId);
       errorCode = CHRE_ERROR_TIMEOUT;
@@ -897,23 +889,6 @@ bool SensorRequestManager::configurePlatformSensor(
     }
   }
   return success;
-}
-
-uint16_t SensorRequestManager::getActiveTargetGroupMask(
-    uint16_t nanoappInstanceId, uint8_t sensorType) {
-  uint16_t mask = 0;
-  for (Sensor &sensor : mSensors) {
-    if (sensor.getSensorType() == sensorType) {
-      size_t index;
-      if (sensor.getRequestMultiplexer().findRequest(nanoappInstanceId,
-                                                     &index) != nullptr) {
-        mask |= sensor.getTargetGroupMask();
-        break;
-      }
-    }
-  }
-
-  return mask;
 }
 
 }  // namespace chre
