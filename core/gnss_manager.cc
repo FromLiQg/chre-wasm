@@ -15,6 +15,7 @@
  */
 
 #include "chre/core/gnss_manager.h"
+
 #include <cstddef>
 
 #include "chre/core/event_loop_manager.h"
@@ -192,6 +193,15 @@ void GnssManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
   mLocationSession.logStateToBuffer(debugDump);
   mMeasurementSession.logStateToBuffer(debugDump);
 
+  debugDump.print("\n API error distribution (error-code indexed):\n");
+  debugDump.print("   GNSS Location:\n");
+  debugDump.logErrorHistogram(mLocationSession.mGnssErrorHistogram,
+                              ARRAY_SIZE(mLocationSession.mGnssErrorHistogram));
+  debugDump.print("   GNSS Measurement:\n");
+  debugDump.logErrorHistogram(
+      mMeasurementSession.mGnssErrorHistogram,
+      ARRAY_SIZE(mMeasurementSession.mGnssErrorHistogram));
+
   debugDump.print(
       "\n Passive location listener %s\n",
       mPlatformPassiveLocationListenerEnabled ? "enabled" : "disabled");
@@ -200,26 +210,20 @@ void GnssManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
   }
 }
 
-uint32_t GnssManager::disableAllSubscriptions(Nanoapp *nanoapp) {
-  uint32_t numDisabledSubscriptions = 0;
+void GnssManager::disableAllSubscriptions(Nanoapp *nanoapp) {
   size_t index;
 
   if (mLocationSession.nanoappHasRequest(nanoapp)) {
-    numDisabledSubscriptions++;
     mLocationSession.removeRequest(nanoapp, nullptr /*cookie*/);
   }
 
   if (mMeasurementSession.nanoappHasRequest(nanoapp)) {
-    numDisabledSubscriptions++;
     mMeasurementSession.removeRequest(nanoapp, nullptr /*cookie*/);
   }
 
   if (nanoappHasPassiveLocationListener(nanoapp->getInstanceId(), &index)) {
-    numDisabledSubscriptions++;
     configurePassiveLocationListener(nanoapp, false /*enable*/);
   }
-
-  return numDisabledSubscriptions;
 }
 
 GnssSession::GnssSession(uint16_t reportEventType)
@@ -575,6 +579,8 @@ bool GnssSession::postAsyncResultEvent(uint16_t instanceId, bool success,
       event->errorCode = errorCode;
       event->reserved = 0;
       event->cookie = cookie;
+
+      mGnssErrorHistogram[errorCode]++;
 
       EventLoopManagerSingleton::get()->getEventLoop().postEventOrDie(
           CHRE_EVENT_GNSS_ASYNC_RESULT, event, freeEventDataCallback,

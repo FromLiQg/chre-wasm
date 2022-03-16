@@ -189,6 +189,7 @@ endif
 # Simulator-specific Compiler Flags ############################################
 
 SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
+SIM_CFLAGS += -Iplatform/linux/sim/include
 
 # Simulator-specific Source Files ##############################################
 
@@ -201,6 +202,7 @@ SIM_SRCS += platform/linux/memory_manager.cc
 SIM_SRCS += platform/linux/platform_debug_dump_manager.cc
 SIM_SRCS += platform/linux/platform_log.cc
 SIM_SRCS += platform/linux/platform_pal.cc
+SIM_SRCS += platform/linux/platform_sensor.cc
 SIM_SRCS += platform/linux/platform_sensor_type_helpers.cc
 SIM_SRCS += platform/linux/power_control_manager.cc
 SIM_SRCS += platform/linux/system_time.cc
@@ -219,9 +221,7 @@ SIM_SRCS += platform/shared/chre_api_wifi.cc
 SIM_SRCS += platform/shared/chre_api_wwan.cc
 SIM_SRCS += platform/shared/memory_manager.cc
 SIM_SRCS += platform/shared/nanoapp/nanoapp_dso_util.cc
-SIM_SRCS += platform/shared/pal_sensor_stub.cc
 SIM_SRCS += platform/shared/pal_system_api.cc
-SIM_SRCS += platform/shared/platform_sensor_manager.cc
 SIM_SRCS += platform/shared/system_time.cc
 SIM_SRCS += platform/shared/version.cc
 
@@ -235,6 +235,12 @@ endif
 ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
 SIM_SRCS += platform/linux/pal_gnss.cc
 SIM_SRCS += platform/shared/platform_gnss.cc
+endif
+
+# Optional sensor support.
+ifeq ($(CHRE_SENSORS_SUPPORT_ENABLED), true)
+SIM_SRCS += platform/linux/pal_sensor.cc
+SIM_SRCS += platform/shared/platform_sensor_manager.cc
 endif
 
 # Optional Wi-Fi support.
