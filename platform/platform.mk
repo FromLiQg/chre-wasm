@@ -189,6 +189,7 @@ endif
 # Simulator-specific Compiler Flags ############################################
 
 SIM_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
+SIM_CFLAGS += -Iplatform/linux/sim/include
 
 # Simulator-specific Source Files ##############################################
 
@@ -224,6 +225,11 @@ SIM_SRCS += platform/shared/pal_system_api.cc
 SIM_SRCS += platform/shared/system_time.cc
 SIM_SRCS += platform/shared/version.cc
 
+# Optional audio support.
+ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
+SIM_SRCS += platform/linux/pal_audio.cc
+endif
+
 # Optional BLE support.
 ifeq ($(CHRE_BLE_SUPPORT_ENABLED), true)
 SIM_SRCS += platform/linux/pal_ble.cc
@@ -234,6 +240,12 @@ endif
 ifeq ($(CHRE_GNSS_SUPPORT_ENABLED), true)
 SIM_SRCS += platform/linux/pal_gnss.cc
 SIM_SRCS += platform/shared/platform_gnss.cc
+endif
+
+# Optional sensor support.
+ifeq ($(CHRE_SENSORS_SUPPORT_ENABLED), true)
+SIM_SRCS += platform/linux/pal_sensor.cc
+SIM_SRCS += platform/shared/platform_sensor_manager.cc
 endif
 
 # Optional Wi-Fi support.
@@ -251,12 +263,6 @@ SIM_SRCS += platform/linux/pal_wwan.cc
 SIM_SRCS += platform/shared/platform_wwan.cc
 endif
 
-# Optional sensor support.
-ifeq ($(CHRE_SENSORS_SUPPORT_ENABLED), true)
-SIM_SRCS += platform/linux/pal_sensor.cc
-SIM_SRCS += platform/shared/platform_sensor_manager.cc
-endif
-
 # Linux-specific Compiler Flags ################################################
 
 GOOGLE_X86_LINUX_CFLAGS += -Iplatform/linux/include
@@ -268,8 +274,8 @@ GOOGLE_X86_LINUX_SRCS += platform/linux/assert.cc
 
 # Optional audio support.
 ifeq ($(CHRE_AUDIO_SUPPORT_ENABLED), true)
-GOOGLE_X86_LINUX_SRCS += platform/linux/audio_source.cc
-GOOGLE_X86_LINUX_SRCS += platform/linux/platform_audio.cc
+GOOGLE_X86_LINUX_SRCS += platform/linux/sim/audio_source.cc
+GOOGLE_X86_LINUX_SRCS += platform/linux/sim/platform_audio.cc
 endif
 
 # Optional WiFi NAN support
@@ -329,8 +335,8 @@ GOOGLETEST_CFLAGS += -Iplatform/slpi/include
 # GoogleTest Source Files ######################################################
 
 GOOGLETEST_COMMON_SRCS += platform/linux/assert.cc
-GOOGLETEST_COMMON_SRCS += platform/linux/audio_source.cc
-GOOGLETEST_COMMON_SRCS += platform/linux/platform_audio.cc
+GOOGLETEST_COMMON_SRCS += platform/linux/sim/audio_source.cc
+GOOGLETEST_COMMON_SRCS += platform/linux/sim/platform_audio.cc
 GOOGLETEST_COMMON_SRCS += platform/tests/log_buffer_test.cc
 GOOGLETEST_COMMON_SRCS += platform/shared/log_buffer.cc
 ifeq ($(CHRE_WIFI_NAN_SUPPORT_ENABLED), true)
