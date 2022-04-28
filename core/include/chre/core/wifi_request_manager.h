@@ -19,6 +19,7 @@
 
 #include "chre/core/api_manager_common.h"
 #include "chre/core/nanoapp.h"
+#include "chre/core/settings.h"
 #include "chre/platform/platform_wifi.h"
 #include "chre/util/buffer.h"
 #include "chre/util/non_copyable.h"
@@ -190,6 +191,11 @@ class WifiRequestManager : public NonCopyable {
    */
   void handleScanEvent(struct chreWifiScanEvent *event);
 
+  /**
+   * Updates the NAN availability state.
+   *
+   * @param available Whether NAN is available to use.
+   */
   void updateNanAvailability(bool available);
 
   /**
@@ -238,6 +244,17 @@ class WifiRequestManager : public NonCopyable {
                                        uint32_t subscriptionId);
 
   /**
+   * Handles a NAN service subscription cancelation event.
+   *
+   * @param errorCode An error code from enum chreError, with CHRE_ERROR_NONE
+   *        indicating successfully canceling a subscription.
+   * @param subscriptionId The ID of the subscribe session which has now been
+   *        canceled.
+   */
+  void handleNanServiceSubscriptionCanceledEvent(uint8_t errorCode,
+                                                 uint32_t subscriptionId);
+
+  /**
    * Prints state in a string buffer. Must only be called from the context of
    * the main CHRE thread.
    *
@@ -245,6 +262,33 @@ class WifiRequestManager : public NonCopyable {
    *     into one of the buffers.
    */
   void logStateToBuffer(DebugDumpWrapper &debugDump) const;
+
+  /**
+   * Invoked when the host notifies CHRE that there has been a change in the
+   * WiFi access via the user settings.
+   *
+   * @param setting The setting that changed.
+   * @param enabled Whether setting is enabled or not.
+   */
+  void onSettingChanged(Setting setting, bool enabled);
+
+  /**
+   * Disables pending scan monitoring and NAN subscription for a nanoapp
+   *
+   * @param nanoapp A non-null pointer to the nanoapp.
+   *
+   * @return The number of subscriptions disabled.
+   */
+  uint32_t disableAllSubscriptions(Nanoapp *nanoapp);
+
+  /**
+   * Get the number of current active NAN subscriptions.
+   *
+   * @return Number of active NAN subscriptions.
+   */
+  size_t getNumNanSubscriptions() const {
+    return mNanoappSubscriptions.size();
+  }
 
  private:
   struct PendingRequestBase {
@@ -397,6 +441,15 @@ class WifiRequestManager : public NonCopyable {
    */
   bool nanoappHasScanMonitorRequest(uint16_t instanceId,
                                     size_t *index = nullptr) const;
+
+  /**
+   * Returns whether the nanoapp has a pending activation for scan monitoring.
+   *
+   * @param instanceId the instance ID of the nanoapp.
+   *
+   * @return whether the nanoapp has a pending request for scan monitoring.
+   */
+  bool nanoappHasPendingScanMonitorRequest(uint16_t instanceId) const;
 
   /**
    * @param requestedState The requested state to compare against.
@@ -595,6 +648,24 @@ class WifiRequestManager : public NonCopyable {
                                            uint32_t subscriptionId);
 
   /**
+   * Handles the event informing CHRE the result of a subscription cancelation.
+   *
+   * @param errorCode A value in @ref enum chreError with CHRE_ERROR_NONE
+   *        indicating successful cancelation, an error code otherwise.
+   * @param subscriptionId The ID of the service whose subscription has been
+   *        canceled.
+   */
+  void handleNanServiceSubscriptionCanceledEventSync(uint8_t errorCode,
+                                                     uint32_t subscriptionId);
+
+  /**
+   * Handles event informing CHRE whether NAN is available.
+   *
+   * @param available Whether NAN is available to use.
+   */
+  void handleNanAvailabilitySync(bool available);
+
+  /**
    * Sends CHRE_EVENT_WIFI_ASYNC_RESULT for the ranging request at the head
    * of the pending queue.
    *
@@ -662,16 +733,6 @@ class WifiRequestManager : public NonCopyable {
   static void freeWifiRangingEventCallback(uint16_t eventType, void *eventData);
   static void freeNanDiscoveryEventCallback(uint16_t eventType,
                                             void *eventData);
-
-  /**
-   * Print API error distribution histogram to debug_dump
-   *
-   * @param eventType the type of event being freed.
-   * @param histogram pointer the error distribution histogram.
-   * @param histogramLength The number of chre error types
-   */
-  void logErrorHistogram(DebugDumpWrapper &debugDump, const uint32_t *histogram,
-                         uint8_t histogramLength) const;
 
   /**
    * Copy a NAN subscription configuration to a pending NAN subscription
