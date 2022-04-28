@@ -18,13 +18,38 @@
 #define CHRE_PLATFORM_LINUX_PAL_GNSS_H_
 
 /**
- * @return true if the GNSS location session is enabled in the GNSS PAL.
+ * @return whether the GNSS location session is enabled in the GNSS PAL.
  */
 bool chrePalGnssIsLocationEnabled();
 
 /**
- * @return true if the GNSS measurement session is enabled in the GNSS PAL.
+ * @return whether the GNSS measurement session is enabled in the GNSS PAL.
  */
 bool chrePalGnssIsMeasurementEnabled();
+
+/**
+ * @return whether the GNSS passive listener is enabled in the GNSS PAL.
+ */
+bool chrePalGnssIsPassiveLocationListenerEnabled();
+
+/**
+ * Delays sending the location events until
+ * chrePalGnssStartSendingLocationEvents is called.
+ *
+ * Use this if you need to control the timing between when CHRE requests GNSS
+ * locations and when the async callback and events are delivered.
+ *
+ * The default is to start sending events immediately to CHRE.
+ */
+void chrePalGnssDelaySendingLocationEvents(bool enable);
+
+/**
+ * Starts sending the location events after chrePalControlLocationSession has
+ * been called with enable set to true.
+ *
+ * Note: This function must only be called after a call to
+ *       chrePalGnssDelaySendingLocationEvents with enable set to true.
+ */
+void chrePalGnssStartSendingLocationEvents();
 
 #endif  // CHRE_PLATFORM_LINUX_PAL_GNSS_H_
