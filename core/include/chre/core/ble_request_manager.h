@@ -75,9 +75,17 @@ class BleRequestManager : public NonCopyable {
    * CHRE_EVENT_BLE_ASYNC_RESULT event.
    *
    * @param nanoapp The nanoapp stopping the request.
-   * @return true if scan was successfully ended.
+   * @return whether the scan was successfully ended.
    */
   bool stopScanAsync(Nanoapp *nanoapp);
+
+  /**
+   * Disables active scan for a nanoapp (no-op if no active scan).
+   *
+   * @param nanoapp A non-null pointer to the nanoapp.
+   * @return the number of scans cancelled (1 or 0).
+   */
+  uint32_t disableActiveScan(const Nanoapp *nanoapp);
 
   /**
    * Frees an advertising event that was previously provided to the BLE
@@ -172,7 +180,7 @@ class BleRequestManager : public NonCopyable {
       mode = req.getMode();
       reportDelayMs = req.getReportDelayMs();
       rssiThreshold = req.getRssiThreshold();
-      scanFilterCount = req.getGenericFilters().size();
+      scanFilterCount = static_cast<uint8_t>(req.getGenericFilters().size());
     }
     Nanoseconds timestamp;
     uint32_t instanceId;
