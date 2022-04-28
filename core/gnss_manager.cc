@@ -210,20 +210,26 @@ void GnssManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
   }
 }
 
-void GnssManager::disableAllSubscriptions(Nanoapp *nanoapp) {
+uint32_t GnssManager::disableAllSubscriptions(Nanoapp *nanoapp) {
+  uint32_t numDisabledSubscriptions = 0;
   size_t index;
 
   if (mLocationSession.nanoappHasRequest(nanoapp)) {
+    numDisabledSubscriptions++;
     mLocationSession.removeRequest(nanoapp, nullptr /*cookie*/);
   }
 
   if (mMeasurementSession.nanoappHasRequest(nanoapp)) {
+    numDisabledSubscriptions++;
     mMeasurementSession.removeRequest(nanoapp, nullptr /*cookie*/);
   }
 
   if (nanoappHasPassiveLocationListener(nanoapp->getInstanceId(), &index)) {
+    numDisabledSubscriptions++;
     configurePassiveLocationListener(nanoapp, false /*enable*/);
   }
+
+  return numDisabledSubscriptions;
 }
 
 GnssSession::GnssSession(uint16_t reportEventType)
@@ -404,7 +410,8 @@ bool GnssSession::configure(Nanoapp *nanoapp, bool enable,
   uint16_t instanceId = nanoapp->getInstanceId();
   size_t requestIndex = 0;
   bool hasRequest = nanoappHasRequest(instanceId, &requestIndex);
-  if (!mStateTransitions.empty()) {
+
+  if (asyncResponsePending()) {
     success = addRequestToQueue(instanceId, enable, minInterval, cookie);
   } else if (stateTransitionIsRequired(enable, minInterval, hasRequest,
                                        requestIndex)) {
