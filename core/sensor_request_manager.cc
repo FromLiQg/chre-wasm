@@ -20,6 +20,7 @@
 #include "chre/util/macros.h"
 #include "chre/util/nested_data_ptr.h"
 #include "chre/util/system/debug_dump.h"
+#include "chre/util/time.h"
 #include "chre_api/chre/version.h"
 
 #define LOG_INVALID_HANDLE(x) \
@@ -36,7 +37,7 @@ bool isSensorRequestValid(const Sensor &sensor,
   bool isRequestPassive = sensorModeIsPassive(sensorRequest.getMode());
 
   bool success = false;
-  if (requestedInterval < sensor.getMinInterval()) {
+  if (!isRequestOff && requestedInterval < sensor.getMinInterval()) {
     LOGE("Requested interval %" PRIu64 " < sensor's minInterval %" PRIu64,
          requestedInterval, sensor.getMinInterval());
   } else if (!isRequestOff && isRequestOneShot != sensor.isOneShot()) {
@@ -593,6 +594,26 @@ void SensorRequestManager::logStateToBuffer(DebugDumpWrapper &debugDump) const {
     }
     debugDump.print("\n");
   }
+}
+
+uint32_t SensorRequestManager::disableAllSubscriptions(Nanoapp *nanoapp) {
+  uint32_t numDisabledSubscriptions = 0;
+
+  const uint32_t numSensors = static_cast<uint32_t>(mSensors.size());
+  for (uint32_t handle = 0; handle < numSensors; handle++) {
+    Sensor &sensor = mSensors[handle];
+    bool nanoappHasRequest =
+        sensor.getRequestMultiplexer().findRequest(
+            nanoapp->getInstanceId(), nullptr /*index*/) != nullptr;
+    if (nanoappHasRequest) {
+      numDisabledSubscriptions++;
+      SensorRequest request(SensorMode::Off, Nanoseconds() /*interval*/,
+                            Nanoseconds() /*latency*/);
+      setSensorRequest(nanoapp, handle, request);
+    }
+  }
+
+  return numDisabledSubscriptions;
 }
 
 void SensorRequestManager::postFlushCompleteEvent(uint32_t sensorHandle,
