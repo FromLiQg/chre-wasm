@@ -798,18 +798,13 @@ static void chppWifiServiceRangingEventCallback(
   }
 
   if (notification != NULL) {
+    uint16_t command = CHPP_WIFI_REQUEST_RANGING_ASYNC;
+
     // Per CHRE's API contract, only one kind of ranging request can be pending
-    // at a time - look into the global wifi request-response state to
-    // determine what context this callback is being invoked for.
-    uint8_t rangingRequestState =
-        gWifiServiceContext.requestRangingAsync.requestState;
-    uint16_t command = (rangingRequestState == CHPP_REQUEST_STATE_REQUEST_SENT)
-                           ? CHPP_WIFI_REQUEST_RANGING_ASYNC
-                           : CHPP_WIFI_REQUEST_NAN_RANGING_ASYNC;
+    // at a time - use the higher of the two for the notification.
     uint8_t transaction =
-        (command == CHPP_WIFI_REQUEST_RANGING_ASYNC)
-            ? gWifiServiceContext.requestRangingAsync.transaction
-            : gWifiServiceContext.requestNanRangingAsync.transaction;
+        MAX(gWifiServiceContext.requestRangingAsync.transaction,
+            gWifiServiceContext.requestNanRangingAsync.transaction);
     notification->header.handle = gWifiServiceContext.service.handle;
     notification->header.type = CHPP_MESSAGE_TYPE_SERVICE_NOTIFICATION;
     notification->header.transaction = transaction;
@@ -848,6 +843,7 @@ static void chppWifiServiceNanIdentifierCallback(uint8_t errorCode,
   if (id == NULL) {
     CHPP_LOG_OOM();
   } else {
+    id->header.command = CHPP_WIFI_REQUEST_NAN_SUB;
     id->header.handle = gWifiServiceContext.service.handle;
     id->header.type = CHPP_MESSAGE_TYPE_SERVICE_NOTIFICATION;
     id->header.error = CHPP_APP_ERROR_NONE;
@@ -996,7 +992,7 @@ static void chppWifiServiceNanSubscriptionCanceledCallback(
   } else {
     response->header.command = CHPP_WIFI_REQUEST_NAN_SUB_CANCEL;
     response->header.handle = gWifiServiceContext.service.handle;
-    response->header.type = CHPP_MESSAGE_TYPE_SERVICE_RESPONSE;
+    response->header.type = CHPP_MESSAGE_TYPE_SERVICE_NOTIFICATION;
     response->header.error = CHPP_APP_ERROR_NONE;
     response->header.transaction =
         gWifiServiceContext.requestNanSubscribeCancel.transaction;
