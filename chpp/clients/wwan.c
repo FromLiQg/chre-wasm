@@ -68,7 +68,9 @@ struct ChppWwanClientState {
 
   struct ChppRequestResponseState rRState[CHPP_WWAN_CLIENT_REQUEST_MAX + 1];
 
-  uint32_t capabilities;  // Cached GetCapabilities result
+  uint32_t capabilities;   // Cached GetCapabilities result
+  bool capabilitiesValid;  // Flag to indicate if the capabilities result
+                           // is valid
 };
 
 // Note: This global definition of gWwanClientContext supports only one
@@ -311,10 +313,15 @@ static void chppWwanGetCapabilitiesResult(
     CHPP_LOGD("chppWwanGetCapabilitiesResult received capabilities=0x%" PRIx32,
               result->capabilities);
 
-    CHPP_ASSERT_LOG((result->capabilities == CHPP_WWAN_DEFAULT_CAPABILITIES),
-                    "WWAN capabilities 0x%" PRIx32 " != 0x%" PRIx32,
-                    result->capabilities, CHPP_WWAN_DEFAULT_CAPABILITIES);
+    // TODO(b/229758746): Disable assertion on WWAN side until it's fixed
+    // CHPP_ASSERT((result->capabilities & CHPP_WWAN_DEFAULT_CAPABILITIES) ==
+    //             CHPP_WWAN_DEFAULT_CAPABILITIES);
+    if (result->capabilities != CHPP_WWAN_DEFAULT_CAPABILITIES) {
+      CHPP_LOGE("WWAN capabilities 0x%" PRIx32 " != 0x%" PRIx32,
+                result->capabilities, CHPP_WWAN_DEFAULT_CAPABILITIES);
+    }
 
+    clientContext->capabilitiesValid = true;
     clientContext->capabilities = result->capabilities;
   }
 }
@@ -437,6 +444,7 @@ static void chppWwanClientClose(void) {
                  sizeof(*request))) {
     gWwanClientContext.client.openState = CHPP_OPEN_STATE_CLOSED;
     gWwanClientContext.capabilities = CHRE_WWAN_CAPABILITIES_NONE;
+    gWwanClientContext.capabilitiesValid = false;
     chppClientCloseOpenRequests(&gWwanClientContext.client, &kWwanClientConfig,
                                 true /* clearOnly */);
   }
@@ -451,7 +459,7 @@ static void chppWwanClientClose(void) {
 static uint32_t chppWwanClientGetCapabilities(void) {
   uint32_t capabilities = CHPP_WWAN_DEFAULT_CAPABILITIES;
 
-  if (gWwanClientContext.capabilities != CHRE_WWAN_CAPABILITIES_NONE) {
+  if (gWwanClientContext.capabilitiesValid) {
     // Result already cached
     capabilities = gWwanClientContext.capabilities;
 
@@ -467,7 +475,9 @@ static uint32_t chppWwanClientGetCapabilities(void) {
               &gWwanClientContext.rRState[CHPP_WWAN_GET_CAPABILITIES], request,
               sizeof(*request))) {
         // Success. gWwanClientContext.capabilities is now populated
-        capabilities = gWwanClientContext.capabilities;
+        if (gWwanClientContext.capabilitiesValid) {
+          capabilities = gWwanClientContext.capabilities;
+        }
       }
     }
   }

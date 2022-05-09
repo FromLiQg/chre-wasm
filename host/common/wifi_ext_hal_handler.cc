@@ -16,21 +16,21 @@
 
 #include "chre_host/wifi_ext_hal_handler.h"
 
-#ifdef WIFI_EXT_V_1_3_HAS_MERGED
-
 namespace android {
 namespace chre {
 
-WifiExtHalHandler::WifiExtHalHandler() {
+WifiExtHalHandler::~WifiExtHalHandler() {
+  notifyThreadToExit();
+  mThread.join();
+}
+
+WifiExtHalHandler::WifiExtHalHandler(
+    const std::function<void(bool)> &statusChangeCallback) {
   mEnableConfig.reset();
   mThread = std::thread(&WifiExtHalHandler::wifiExtHandlerThreadEntry, this);
   auto cb = [&]() { onWifiExtHalServiceDeath(); };
   mDeathRecipient = new WifiExtHalDeathRecipient(cb);
-}
-
-void WifiExtHalHandler::init(
-    const std::function<void(bool)> &statusChangeCallback) {
-  mStatusChangeCallback = std::move(statusChangeCallback);
+  mCallback = new WifiExtCallback(statusChangeCallback);
 }
 
 void WifiExtHalHandler::handleConfigurationRequest(bool enable) {
@@ -47,18 +47,11 @@ void WifiExtHalHandler::dispatchConfigurationRequest(bool enable) {
            (enable == true) ? "Enable" : "Disable", status.code,
            status.description.c_str());
     }
-    onStatusChanged(success);
+    mCallback->onStatusChanged(success);
   };
 
   if (checkWifiExtHalConnected()) {
-    hardware::Return<void> result;
-    if (enable) {
-      // The transaction ID is inconsequential from CHRE's perspective, and is
-      // an unimplemented artifact in the WiFi ext HAL.
-      result = mService->enableWifiChreNan(0 /*transaction_id*/, hidlCb);
-    } else {
-      result = mService->disableWifiChreNan(0 /*transaction_id*/, hidlCb);
-    }
+    auto result = mService->requestWifiChreNanRtt(enable, hidlCb);
     if (!result.isOk()) {
       LOGE("Failed to %s NAN: %s", (enable == true) ? "Enable" : "Disable",
            result.description().c_str());
@@ -67,15 +60,29 @@ void WifiExtHalHandler::dispatchConfigurationRequest(bool enable) {
 }
 
 bool WifiExtHalHandler::checkWifiExtHalConnected() {
-  bool success = true;
+  bool success = false;
   if (mService == nullptr) {
     mService = IWifiExt::getService();
     if (mService != nullptr) {
       LOGD("Connected to Wifi Ext HAL service");
       mService->linkToDeath(mDeathRecipient, 0 /*cookie*/);
+
+      auto hidlCb = [&success](const WifiStatus &status) {
+        success = (status.code == WifiStatusCode::SUCCESS);
+        if (!success) {
+          LOGE("Failed to register CHRE callback with WifiExt: %s",
+               status.description.c_str());
+        }
+      };
+      auto result = mService->registerChreCallback(mCallback, hidlCb);
+      if (!result.isOk()) {
+        LOGE("Failed to register CHRE callback with WifiEmDeathRecipientxt: %s",
+             result.description().c_str());
+      } else {
+        success = true;
+      }
     } else {
       LOGE("Failed to connect to Wifi Ext HAL service");
-      success = false;
     }
   }
   return success;
@@ -92,16 +99,23 @@ void WifiExtHalHandler::onWifiExtHalServiceDeath() {
 }
 
 void WifiExtHalHandler::wifiExtHandlerThreadEntry() {
-  while (true) {
+  while (mThreadRunning) {
     std::unique_lock<std::mutex> lock(mMutex);
-    mCondVar.wait(lock, [this] { return mEnableConfig.has_value(); });
+    mCondVar.wait(
+        lock, [this] { return mEnableConfig.has_value() || !mThreadRunning; });
 
-    dispatchConfigurationRequest(mEnableConfig.value());
-    mEnableConfig.reset();
+    if (mThreadRunning) {
+      dispatchConfigurationRequest(mEnableConfig.value());
+      mEnableConfig.reset();
+    }
   }
+}
+
+void WifiExtHalHandler::notifyThreadToExit() {
+  std::lock_guard<std::mutex> lock(mMutex);
+  mThreadRunning = false;
+  mCondVar.notify_one();
 }
 
 }  // namespace chre
 }  // namespace android
-
-#endif  // WIFI_EXT_V_1_3_HAS_MERGED
