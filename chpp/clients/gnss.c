@@ -70,6 +70,8 @@ struct ChppGnssClientState {
   uint32_t capabilities;           // Cached GetCapabilities result
   bool requestStateResyncPending;  // requestStateResync() is waiting to be
                                    // processed
+  bool capabilitiesValid;  // Flag to indicate if the capabilities result
+                           // is valid
 };
 
 // Note: This global definition of gGnssClientContext supports only one
@@ -392,10 +394,14 @@ static void chppGnssGetCapabilitiesResult(
     CHPP_LOGD("chppGnssGetCapabilitiesResult received capabilities=0x%" PRIx32,
               result->capabilities);
 
-    CHPP_ASSERT_LOG((result->capabilities == CHPP_GNSS_DEFAULT_CAPABILITIES),
-                    "GNSS capabilities 0x%" PRIx32 " != 0x%" PRIx32,
-                    result->capabilities, CHPP_GNSS_DEFAULT_CAPABILITIES);
+    CHPP_ASSERT((result->capabilities & CHPP_GNSS_DEFAULT_CAPABILITIES) ==
+                CHPP_GNSS_DEFAULT_CAPABILITIES);
+    if (result->capabilities != CHPP_GNSS_DEFAULT_CAPABILITIES) {
+      CHPP_LOGE("GNSS capabilities 0x%" PRIx32 " != 0x%" PRIx32,
+                result->capabilities, CHPP_GNSS_DEFAULT_CAPABILITIES);
+    }
 
+    clientContext->capabilitiesValid = true;
     clientContext->capabilities = result->capabilities;
   }
 }
@@ -627,6 +633,7 @@ static void chppGnssClientClose(void) {
                  sizeof(*request))) {
     gGnssClientContext.client.openState = CHPP_OPEN_STATE_CLOSED;
     gGnssClientContext.capabilities = CHRE_GNSS_CAPABILITIES_NONE;
+    gGnssClientContext.capabilitiesValid = false;
     chppClientCloseOpenRequests(&gGnssClientContext.client, &kGnssClientConfig,
                                 true /* clearOnly */);
   }
@@ -641,7 +648,7 @@ static void chppGnssClientClose(void) {
 static uint32_t chppGnssClientGetCapabilities(void) {
   uint32_t capabilities = CHPP_GNSS_DEFAULT_CAPABILITIES;
 
-  if (gGnssClientContext.capabilities != CHRE_GNSS_CAPABILITIES_NONE) {
+  if (gGnssClientContext.capabilitiesValid) {
     // Result already cached
     capabilities = gGnssClientContext.capabilities;
 
@@ -657,7 +664,9 @@ static uint32_t chppGnssClientGetCapabilities(void) {
               &gGnssClientContext.rRState[CHPP_GNSS_GET_CAPABILITIES], request,
               sizeof(*request))) {
         // Success. gGnssClientContext.capabilities is now populated
-        capabilities = gGnssClientContext.capabilities;
+        if (gGnssClientContext.capabilitiesValid) {
+          capabilities = gGnssClientContext.capabilities;
+        }
       }
     }
   }

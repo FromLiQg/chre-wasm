@@ -39,16 +39,6 @@ Nanoapp::Nanoapp() {
   cycleWakeupBuckets(1);
 }
 
-Nanoapp::~Nanoapp() {
-  const size_t totalAllocatedBytes = getTotalAllocatedBytes();
-
-  if (totalAllocatedBytes > 0) {
-    // TODO: Consider asserting here
-    LOGE("Nanoapp ID=0x%016" PRIx64 " still has %zu allocated bytes!",
-         getAppId(), totalAllocatedBytes);
-  }
-}
-
 bool Nanoapp::isRegisteredForBroadcastEvent(const Event *event) const {
   bool registered = false;
   uint16_t eventType = event->eventType;
@@ -142,6 +132,7 @@ void Nanoapp::processEvent(Event *event) {
 
 void Nanoapp::blameHostWakeup() {
   if (mWakeupBuckets.back() < UINT16_MAX) ++mWakeupBuckets.back();
+  if (mNumWakeupsSinceBoot < UINT32_MAX) ++mNumWakeupsSinceBoot;
 }
 
 void Nanoapp::cycleWakeupBuckets(size_t numBuckets) {
@@ -172,7 +163,10 @@ void Nanoapp::logStateToBuffer(DebugDumpWrapper &debugDump) const {
     debugDump.print("%" PRIu16 ", ", mWakeupBuckets[i]);
   }
   // Earliest bucket gets no comma
-  debugDump.print("%" PRIu16 " ]\n", mWakeupBuckets.front());
+  debugDump.print("%" PRIu16 " ]", mWakeupBuckets.front());
+
+  // Print total wakeups since boot
+  debugDump.print(" totWakeups=%" PRIu32 " ]\n", mNumWakeupsSinceBoot);
 }
 
 bool Nanoapp::permitPermissionUse(uint32_t permission) const {
@@ -237,6 +231,35 @@ bool Nanoapp::publishRpcServices(struct chreNanoappRpcService *services,
   }
 
   return success;
+}
+
+void Nanoapp::linkHeapBlock(HeapBlockHeader *header) {
+  header->data.next = mFirstHeader;
+  mFirstHeader = header;
+}
+
+void Nanoapp::unlinkHeapBlock(HeapBlockHeader *header) {
+  if (mFirstHeader == nullptr) {
+    // The list is empty.
+    return;
+  }
+
+  if (header == mFirstHeader) {
+    mFirstHeader = header->data.next;
+    return;
+  }
+
+  HeapBlockHeader *previous = mFirstHeader;
+  HeapBlockHeader *current = mFirstHeader->data.next;
+
+  while (current != nullptr) {
+    if (current == header) {
+      previous->data.next = current->data.next;
+      break;
+    }
+    previous = current;
+    current = current->data.next;
+  }
 }
 
 }  // namespace chre
