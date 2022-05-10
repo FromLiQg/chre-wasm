@@ -208,15 +208,13 @@ static enum ChppAppErrorCode chppWwanServiceOpen(
   enum ChppAppErrorCode error = CHPP_APP_ERROR_NONE;
 
   if (wwanServiceContext->service.openState == CHPP_OPEN_STATE_OPENED) {
-    CHPP_LOGE("WWAN service already open");
-    CHPP_DEBUG_ASSERT(false);
+    CHPP_DEBUG_ASSERT_LOG(false, "WWAN service already open");
     error = CHPP_APP_ERROR_INVALID_COMMAND;
 
   } else if (!wwanServiceContext->api->open(
                  wwanServiceContext->service.appContext->systemApi,
                  &palCallbacks)) {
-    CHPP_LOGE("WWAN PAL open failed");
-    CHPP_DEBUG_ASSERT(false);
+    CHPP_DEBUG_ASSERT_LOG(false, "WWAN PAL open failed");
     error = CHPP_APP_ERROR_BEYOND_CHPP;
 
   } else {
@@ -374,20 +372,27 @@ static void chppWwanServiceCellInfoResultCallback(
       container_of(rRState, struct ChppWwanServiceState, getCellInfoAsync);
 
   // Craft response per parser script
-  struct ChppWwanCellInfoResultWithHeader *response;
-  size_t responseLen;
+  struct ChppWwanCellInfoResultWithHeader *response = NULL;
+  size_t responseLen = 0;
   if (!chppWwanCellInfoResultFromChre(result, &response, &responseLen)) {
-    CHPP_LOGE(
-        "chppWwanCellInfoResultFromChre failed (OOM?). Transaction ID = "
-        "%" PRIu8,
-        rRState->transaction);
-    // TODO: consider sending an error response if this fails
+    CHPP_LOGE("CellInfo conversion failed (OOM?) ID=%" PRIu8,
+              rRState->transaction);
 
-  } else {
+    response = chppMalloc(sizeof(struct ChppAppHeader));
+    if (response == NULL) {
+      CHPP_LOG_OOM();
+    } else {
+      responseLen = sizeof(struct ChppAppHeader);
+    }
+  }
+
+  if (response != NULL) {
     response->header.handle = wwanServiceContext->service.handle;
     response->header.type = CHPP_MESSAGE_TYPE_SERVICE_RESPONSE;
     response->header.transaction = rRState->transaction;
-    response->header.error = CHPP_APP_ERROR_NONE;
+    response->header.error = (responseLen > sizeof(struct ChppAppHeader))
+                                 ? CHPP_APP_ERROR_NONE
+                                 : CHPP_APP_ERROR_CONVERSION_FAILED;
     response->header.command = CHPP_WWAN_GET_CELLINFO_ASYNC;
 
     chppSendTimestampedResponseOrFail(&wwanServiceContext->service, rRState,
@@ -405,13 +410,12 @@ void chppRegisterWwanService(struct ChppAppState *appContext) {
   gWwanServiceContext.api = chrePalWwanGetApi(CHPP_PAL_WWAN_API_VERSION);
 
   if (gWwanServiceContext.api == NULL) {
-    CHPP_LOGE(
-        "WWAN PAL API version not compatible with CHPP. Cannot register WWAN "
-        "service");
-    CHPP_DEBUG_ASSERT(false);
+    CHPP_DEBUG_ASSERT_LOG(false,
+                          "WWAN PAL API incompatible. Cannot register service");
 
   } else {
     gWwanServiceContext.service.appContext = appContext;
+    gWwanServiceContext.service.openState = CHPP_OPEN_STATE_CLOSED;
     gWwanServiceContext.service.handle = chppRegisterService(
         appContext, (void *)&gWwanServiceContext, &kWwanServiceConfig);
     CHPP_DEBUG_ASSERT(gWwanServiceContext.service.handle);
