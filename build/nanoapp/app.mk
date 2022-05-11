@@ -22,6 +22,11 @@ $(error "The NANOAPP_VERSION variable must be set to the version of the nanoapp.
          This should be assigned by the Makefile that includes app.mk.")
 endif
 
+ifeq ($(BUILD_ID),)
+# If BUILD_ID is unset this must be a local build.
+BUILD_ID = local
+endif
+
 NANOAPP_VERSION := $(strip $(NANOAPP_VERSION))
 MATCHED_NANOAPP_VERSION := $(shell echo $(NANOAPP_VERSION) \
                                  | grep "^0x[0-9a-fA-F]\{8\}")
@@ -71,6 +76,10 @@ ifneq ($(CHRE_NANOAPP_USES_AUDIO),)
 COMMON_CFLAGS += -DCHRE_NANOAPP_USES_AUDIO
 endif
 
+ifneq ($(CHRE_NANOAPP_USES_BLE),)
+COMMON_CFLAGS += -DCHRE_NANOAPP_USES_BLE
+endif
+
 ifneq ($(CHRE_NANOAPP_USES_GNSS),)
 COMMON_CFLAGS += -DCHRE_NANOAPP_USES_GNSS
 endif
@@ -88,9 +97,10 @@ endif
 # Add the CHRE API to the include search path.
 COMMON_CFLAGS += -I$(CHRE_PREFIX)/chre_api/include/chre_api
 
-# Add util and platform/shared to the include search path.
+# Don't pull in the utils folder if not desired
+ifneq ($(NANOAPP_NO_UTILS_INCLUDE),true)
 COMMON_CFLAGS += -I$(CHRE_PREFIX)/util/include
-COMMON_CFLAGS += -I$(CHRE_PREFIX)/platform/shared/include
+endif
 
 # Allows a nanoapp to know that is compiled separately from the CHRE system.
 COMMON_CFLAGS += -DCHRE_IS_NANOAPP_BUILD
@@ -105,12 +115,12 @@ COMMON_CFLAGS += -DNANOAPP_VENDOR_STRING=$(NANOAPP_VENDOR_STRING)
 COMMON_CFLAGS += -DNANOAPP_NAME_STRING=$(NANOAPP_NAME_STRING)
 COMMON_CFLAGS += -DNANOAPP_IS_SYSTEM_NANOAPP=$(NANOAPP_IS_SYSTEM_NANOAPP)
 
-# Version String ###############################################################
+# Unstable ID ##################################################################
 
 COMMIT_HASH_DIRTY_SUFFIX = $(shell git diff --quiet || echo -dirty)
 COMMIT_HASH = $(shell git log -1 --pretty="format:%h" .)$(COMMIT_HASH_DIRTY_SUFFIX)
-NANOAPP_VERSION_STRING = "nanoapp=$(NANOAPP_NAME)@$(COMMIT_HASH)"
-COMMON_CFLAGS += -DNANOAPP_VERSION_STRING="\"$(NANOAPP_VERSION_STRING)\""
+NANOAPP_UNSTABLE_ID = "nanoapp=$(NANOAPP_NAME)@$(BUILD_ID)"
+COMMON_CFLAGS += -DNANOAPP_UNSTABLE_ID="\"$(NANOAPP_UNSTABLE_ID)\""
 
 # Variant-specific Nanoapp Support Source Files ################################
 
@@ -118,7 +128,10 @@ APP_SUPPORT_PATH = $(CHRE_PREFIX)/build/app_support
 DSO_SUPPORT_LIB_PATH = $(CHRE_PREFIX)/platform/shared/nanoapp
 DSO_SUPPORT_LIB_SRCS = $(DSO_SUPPORT_LIB_PATH)/nanoapp_support_lib_dso.cc
 
-GOOGLE_HEXAGONV60_SLPI_SRCS += $(DSO_SUPPORT_LIB_SRCS)
+# Required includes for nanoapp_support_lib_dso.cc, but using a special prefix
+# directory and symlinks to effectively hide them from nanoapps
+DSO_SUPPORT_LIB_CFLAGS = -I$(CHRE_PREFIX)/platform/shared/nanoapp/include
+
 GOOGLE_HEXAGONV62_SLPI_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 GOOGLE_HEXAGONV62_SLPI-UIMG_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 GOOGLE_HEXAGONV65_ADSP-SEE_SRCS += $(DSO_SUPPORT_LIB_SRCS)
@@ -132,8 +145,20 @@ GOOGLE_HEXAGONV66_SLPI-SEE-UIMG_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 GOOGLE_HEXAGONV66_SLPI-QSH_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 GOOGLE_ARM64_ANDROID_SRCS += $(DSO_SUPPORT_LIB_SRCS)
 GOOGLE_X86_LINUX_SRCS += $(DSO_SUPPORT_LIB_SRCS)
-QCOM_HEXAGONV60_NANOHUB_SRCS += $(APP_SUPPORT_PATH)/qcom_nanohub/app_support.cc
-QCOM_HEXAGONV60_NANOHUB-UIMG_SRCS += $(APP_SUPPORT_PATH)/qcom_nanohub/app_support_uimg.cc
+
+GOOGLE_HEXAGONV62_SLPI_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV62_SLPI-UIMG_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV65_ADSP-SEE_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV65_ADSP-SEE-UIMG_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV65_SLPI-SEE_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV65_SLPI-SEE-UIMG_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV66_ADSP-SEE_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV66_ADSP-SEE-UIMG_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV66_SLPI-SEE_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV66_SLPI-SEE-UIMG_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_HEXAGONV66_SLPI-QSH_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_ARM64_ANDROID_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
+GOOGLE_X86_LINUX_CFLAGS += $(DSO_SUPPORT_LIB_CFLAGS)
 
 # Makefile Includes ############################################################
 
@@ -144,6 +169,9 @@ include $(CHRE_PREFIX)/std_overrides/std_overrides.mk
 include $(CHRE_PREFIX)/build/defs.mk
 include $(CHRE_PREFIX)/build/common.mk
 
+# Pigweed module includes
+include $(CHRE_PREFIX)/external/pigweed/pw_rpc.mk
+
 # CHRE API version.
 include $(CHRE_PREFIX)/chre_api/chre_api_version.mk
 
@@ -152,9 +180,6 @@ ifneq ($(CHRE_TARGET_EXTENSION),)
 include $(CHRE_TARGET_EXTENSION)
 endif
 include $(CHRE_PREFIX)/build/variant/google_arm64_android.mk
-include $(CHRE_PREFIX)/build/variant/google_cm4_nanohub.mk
-include $(CHRE_PREFIX)/build/variant/google_hexagonv55_slpi-see.mk
-include $(CHRE_PREFIX)/build/variant/google_hexagonv60_slpi.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv62_slpi.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv62_slpi-uimg.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv65_adsp-see.mk
@@ -167,5 +192,3 @@ include $(CHRE_PREFIX)/build/variant/google_hexagonv66_slpi-see.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv66_slpi-see-uimg.mk
 include $(CHRE_PREFIX)/build/variant/google_hexagonv66_slpi-qsh.mk
 include $(CHRE_PREFIX)/build/variant/google_x86_linux.mk
-include $(CHRE_PREFIX)/build/variant/qcom_hexagonv60_nanohub.mk
-include $(CHRE_PREFIX)/build/variant/qcom_hexagonv60_nanohub-uimg.mk

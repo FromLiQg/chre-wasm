@@ -38,7 +38,7 @@ extern "C" {
  * predefined services), if not defined by the build system.
  */
 #ifndef CHPP_MAX_REGISTERED_SERVICES
-#define CHPP_MAX_REGISTERED_SERVICES 5
+#define CHPP_MAX_REGISTERED_SERVICES 1
 #endif
 
 /**
@@ -46,7 +46,7 @@ extern "C" {
  * predefined clients), if not defined by the build system.
  */
 #ifndef CHPP_MAX_REGISTERED_CLIENTS
-#define CHPP_MAX_REGISTERED_CLIENTS 5
+#define CHPP_MAX_REGISTERED_CLIENTS 1
 #endif
 
 /**
@@ -148,6 +148,8 @@ enum ChppAppErrorCode {
   CHPP_APP_ERROR_BEYOND_CHPP = 12,
   //! Response not matching a pending request
   CHPP_APP_ERROR_UNEXPECTED_RESPONSE = 13,
+  //! Conversion failed
+  CHPP_APP_ERROR_CONVERSION_FAILED = 14,
   //! Unspecified failure
   CHPP_APP_ERROR_UNSPECIFIED = 255
 };
@@ -157,10 +159,9 @@ enum ChppAppErrorCode {
  */
 enum ChppOpenState {
   CHPP_OPEN_STATE_CLOSED = 0,           // Closed
-  CHPP_OPEN_STATE_PSEUDO_OPEN = 1,      // Closed but open returns success
-  CHPP_OPEN_STATE_OPENING = 2,          // Enables the open request to pass
-  CHPP_OPEN_STATE_WAITING_TO_OPEN = 3,  // Waiting for open response
-  CHPP_OPEN_STATE_OPENED = 4,           // Opened
+  CHPP_OPEN_STATE_OPENING = 1,          // Enables the open request to pass
+  CHPP_OPEN_STATE_WAITING_TO_OPEN = 2,  // Waiting for open response
+  CHPP_OPEN_STATE_OPENED = 3,           // Opened
 };
 
 /**
@@ -186,9 +187,6 @@ struct ChppAppHeader {
 
 } CHPP_PACKED_ATTR;
 CHPP_PACKED_END
-
-//! Minimum length of a header that includes upto the transaction ID
-#define CHPP_APP_MIN_LEN_HEADER_WITH_TRANSACTION (3 * sizeof(uint8_t))
 
 /**
  * Function type that dispatches incoming datagrams for any client or service
@@ -316,10 +314,6 @@ struct ChppClient {
   //! Pointer to the function that deinitializes the client.
   ChppClientDeinitFunction *deinitFunctionPtr;
 
-  //! Pointer to the client's array of request-response states. May be NULL if
-  //! rRStateCount is 0.
-  struct ChppRequestResponseState *rRStates;
-
   //! Number of request-response states in the rRStates array. This is a
   //! uint16_t to match the uint16_t command in struct ChppAppHeader.
   uint16_t rRStateCount;
@@ -383,9 +377,12 @@ struct ChppAppState {
 
   void *registeredServiceContexts[CHPP_MAX_REGISTERED_SERVICES];
 
-  uint8_t registeredClientCount;  // Number of services currently registered
+  uint8_t registeredClientCount;  // Number of clients currently registered
 
   const struct ChppClient *registeredClients[CHPP_MAX_REGISTERED_CLIENTS];
+
+  const struct ChppClientState
+      *registeredClientStates[CHPP_MAX_REGISTERED_CLIENTS];
 
   void *registeredClientContexts[CHPP_MAX_REGISTERED_CLIENTS];
 
@@ -499,6 +496,18 @@ void chppUuidToStr(const uint8_t uuid[CHPP_SERVICE_UUID_LEN],
  * @return CHRE error (from enum chreError).
  */
 uint8_t chppAppErrorToChreError(uint8_t error);
+
+/**
+ * Handles logging and error conversion when an app layer response is too short.
+ *
+ * @param buf Input data. Cannot be null.
+ * @param len Length of input data in bytes.
+ * @param responseName Name of the request/response to be logged.
+ *
+ * @return CHRE error (from enum chreError).
+ */
+uint8_t chppAppShortResponseErrorHandler(uint8_t *buf, size_t len,
+                                         const char *responseName);
 
 #ifdef __cplusplus
 }

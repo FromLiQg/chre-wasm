@@ -70,6 +70,9 @@ class Manager {
   //! result comes in.
   uint8_t mChreScanResultsI = 0;
 
+  // The max chre scan results to be validated
+  uint8_t mMaxChreResultSize = 100;
+
   uint8_t mChreScanResultsSize = 0;
   uint8_t mApScanResultsSize = 0;
 
@@ -79,11 +82,6 @@ class Manager {
   //! Bools indicating that data collection is complete for each side
   bool mApDataCollectionDone = false;
   bool mChreDataCollectionDone = false;
-
-  bool mWifiAsyncResultDone = false;
-  bool mReceiveUseScanResultsThresholdMessageDone = false;
-
-  bool mUseScanResultsSizeThreshold = false;
 
   /**
    * This is the fraction of the number of results in the greater set of
@@ -150,14 +148,6 @@ class Manager {
    * @param hostData The message.
    */
   void handleDataMessage(const chreMessageFromHostData *hostData);
-
-  /**
-   * Handle a use scan results size threshold message from the host.
-   *
-   * @param hostData The message.
-   */
-  void handleUseScanResultsSizeThresholdMessage(
-      const chreMessageFromHostData *hostData);
 
   /**
    * Handle a wifi scan result event from a CHRE event.
