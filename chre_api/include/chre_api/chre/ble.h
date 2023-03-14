@@ -615,4 +615,6 @@ bool chreBleStopScanAsync(void);
 }
 #endif
 
+#include "chre/platform/shared/chre_api_wrapper/ble_assert.h"
+
 #endif /* CHRE_BLE_H_ */
