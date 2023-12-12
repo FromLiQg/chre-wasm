@@ -99,6 +99,7 @@ enum chreAudioDataFormat {
  * This provides a description of an audio source with a name and a
  * description of the format of the provided audio data.
  */
+#pragma pack(4)
 struct chreAudioSource {
   /**
    * A human readable name for this audio source. This is a C-style,
@@ -148,7 +149,7 @@ struct chreAudioSource {
    */
   uint8_t format;
 };
-
+#pragma pack()
 /**
  * The current status of an audio source.
  */
@@ -425,5 +426,7 @@ bool chreAudioGetStatus(uint32_t handle, struct chreAudioSourceStatus *status);
 #ifdef __cplusplus
 }
 #endif
+
+#include "chre/platform/shared/chre_api_wrapper/audio_assert.h"
 
 #endif  /* _CHRE_AUDIO_H_ */

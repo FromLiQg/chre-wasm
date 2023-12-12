@@ -639,6 +639,7 @@ struct chreWifiScanResult {
 /**
  * Data structure sent with events of type CHRE_EVENT_WIFI_SCAN_RESULT.
  */
+#pragma pack(4)
 struct chreWifiScanEvent {
     //! Indicates the version of the structure, for compatibility purposes.
     //! Clients do not normally need to worry about this field; the CHRE
@@ -700,6 +701,7 @@ struct chreWifiScanEvent {
     //! @since v1.2
     uint8_t radioChainPref;
 };
+#pragma pack()
 
 /**
  * Identifies a device to perform RTT ranging against. These values are normally
@@ -1309,5 +1311,7 @@ bool chreWifiNanRequestRangingAsync(const struct chreWifiNanRangingParams *param
 #ifdef __cplusplus
 }
 #endif
+
+#include "chre/platform/shared/chre_api_wrapper/wifi_assert.h"
 
 #endif  /* _CHRE_WIFI_H_ */

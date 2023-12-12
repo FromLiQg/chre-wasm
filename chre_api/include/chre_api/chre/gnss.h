@@ -317,6 +317,7 @@ struct chreGnssMeasurement {
  * Data structure sent with events associated with CHRE_EVENT_GNSS_DATA, enabled
  * via chreGnssMeasurementSessionStartAsync()
  */
+#pragma pack(4)
 struct chreGnssDataEvent {
     //! Indicates the version of the structure, for compatibility purposes.
     //! Clients do not normally need to worry about this field; the CHRE
@@ -336,7 +337,7 @@ struct chreGnssDataEvent {
     //! Pointer to an array containing measurement_count measurements
     const struct chreGnssMeasurement *measurements;
 };
-
+#pragma pack()
 /**
  * Data structure sent with events of type CHRE_EVENT_GNSS_LOCATION, enabled via
  * chreGnssLocationSessionStartAsync(). This is modeled after GpsLocation in the
@@ -600,5 +601,7 @@ bool chreGnssConfigurePassiveLocationListener(bool enable);
 #ifdef __cplusplus
 }
 #endif
+
+#include "chre/platform/shared/chre_api_wrapper/gnss_assert.h"
 
 #endif  /* _CHRE_GNSS_H_ */

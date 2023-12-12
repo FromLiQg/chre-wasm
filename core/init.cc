@@ -34,7 +34,6 @@ void init() {
 
 void deinit() {
   EventLoopManagerSingleton::deinit();
-
   LOGD("CHRE deinit");
 }
 
